@@ -10,11 +10,22 @@ import requests
 import random
 from fpdf import FPDF
 import base64
+from fpdf import FPDF
+import base64
+
+# Helper function to strip emojis for PDF
+def clean_for_pdf(text):
+    # This encodes the text to latin-1 and ignores errors (removing emojis), 
+    # then decodes it back to a string that FPDF can handle.
+    if not isinstance(text, str): return str(text)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
-        self.set_text_color(0, 201, 255) # Neon Cyan
-        self.cell(0, 10, 'LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING', 0, 1, 'C')
+        self.set_text_color(0, 201, 255)
+        # We clean the header text too, just in case
+        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
@@ -25,14 +36,14 @@ class PDF(FPDF):
 
     def chapter_title(self, title):
         self.set_font('Arial', 'B', 12)
-        self.set_text_color(0, 114, 255) # Neon Blue
-        self.cell(0, 10, title, 0, 1, 'L')
+        self.set_text_color(0, 114, 255)
+        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
         self.ln(2)
 
     def chapter_body(self, body):
         self.set_font('Arial', '', 10)
         self.set_text_color(50)
-        self.multi_cell(0, 6, body)
+        self.multi_cell(0, 6, clean_for_pdf(body))
         self.ln()
 
 def create_download_link(val, filename):
