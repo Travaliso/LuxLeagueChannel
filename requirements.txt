@@ -5,3 +5,4 @@ openai
 numpy
 plotly
 streamlit-lottie
+nfl_data_py
