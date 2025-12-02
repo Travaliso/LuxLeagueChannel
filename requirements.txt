@@ -3,3 +3,4 @@ espn-api
 pandas
 openai
 Plotly
+numpy
