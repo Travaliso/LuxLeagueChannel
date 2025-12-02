@@ -6,3 +6,4 @@ numpy
 plotly
 streamlit-lottie
 nfl_data_py
+fpdf
