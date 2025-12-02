@@ -4,3 +4,4 @@ pandas
 openai
 numpy
 plotly
+streamlit-lottie
