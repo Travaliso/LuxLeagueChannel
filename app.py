@@ -53,7 +53,17 @@ selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 # ------------------------------------------------------------------
 box_scores = league.box_scores(week=selected_week)
 
-score_data = []
+score_data = [
+    # (Inside the loop)
+    score_data.append({
+        "Home Logo": game.home_team.logo_url,  # <--- NEW: Grab the URL
+        "Home Team": game.home_team.team_name,
+        "Score": f"{home_score} - {away_score}",
+        "Away Team": game.away_team.team_name,
+        "Away Logo": game.away_team.logo_url,  # <--- NEW: Grab the URL
+        "Winner": "Home" if home_score > away_score else "Away"
+    })
+]
 all_active_players = []
 bench_data = []
 
@@ -155,12 +165,36 @@ st.divider()
 tab1, tab2, tab3 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit"])
 
 with tab1:
-    st.subheader("Weekly Matchups")
-    st.dataframe(pd.DataFrame(score_data), use_container_width=True, hide_index=True)
+    st.subheader("Weekly Transactions")
+    df_scores = pd.DataFrame(score_data)
+    
+    # We rearrange columns to put Logos next to names
+    st.dataframe(
+        df_scores, 
+        use_container_width=True, 
+        hide_index=True,
+        column_order=["Home Logo", "Home Team", "Score", "Away Team", "Away Logo", "Winner"], # Force order
+        column_config={
+            "Home Logo": st.column_config.ImageColumn(" ", width="small"), # Render as Image
+            "Away Logo": st.column_config.ImageColumn(" ", width="small"), # Render as Image
+            "Score": st.column_config.TextColumn("Final Score", help="Official box score"),
+            "Winner": st.column_config.TextColumn("Victor", width="small")
+        }
+    )
 
 with tab2:
     st.subheader("Power Rankings")
-    st.bar_chart(df_rank.set_index("Team")["Power Score"], color="#FFD700")
+    
+    # Show the #1 Team's Logo
+    top_dog = df_rank.iloc[0] # Get the first row
+    # Find the logo URL for this team from the league object
+    top_team_obj = next(t for t in league.teams if t.team_name == top_dog["Team"])
+    
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        st.image(top_team_obj.logo_url, caption="Current #1")
+    with c2:
+        st.bar_chart(df_rank.set_index("Team")["Power Score"], color="#FFD700")
 
 with tab3:
     st.subheader("The Manager Efficiency Audit")
