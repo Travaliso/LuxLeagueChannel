@@ -33,6 +33,22 @@ st.markdown("""
         margin-bottom: 20px;
         color: #e0e0e0;
     }
+    /* Custom Table Styling for Rosters */
+    .roster-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid #333;
+        font-size: 14px;
+    }
+    .roster-pos {
+        color: #666;
+        font-weight: bold;
+        width: 50px;
+        text-align: center;
+    }
+    .roster-player { flex: 1; }
+    .roster-score { font-weight: bold; color: #FFD700; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -40,7 +56,6 @@ st.markdown("""
 # 2. CONNECTION & CACHING
 # ------------------------------------------------------------------
 try:
-    # Load secrets safely
     league_id = st.secrets["league_id"]
     swid = st.secrets["swid"]
     espn_s2 = st.secrets["espn_s2"]
@@ -63,27 +78,17 @@ except Exception as e:
 @st.cache_data(ttl=3600)
 def calculate_advanced_stats(current_week):
     data_rows = []
-    
-    # We need historical data for the scatter plot
     for team in league.teams:
-        # 1. Power Score (ESPN's internal calculation)
-        # Note: We take the most recent available rank/score
-        power_score = team.wins * 20 + team.points_for * 0.5 # Simple custom power formula if API fails
+        # Simple Power Score (PPG)
+        power_score = round(team.points_for / current_week, 1)
         
-        # 2. Luck Calculation (True Record)
+        # Luck Calculation (True Record approximation)
         true_wins = 0
         total_matchups = 0
-        
-        # Loop through history to find "True Wins"
-        # (This is expensive, so we just estimate using PF for speed if needed)
-        # But here is the real way:
         for w in range(1, current_week + 1):
             box = league.box_scores(week=w)
-            # Find this team's score
             my_score = next((g.home_score if g.home_team == team else g.away_score 
                              for g in box if g.home_team == team or g.away_team == team), 0)
-            
-            # Compare vs entire league
             all_scores = [g.home_score for g in box] + [g.away_score for g in box]
             wins_this_week = sum(1 for s in all_scores if my_score > s)
             true_wins += wins_this_week
@@ -91,20 +96,15 @@ def calculate_advanced_stats(current_week):
 
         true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
-        
-        # Luck = Difference between Actual and Theoretical
         luck_rating = (actual_win_pct - true_win_pct) * 10
         
         data_rows.append({
             "Team": team.team_name,
-            "Logo": team.logo_url,
             "Wins": team.wins,
             "Points For": team.points_for,
-            "Power Score": round(team.points_for / current_week, 1), # Using PPG as "Power" for clarity
-            "Luck Rating": luck_rating,
-            "True Win %": true_win_pct
+            "Power Score": power_score,
+            "Luck Rating": luck_rating
         })
-        
     return pd.DataFrame(data_rows)
 
 # ------------------------------------------------------------------
@@ -117,77 +117,77 @@ selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 
 box_scores = league.box_scores(week=selected_week)
 
-# Containers
 matchup_data = []
-efficiency_data = [] # For the new "Audit" chart
+efficiency_data = [] 
 all_active_players = []
+bench_highlights = [] # To store list of benched players with high scores
 
-# Loop
 for game in box_scores:
     home = game.home_team
     away = game.away_team
     
-    # 1. Store Matchup
+    # 1. Detailed Lineup Processing
+    def get_roster_data(lineup, team_name):
+        starters = []
+        bench = []
+        points_starter = 0
+        points_bench = 0
+        
+        for p in lineup:
+            player_info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
+            
+            if p.slot_position == 'BE':
+                bench.append(player_info)
+                points_bench += p.points
+                # Check for "Bench Star" (Score > 15)
+                if p.points > 15:
+                    bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
+            else:
+                starters.append(player_info)
+                points_starter += p.points
+                all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
+                
+        return starters, bench, points_starter, points_bench
+
+    h_roster, h_bench_roster, h_start_pts, h_bench_pts = get_roster_data(game.home_lineup, home.team_name)
+    a_roster, a_bench_roster, a_start_pts, a_bench_pts = get_roster_data(game.away_lineup, away.team_name)
+    
+    # Store Matchup
     matchup_data.append({
-        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url,
-        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url
+        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url, "Home Roster": h_roster,
+        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url, "Away Roster": a_roster
     })
     
-    # 2. Efficiency Calculation (Starter vs Bench)
-    def get_split(lineup, team_name):
-        starters = 0
-        bench = 0
-        for p in lineup:
-            if p.slot_position == 'BE': bench += p.points
-            else: 
-                starters += p.points
-                all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
-        return starters, bench
-
-    h_start, h_bench = get_split(game.home_lineup, home.team_name)
-    a_start, a_bench = get_split(game.away_lineup, away.team_name)
-    
-    efficiency_data.append({"Team": home.team_name, "Starters": h_start, "Bench": h_bench, "Total Potential": h_start + h_bench})
-    efficiency_data.append({"Team": away.team_name, "Starters": a_start, "Bench": a_bench, "Total Potential": a_start + a_bench})
+    # Store Efficiency
+    efficiency_data.append({"Team": home.team_name, "Starters": h_start_pts, "Bench": h_bench_pts, "Total Potential": h_start_pts + h_bench_pts})
+    efficiency_data.append({"Team": away.team_name, "Starters": a_start_pts, "Bench": a_bench_pts, "Total Potential": a_start_pts + a_bench_pts})
 
 # DataFrames
 df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
 df_advanced = calculate_advanced_stats(current_week)
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
+df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
 # ------------------------------------------------------------------
 # 5. AI NARRATIVE
 # ------------------------------------------------------------------
 def get_ai_recap():
     if not openai_key: return "⚠️ Add 'openai_key' to secrets."
-    
-    # Find superlatives for context
     top_scorer = df_eff.iloc[0]['Team']
     bench_king = df_eff.sort_values(by="Bench", ascending=False).iloc[0]['Team']
-    
-    prompt = f"""
-    Write a 2-paragraph fantasy football recap for Week {selected_week}.
-    Focus on:
-    1. The "Powerhouse" of the week: {top_scorer} (Highest Potential).
-    2. The "Inefficient Manager": {bench_king} (Most points left on bench).
-    Style: Wall Street financial report.
-    """
+    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}, Inefficient Manager: {bench_king}. Style: Wall Street Report."
     try:
         client = OpenAI(api_key=openai_key)
-        return client.chat.completions.create(
-            model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400
-        ).choices[0].message.content
-    except: return "Analyst is offline."
+        return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
+    except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
 # 6. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League: Week {selected_week}")
 
-# AI Box
 if "recap" not in st.session_state:
-    with st.spinner("🎙️ Analyst is reviewing portfolios..."):
-        st.session_state["recap"] = get_ai_recap()
+    with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_ai_recap()
 st.markdown(f'<div class="studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
 
 # Top Players
@@ -204,9 +204,9 @@ tab1, tab2, tab3 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The A
 with tab1:
     st.subheader("Weekly Matchups")
     for m in matchup_data:
-        # Custom HTML Scoreboard for "Luxury" feel
+        # Scoreboard Header
         st.markdown(f"""
-        <div style="background-color: #1a1c24; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333;">
+        <div style="background-color: #1a1c24; padding: 15px; border-radius: 10px; margin-bottom: 5px; border: 1px solid #333;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="text-align: center; width: 40%;">
                     <img src="{m['Home Logo']}" width="50" style="border-radius: 50%;">
@@ -222,60 +222,63 @@ with tab1:
             </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Expander with ROSTER COMPARISON
+        with st.expander(f"📉 View Lineups: {m['Home']} vs {m['Away']}"):
+            
+            # Prepare data for Head-to-Head Table
+            # We map rosters by position to align them roughly
+            roster_data = []
+            # This is a simplified alignment; ideally you match by slot
+            max_len = max(len(m['Home Roster']), len(m['Away Roster']))
+            
+            # Create a clean DataFrame for display
+            df_matchup = pd.DataFrame({
+                f"{m['Home']} Player": [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
+                f"{m['Home']} Pts": [p['Score'] for p in m['Home Roster']] + [0] * (max_len - len(m['Home Roster'])),
+                "Pos": [p['Pos'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
+                f"{m['Away']} Pts": [p['Score'] for p in m['Away Roster']] + [0] * (max_len - len(m['Away Roster'])),
+                f"{m['Away']} Player": [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster'])),
+            })
+            
+            # Highlight high scores
+            st.dataframe(
+                df_matchup, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"),
+                    f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f"),
+                }
+            )
 
 with tab2:
-    st.subheader("Power vs. Performance Matrix")
-    st.caption("Are you actually good, or just lucky?")
-    
-    # SCATTER PLOT: Power (PPG) vs Wins
-    fig = px.scatter(
-        df_advanced, 
-        x="Power Score", 
-        y="Wins", 
-        text="Team", 
-        size="Points For",
-        color="Luck Rating",
-        color_continuous_scale=["#FF4B4B", "#333333", "#00FF00"], # Red (Unlucky) -> Green (Lucky)
-        title="The Luck Matrix: Power (PPG) vs Actual Wins"
-    )
+    st.subheader("Power vs. Performance")
+    fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating",
+                     color_continuous_scale=["#FF4B4B", "#333333", "#00FF00"], title="The Luck Matrix")
     fig.update_traces(textposition='top center', marker=dict(line=dict(width=1, color='DarkSlateGrey')))
-    fig.update_layout(
-        plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white",
-        xaxis_title="Team Power (Avg Points Per Game)",
-        yaxis_title="Actual Wins"
-    )
-    # Add a reference line for "Average"
-    fig.add_shape(type="line", x0=df_advanced["Power Score"].min(), y0=df_advanced["Wins"].min(),
-                  x1=df_advanced["Power Score"].max(), y1=df_advanced["Wins"].max(),
-                  line=dict(color="Gold", width=2, dash="dash"), opacity=0.5)
-    
+    fig.update_layout(plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white")
     st.plotly_chart(fig, use_container_width=True)
 
 with tab3:
     st.subheader("Manager Efficiency Audit")
-    st.caption("Green = Points Scored. Red = Points Wasted on Bench.")
     
-    # STACKED BAR CHART
+    # 1. Stacked Bar Chart
     fig = go.Figure()
-    
-    # 1. Starters Bar (Green/Gold)
-    fig.add_trace(go.Bar(
-        x=df_eff["Team"], y=df_eff["Starters"], 
-        name='Starters', marker_color='#FFD700'
-    ))
-    
-    # 2. Bench Bar (Red/Grey)
-    fig.add_trace(go.Bar(
-        x=df_eff["Team"], y=df_eff["Bench"], 
-        name='Bench Waste', marker_color='#333333'
-    ))
-    
-    fig.update_layout(
-        barmode='stack', 
-        plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white",
-        title="Total Roster Strength (Potential Points)",
-        xaxis_title="Manager",
-        yaxis_title="Points"
-    )
-    
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#FFD700'))
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#333333'))
+    fig.update_layout(barmode='stack', plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white", title="Total Potential Points")
     st.plotly_chart(fig, use_container_width=True)
+    
+    # 2. Benchwarmers List (New!)
+    if not df_bench_stars.empty:
+        st.markdown("#### 🚨 The 'Should Have Started' List")
+        st.caption("Bench players who scored 15+ points")
+        st.dataframe(
+            df_bench_stars, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Score": st.column_config.NumberColumn(format="%.1f pts")
+            }
+        )
