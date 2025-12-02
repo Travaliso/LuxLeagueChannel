@@ -74,6 +74,7 @@ lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-068
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
+lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json") # Graph/Search animation
 
 try:
     league_id = st.secrets["league_id"]
@@ -187,16 +188,6 @@ def run_monte_carlo_simulation(simulations=1000):
     try: num_playoff_teams = league.settings.playoff_team_count
     except: num_playoff_teams = 4
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
-    avg_league_power = sum(team_power.values()) / len(team_power)
-    schedule_difficulty = {t.team_id: [] for t in league.teams}
-    
-    if current_w <= reg_season_end:
-        for w in range(current_w, reg_season_end + 1):
-            future_box = league.box_scores(week=w)
-            for game in future_box:
-                h, a = game.home_team, game.away_team
-                schedule_difficulty[h.team_id].append(team_power[a.team_id])
-                schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
     results = {t.team_name: 0 for t in league.teams}
     for i in range(simulations):
@@ -211,19 +202,54 @@ def run_monte_carlo_simulation(simulations=1000):
 
     final_output = []
     for team in league.teams:
-        tid = team.team_id
         odds = (results[team.team_name] / simulations) * 100
-        opponents_scores = schedule_difficulty[tid]
-        avg_opp_strength = sum(opponents_scores) / len(opponents_scores) if opponents_scores else avg_league_power
-        diff = team_power[tid] - avg_opp_strength
         if odds > 99: reason = "🔒 Locked."
-        elif odds > 80: reason = "🚀 High Prob." if diff > 10 else "💪 Grinding."
-        elif odds > 40: reason = "⚖️ Bubble." if diff > 0 else "⚠️ Coin Flip."
+        elif odds > 80: reason = "🚀 High Prob."
+        elif odds > 40: reason = "⚖️ Bubble."
         elif odds > 5: reason = "🙏 Miracle."
         else: reason = "💀 Dead."
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
+
+# --- D. Dark Pool (Waiver Wire Analytics) ---
+@st.cache_data(ttl=3600)
+def scan_dark_pool(limit=15):
+    # Fetch free agents (Top 50 available)
+    # Note: 'size' param depends on API version, keeping it simple
+    free_agents = league.free_agents(size=50)
+    
+    pool_data = []
+    for player in free_agents:
+        # We look for players with:
+        # 1. High recent performance (Projected or Actual) - Using total points for simplicity
+        # 2. Position scarcity
+        
+        # Simple Logic: Points per game average
+        # (ESPN API free_agents sometimes returns varied data, we use what's available)
+        try:
+            # Check if we have recent stats (this varies by API call)
+            # We'll use 'total_points' and 'projected_total_points' if available
+            avg_pts = player.total_points / league.current_week if league.current_week > 0 else 0
+            
+            # Identify "Breakout" (High Project vs Low Own if we had ownership data)
+            # For now, we filter by meaningful production
+            if avg_pts > 5: # Filter out scrubs
+                pool_data.append({
+                    "Name": player.name,
+                    "Position": player.position,
+                    "Team": player.proTeam,
+                    "Avg Pts": avg_pts,
+                    "Total Pts": player.total_points,
+                    "ID": player.playerId
+                })
+        except:
+            continue
+            
+    df = pd.DataFrame(pool_data)
+    if not df.empty:
+        df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    return df
 
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
@@ -242,6 +268,7 @@ page_options = [
     "🔮 The Forecast", 
     "🚀 Next Week", 
     "🤝 The Dealmaker", 
+    "🕵️ The Dark Pool", # NEW PAGE
     "🏆 Trophy Room"
 ]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
@@ -324,7 +351,6 @@ def get_season_retrospective(mvp, best_mgr):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
     except: return "Analyst Offline."
 
-# FIXED AI BROKER FUNCTION
 def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
@@ -338,6 +364,21 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
     Style: Jerry Maguire / Wolf of Wall Street.
     """
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
+    except: return "Analyst Offline."
+
+# NEW AI SCOUT (DARK POOL)
+def get_ai_scouting_report(free_agents_str):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    prompt = f"""
+    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool):
+    {free_agents_str}
+    
+    Identify 3 "Must Add" players.
+    For each, provide a 1-sentence "Scouting Report" on why they are a hidden gem (e.g. recent volume, injury opportunity).
+    Style: Scouting Notebook (Gritty, technical).
+    """
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=500).choices[0].message.content
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
@@ -411,86 +452,4 @@ elif selected_page == "🔮 The Forecast":
             if lottie_forecast: st_lottie(lottie_forecast, height=200)
             with st.spinner("Crunching probabilities..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
     else:
-        df_odds = st.session_state["playoff_odds"]
-        st.dataframe(df_odds, use_container_width=True, hide_index=True, column_config={"Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=100)})
-        if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
-
-elif selected_page == "🚀 Next Week":
-    try:
-        next_week = league.current_week
-        next_box_scores = league.box_scores(week=next_week)
-        games_list = []
-        for game in next_box_scores:
-            h_proj, a_proj = game.home_projected, game.away_projected
-            if h_proj == 0: h_proj = 100
-            if a_proj == 0: a_proj = 100
-            spread = abs(h_proj - a_proj)
-            games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
-        if "next_week_commentary" not in st.session_state:
-            with st.spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.header("Next Week's Market Preview")
-        for game in next_box_scores:
-            h_proj, a_proj = game.home_projected, game.away_projected
-            if h_proj == 0: h_proj = 100
-            if a_proj == 0: a_proj = 100
-            spread = abs(h_proj - a_proj)
-            fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div><div style="color: #00C9FF;">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div><div style="color: #00C9FF;">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
-    except: st.info("Projections unavailable.")
-
-elif selected_page == "🤝 The Dealmaker":
-    st.header("🤝 The AI Dealmaker")
-    st.caption("Select two teams to have the AI negotiate a mutually beneficial trade.")
-    col_a, col_b = st.columns(2)
-    with col_a: team_a_name = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
-    with col_b: team_b_name = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
-    if st.button("🤖 Generate Trade Proposal"):
-        if lottie_trade: st_lottie(lottie_trade, height=200)
-        with st.spinner("Analyzing roster deficiencies and surplus..."):
-            team_a = next(t for t in league.teams if t.team_name == team_a_name)
-            team_b = next(t for t in league.teams if t.team_name == team_b_name)
-            roster_a = [f"{p.name} ({p.position})" for p in team_a.roster]
-            roster_b = [f"{p.name} ({p.position})" for p in team_b.roster]
-            proposal = get_ai_trade_proposal(team_a_name, team_b_name, roster_a, roster_b)
-            st.markdown(f'<div class="luxury-card studio-box"><h3>🤝 Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
-
-elif selected_page == "🏆 Trophy Room":
-    if "awards" not in st.session_state:
-        if st.button("🏅 Unveil Yearly Awards"):
-            if lottie_trophy: st_lottie(lottie_trophy, height=200)
-            with st.spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards(current_week)
-                awards = st.session_state["awards"]
-                mvp_name = awards['MVP']['Name'] if awards['MVP'] else "N/A"
-                best_mgr_name = awards['Best Manager']['Team']
-                st.session_state["season_commentary"] = get_season_retrospective(mvp_name, best_mgr_name)
-                st.rerun()
-    else:
-        awards = st.session_state["awards"]
-        if "season_commentary" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_commentary"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.header("Season Awards")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown('<div class="luxury-card award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
-            if awards['MVP']:
-                p = awards['MVP']
-                st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254", width=150)
-                st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts", delta="Season Total")
-        with c2:
-            st.markdown('<div class="luxury-card award-card"><h3>🐋 The Whale (Best Mgr)</h3></div>', unsafe_allow_html=True)
-            mgr = awards['Best Manager']
-            st.image(mgr['Logo'], width=100)
-            st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts", delta="Total Points For")
-        st.divider()
-        c3, c4, c5 = st.columns(3)
-        with c3:
-            st.markdown("#### 💔 Heartbreaker"); st.caption("Smallest Margin of Defeat"); hb = awards['Heartbreaker']
-            st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts", delta=f"Week {hb['Week']}")
-        with c4:
-            st.markdown("#### 🔥 The Streak"); st.caption("Longest Win Streak"); stk = awards['Streak']
-            st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
-        with c5:
-            st.markdown("#### 💤 Asleep at Wheel"); st.caption("Starters with 0.0 Pts"); slp = awards['Sleeper']
-            st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
+        df_
