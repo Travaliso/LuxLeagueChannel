@@ -8,7 +8,36 @@ from openai import OpenAI
 from streamlit_lottie import st_lottie
 import requests
 import random
+from fpdf import FPDF
+import base64
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 201, 255) # Neon Cyan
+        self.cell(0, 10, 'LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING', 0, 1, 'C')
+        self.ln(5)
 
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(0, 114, 255) # Neon Blue
+        self.cell(0, 10, title, 0, 1, 'L')
+        self.ln(2)
+
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.set_text_color(50)
+        self.multi_cell(0, 6, body)
+        self.ln()
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 # ------------------------------------------------------------------
 # 1. CONFIGURATION & NEON LUXURY CSS
 # ------------------------------------------------------------------
@@ -249,6 +278,48 @@ st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
+# ... inside the Sidebar ...
+
+if st.sidebar.button("📄 Generate PDF Report"):
+    # Check if we have the necessary data
+    if "recap" not in st.session_state or "awards" not in st.session_state:
+        st.sidebar.error("Please visit 'The Ledger' and 'Trophy Room' first to generate data.")
+    else:
+        pdf = PDF()
+        pdf.add_page()
+        
+        # 1. The Studio Report
+        pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE SUMMARY")
+        # Clean up text (remove markdown * and #)
+        clean_recap = st.session_state["recap"].replace("*", "").replace("#", "")
+        pdf.chapter_body(clean_recap)
+        
+        # 2. The Awards
+        awards = st.session_state["awards"]
+        pdf.chapter_title("THE TROPHY ROOM")
+        
+        if awards['MVP']:
+            pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts) - Owner: {awards['MVP']['Owner']}")
+        
+        if awards['Best Manager']:
+            pdf.chapter_body(f"The Whale (Best Manager): {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
+            
+        hb = awards['Heartbreaker']
+        pdf.chapter_body(f"Heartbreaker: {hb['Loser']} lost to {hb['Winner']} by {hb['Margin']:.2f} pts")
+        
+        slp = awards['Sleeper']
+        pdf.chapter_body(f"Asleep at Wheel: {slp['Team']} started {slp['Count']} players with 0.0 pts")
+
+        # 3. Forecast
+        if "playoff_odds" in st.session_state:
+            pdf.chapter_title("PLAYOFF PROJECTIONS")
+            df_odds = st.session_state["playoff_odds"].head(5)
+            for i, row in df_odds.iterrows():
+                pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
+
+        # Output
+        html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
+        st.sidebar.markdown(html, unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
 # PAGE DEFINITIONS (Ensures logic matches UI exactly)
