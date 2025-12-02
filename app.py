@@ -218,12 +218,15 @@ def scan_dark_pool(limit=15):
     free_agents = league.free_agents(size=60) # Fetch a few more to account for filtered injuries
     pool_data = []
     for player in free_agents:
-        # --- INJURY FILTER ---
-        # Skip players marked as OUT or IR. Keep Questionable.
-        if player.status in ['OUT', 'IR']:
-            continue
-            
         try:
+            # FIX: Use injuryStatus instead of status, and use getattr for safety
+            status = getattr(player, 'injuryStatus', 'ACTIVE')
+            
+            # --- INJURY FILTER ---
+            # Skip players marked as OUT or IR. Keep Questionable.
+            if status in ['OUT', 'IR']:
+                continue
+            
             # Fallback logic: Use Total Points OR Projected if Total is missing
             total = player.total_points if player.total_points > 0 else player.projected_total_points
             avg_pts = total / league.current_week if league.current_week > 0 else 0
@@ -231,7 +234,7 @@ def scan_dark_pool(limit=15):
             if avg_pts > 3: # Lower threshold to ensure we catch players
                 pool_data.append({
                     "Name": player.name, "Position": player.position, "Team": player.proTeam,
-                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": player.status
+                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status
                 })
         except: continue
             
@@ -284,8 +287,10 @@ for game in box_scores:
         for p in lineup:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
             
-            # Check injury status for Weekly Elite filter
-            is_injured = p.status in ['OUT', 'IR']
+            # FIX: Check injury status safely for Weekly Elite filter
+            # Use getattr to prevent crashes if 'injuryStatus' is missing
+            status = getattr(p, 'injuryStatus', 'ACTIVE')
+            is_injured = status in ['OUT', 'IR']
 
             if p.slot_position == 'BE':
                 bench.append(info); p_bench += p.points
