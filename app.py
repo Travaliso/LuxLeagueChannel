@@ -142,26 +142,31 @@ def get_ai_recap(week, tragic_hero, bandit, bench_king, top_player, rank_1):
     
     client = OpenAI(api_key=openai_key)
     
-    # The Prompt Engineering
     prompt = f"""
-    You are a high-energy, slightly arrogant, sophisticated sportscaster for a high-end fantasy league called 'Luxury League'.
-    Write a 3-sentence 'Breaking News' ticker update for Week {week}.
+    You are a high-energy, sophisticated sportscaster for a high-end fantasy league called 'Luxury League'.
     
-    Here is the data:
+    The User's team is "14 Jettas" (Use this context if they are mentioned).
+    
+    Write a 2-paragraph 'Breaking News' segment for Week {week}.
+    
+    THE DATA:
     - The Tragic Hero (Good score but lost): {tragic_hero['team']} ({tragic_hero['score']} pts)
     - The Lucky Bandit (Bad score but won): {bandit['team']} ({bandit['score']} pts)
     - Worst Manager (Left points on bench): {bench_king['team']} ({bench_king['points']} pts wasted)
     - League MVP: {top_player}
     - Current King of the Hill (Rank #1): {rank_1}
     
-    Style: Use financial metaphors (assets, liquidity, dividends) mixed with sports trash talk. Be ruthless but classy.
+    STYLE: 
+    - Use financial metaphors (assets, liquidity, dividends, bankruptcy).
+    - Be ruthless but classy. 
+    - Specifically mock the "Worst Manager" for their inefficiency.
     """
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini", # Cost effective model
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=150
+            max_tokens=500  # <--- CHANGED FROM 150 TO 500
         )
         return response.choices[0].message.content
     except Exception as e:
