@@ -10,21 +10,20 @@ import requests
 import random
 
 # ------------------------------------------------------------------
-# 1. CONFIGURATION & NEW LUXURY CSS
+# 1. CONFIGURATION & NEON LUXURY CSS
 # ------------------------------------------------------------------
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layout="wide")
 
-# NEW NEON LUXURY THEME CSS
 st.markdown("""
     <style>
     /* MAIN BACKGROUND */
     .stApp {
-        background-color: #080a10; /* Deeper, darker background */
+        background-color: #080a10;
     }
 
     /* NEON GRADIENT HEADINGS */
     h1, h2, h3, h4 {
-        background: linear-gradient(90deg, #00C9FF, #0072ff); /* Electric Cyan to Blue */
+        background: linear-gradient(90deg, #00C9FF, #0072ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-family: 'Helvetica Neue', sans-serif;
@@ -35,49 +34,45 @@ st.markdown("""
     /* METRIC NUMBERS */
     div[data-testid="stMetricValue"] {
         font-size: 2rem !important;
-        color: #00C9FF !important; /* Neon Cyan glowing numbers */
+        color: #00C9FF !important;
         text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);
     }
     div[data-testid="stMetricLabel"] {
-         color: #a0aaba !important; /* Lighter grey labels */
+         color: #a0aaba !important;
     }
 
-    /* LUXURY CARD STYLING (Used for Studio, Matchups, Awards) */
+    /* LUXURY CARD STYLING */
     .luxury-card {
-        background: linear-gradient(145deg, #151922, #1a1c24); /* Subtle gradient card bg */
+        background: linear-gradient(145deg, #151922, #1a1c24);
         border-radius: 16px;
         padding: 20px;
         margin-bottom: 15px;
-        border: 1px solid rgba(0, 201, 255, 0.1); /* Subtle neon border */
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 0 0px rgba(0, 201, 255, 0.1); /* Depth shadows */
-        backdrop-filter: blur(10px); /* Pseudo-glass effect */
+        border: 1px solid rgba(0, 201, 255, 0.1);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    .award-card { border-left: 4px solid #00C9FF; }
+    .studio-box { border-left: 4px solid #0072ff; }
+
+    /* SIDEBAR NAVIGATION STYLING */
+    section[data-testid="stSidebar"] {
+        background-color: #0e1117;
+        border-right: 1px solid #333;
+    }
+    /* Style the Radio Buttons to look like Menu Items */
+    div[data-testid="stRadio"] > label {
+        color: #a0aaba !important;
+        font-weight: bold;
+    }
+    div[role="radiogroup"] label {
+        padding: 10px;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    div[role="radiogroup"] label:hover {
+        background-color: rgba(0, 201, 255, 0.1);
+        color: #00C9FF !important;
     }
     
-    /* Highlight borders for specific cards */
-    .award-card {
-        border-left: 4px solid #00C9FF;
-    }
-    .studio-box {
-        border-left: 4px solid #0072ff;
-    }
-
-    /* CUSTOMIZING STREAMLIT TABS */
-    /* Tab Labels */
-    button[data-baseweb="tab"] {
-        color: #a0aaba;
-        border-radius: 8px;
-    }
-    /* Active Tab Styling */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #00C9FF !important;
-        background-color: rgba(0, 201, 255, 0.1) !important;
-        border: 1px solid #00C9FF !important;
-    }
-    /* Remove default underline */
-    div[data-baseweb="tab-highlight"] {
-        background-color: transparent !important;
-    }
-
     /* DATAFRAME STYLING */
     div[data-testid="stDataFrame"] {
         background-color: #151922;
@@ -97,9 +92,7 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
-# Kept the same animations, but they might clash slightly now. 
-# Consider finding cyan/blue tech animations in the future.
-lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06888982f8d8/WfK7bXoGqj.json")
+lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 
@@ -254,13 +247,32 @@ def run_monte_carlo_simulation(simulations=1000):
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
 # ------------------------------------------------------------------
-# 4. INITIAL LOADING
+# 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
+
+# 1. Week Selector
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 
+st.sidebar.markdown("---")
+
+# 2. Page Navigation (Replaces Tabs)
+page_options = [
+    "📜 The Ledger", 
+    "📈 The Hierarchy", 
+    "🔎 The Audit", 
+    "💎 The Hedge Fund", 
+    "🔮 The Forecast", 
+    "🚀 Next Week", 
+    "🏆 Trophy Room"
+]
+selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
+
+# ------------------------------------------------------------------
+# 5. DATA LOADING & PROCESSING
+# ------------------------------------------------------------------
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     if lottie_loading: st_lottie(lottie_loading, height=200, key="loading")
     st.session_state['box_scores'] = league.box_scores(week=selected_week)
@@ -269,9 +281,7 @@ if 'box_scores' not in st.session_state or st.session_state.get('week') != selec
 
 box_scores = st.session_state['box_scores']
 
-# ------------------------------------------------------------------
-# 5. DATA PROCESSING
-# ------------------------------------------------------------------
+# Process Week Data
 matchup_data = []
 efficiency_data = [] 
 all_active_players = []
@@ -301,9 +311,7 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# ------------------------------------------------------------------
-# 6. AI NARRATIVE
-# ------------------------------------------------------------------
+# AI Recap Function
 def get_ai_recap():
     if not openai_key: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
@@ -314,33 +322,42 @@ def get_ai_recap():
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
-# 7. DASHBOARD UI
+# 6. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
+# Only show Overview items on specific pages or all? 
+# Let's keep the Studio & Top Players at the top of EVERY page for context
 if "recap" not in st.session_state:
     with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_ai_recap()
-# APPLIED NEW LUXURY-CARD CLASS AND STUDIO-BOX CLASS
-st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
 
-st.markdown("### 🌟 The Week's Elite Assets")
-cols = st.columns(5)
-for i, (idx, p) in enumerate(df_players.iterrows()):
-    with cols[i]:
-        # APPLIED LUXURY-CARD CLASS TO PLAYER CARDS
-        st.markdown(f"""<div class="luxury-card" style="padding: 10px; text-align: center;">
-            <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=150&h=110" style="border-radius: 10px;">
-            <div style="font-weight: bold; color: #00C9FF; margin-top: 5px;">{p['Name']}</div>
-            <div style="color: #a0aaba;">{p['Points']} pts</div>
-        </div>""", unsafe_allow_html=True)
+col_main, col_players = st.columns([2, 1])
 
-# TABS
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "🏆 Trophy Room"])
+with col_main:
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
 
-with tab1:
-    st.subheader("Weekly Matchups")
+with col_players:
+    st.markdown("### 🌟 Weekly Elite")
+    # Compact player view for side column
+    for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
+         st.markdown(f"""
+            <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
+                <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;">
+                <div>
+                    <div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div>
+                    <div style="color: #fff; font-size: 12px;">{p['Points']} pts</div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+st.divider()
+
+# ------------------------------------------------------------------
+# 7. PAGE RENDERING (CONDITIONAL)
+# ------------------------------------------------------------------
+
+if selected_page == "📜 The Ledger":
+    st.header("Weekly Transactions")
     for m in matchup_data:
-        # APPLIED LUXURY-CARD CLASS TO MATCHUPS
         st.markdown(f"""
         <div class="luxury-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -372,15 +389,13 @@ with tab1:
                 f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f"),
             })
 
-with tab2:
-    st.subheader("Power Rankings")
-    # UPDATED COLOR TO NEON BLUE
+elif selected_page == "📈 The Hierarchy":
+    st.header("Power Rankings")
     st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
-with tab3:
-    st.subheader("Efficiency Audit")
+elif selected_page == "🔎 The Audit":
+    st.header("Efficiency Audit")
     fig = go.Figure()
-    # UPDATED COLORS TO NEON BLUE / DARK GREY
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#2c313a'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential")
@@ -389,8 +404,8 @@ with tab3:
         st.markdown("#### 🚨 'Should Have Started'")
         st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
-with tab4:
-    st.subheader("💎 The Hedge Fund")
+elif selected_page == "💎 The Hedge Fund":
+    st.header("Market Analytics")
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
@@ -399,14 +414,13 @@ with tab4:
                 st.rerun()
     else:
         df_advanced = st.session_state["df_advanced"]
-        # UPDATED COLOR SCALE TO BLUE/CYAN GRADIENT
         fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating",
                          color_continuous_scale=["#0072ff", "#1a1c24", "#00C9FF"], title="Luck Matrix")
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
 
-with tab5:
-    st.subheader("🔮 The Crystal Ball")
+elif selected_page == "🔮 The Forecast":
+    st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             if lottie_forecast: st_lottie(lottie_forecast, height=200)
@@ -419,8 +433,8 @@ with tab5:
             "Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=100)})
         if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
 
-with tab6:
-    st.subheader("🚀 Next Week")
+elif selected_page == "🚀 Next Week":
+    st.header("Next Week's Market Preview")
     try:
         next_week = league.current_week
         next_box_scores = league.box_scores(week=next_week)
@@ -430,7 +444,6 @@ with tab6:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            # APPLIED LUXURY-CARD TO NEXT WEEK MATCHUPS
             st.markdown(f"""
             <div class="luxury-card" style="padding: 15px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; text-align: center;">
@@ -451,8 +464,8 @@ with tab6:
             """, unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
-with tab7:
-    st.subheader("🏆 The Trophy Room")
+elif selected_page == "🏆 Trophy Room":
+    st.header("Season Awards")
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Yearly Awards"):
             if lottie_trophy: st_lottie(lottie_trophy, height=200)
@@ -463,7 +476,6 @@ with tab7:
         awards = st.session_state["awards"]
         c1, c2 = st.columns(2)
         with c1:
-            # UPDATED AWARD CARDS TO USE NEW LUXURY-CARD CLASS AND CYAN BORDER
             st.markdown('<div class="luxury-card award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
             if awards['MVP']:
                 p = awards['MVP']
@@ -484,11 +496,4 @@ with tab7:
             st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts", delta=f"Week {hb['Week']}")
         with c4:
             st.markdown("#### 🔥 The Streak")
-            st.caption("Longest Win Streak")
-            stk = awards['Streak']
-            st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
-        with c5:
-            st.markdown("#### 💤 Asleep at Wheel")
-            st.caption("Starters with 0.0 Pts (Byes/Injuries)")
-            slp = awards['Sleeper']
-            st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
+            st.caption("Longest Win
