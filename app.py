@@ -10,12 +10,6 @@ try:
     espn_s2 = st.secrets["espn_s2"] # Ask for the value inside the "espn_s2" drawer    
     # Try connecting (Updated to 2025)
     year = 2025 
-    
-    st.write(f"Attempting to connect to League ID: {league_id} for Year: {year}...")
-    
-    league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-    
-    st.success(f"✅ Connected to league: {league.settings.name}")
 
 except Exception as e:
     # This will print the SPECIFIC error from Python
