@@ -10,40 +10,79 @@ import requests
 import random
 
 # ------------------------------------------------------------------
-# 1. CONFIGURATION
+# 1. CONFIGURATION & NEW LUXURY CSS
 # ------------------------------------------------------------------
-st.set_page_config(page_title="Luxury League", page_icon="🥂", layout="wide")
+st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layout="wide")
 
+# NEW NEON LUXURY THEME CSS
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; }
-    h1, h2, h3 {
-        background: -webkit-linear-gradient(45deg, #FFD700, #FDB931);
+    /* MAIN BACKGROUND */
+    .stApp {
+        background-color: #080a10; /* Deeper, darker background */
+    }
+
+    /* NEON GRADIENT HEADINGS */
+    h1, h2, h3, h4 {
+        background: linear-gradient(90deg, #00C9FF, #0072ff); /* Electric Cyan to Blue */
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-family: 'Helvetica Neue', sans-serif;
         font-weight: 800 !important;
+        letter-spacing: 1px;
     }
+
+    /* METRIC NUMBERS */
     div[data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
-        color: #FFD700 !important;
+        font-size: 2rem !important;
+        color: #00C9FF !important; /* Neon Cyan glowing numbers */
+        text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);
+    }
+    div[data-testid="stMetricLabel"] {
+         color: #a0aaba !important; /* Lighter grey labels */
+    }
+
+    /* LUXURY CARD STYLING (Used for Studio, Matchups, Awards) */
+    .luxury-card {
+        background: linear-gradient(145deg, #151922, #1a1c24); /* Subtle gradient card bg */
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(0, 201, 255, 0.1); /* Subtle neon border */
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 0 0px rgba(0, 201, 255, 0.1); /* Depth shadows */
+        backdrop-filter: blur(10px); /* Pseudo-glass effect */
+    }
+    
+    /* Highlight borders for specific cards */
+    .award-card {
+        border-left: 4px solid #00C9FF;
     }
     .studio-box {
-        background-color: #1e2130;
-        border-left: 5px solid #FFD700;
-        padding: 20px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-        color: #e0e0e0;
+        border-left: 4px solid #0072ff;
     }
-    /* Gold Border Card for Awards */
-    .award-card {
-        border: 1px solid #FFD700;
-        background-color: #1a1c24;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        margin-bottom: 10px;
+
+    /* CUSTOMIZING STREAMLIT TABS */
+    /* Tab Labels */
+    button[data-baseweb="tab"] {
+        color: #a0aaba;
+        border-radius: 8px;
+    }
+    /* Active Tab Styling */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #00C9FF !important;
+        background-color: rgba(0, 201, 255, 0.1) !important;
+        border: 1px solid #00C9FF !important;
+    }
+    /* Remove default underline */
+    div[data-baseweb="tab-highlight"] {
+        background-color: transparent !important;
+    }
+
+    /* DATAFRAME STYLING */
+    div[data-testid="stDataFrame"] {
+        background-color: #151922;
+        border-radius: 12px;
+        padding: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -58,7 +97,9 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
-lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
+# Kept the same animations, but they might clash slightly now. 
+# Consider finding cyan/blue tech animations in the future.
+lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06888982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 
@@ -113,103 +154,56 @@ def calculate_heavy_analytics(current_week):
 # --- B. Season Awards Engine (Trophy Room) ---
 @st.cache_data(ttl=3600)
 def calculate_season_awards(current_week):
-    # Trackers
     player_points = {} 
     team_bench_points = {t.team_name: 0 for t in league.teams}
-    
-    # New Award Trackers
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
-    heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0} # Smallest loss
-    
-    # Streak Tracking
+    heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
     current_streaks = {t.team_name: 0 for t in league.teams}
     max_streaks = {t.team_name: 0 for t in league.teams}
-    
-    # Asleep at the Wheel (0 points in starting lineup)
     asleep_count = {t.team_name: 0 for t in league.teams}
     
     for w in range(1, current_week + 1):
         box = league.box_scores(week=w)
         for game in box:
-            h_name = game.home_team.team_name
-            a_name = game.away_team.team_name
-            
-            # 1. Margins & Streaks
+            h_name, a_name = game.home_team.team_name, game.away_team.team_name
             margin = abs(game.home_score - game.away_score)
-            
-            # Determine Winner/Loser
-            if game.home_score > game.away_score:
-                winner, loser = h_name, a_name
-            else:
-                winner, loser = a_name, h_name
+            if game.home_score > game.away_score: winner, loser = h_name, a_name
+            else: winner, loser = a_name, h_name
                 
-            # Update Streaks
             current_streaks[winner] += 1
-            current_streaks[loser] = 0 # Reset loser streak
-            if current_streaks[winner] > max_streaks[winner]:
-                max_streaks[winner] = current_streaks[winner]
+            current_streaks[loser] = 0
+            if current_streaks[winner] > max_streaks[winner]: max_streaks[winner] = current_streaks[winner]
             
-            # Check Blowout
-            if margin > biggest_blowout["Margin"]:
-                biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            if game.home_score > single_game_high["Score"]: single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
+            if game.away_score > single_game_high["Score"]: single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
                 
-            # Check Heartbreaker (Smallest Margin)
-            if margin < heartbreaker["Margin"]:
-                heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
-            
-            # Check Max Score
-            if game.home_score > single_game_high["Score"]:
-                single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
-            if game.away_score > single_game_high["Score"]:
-                single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
-                
-            # 2. Player Stats (MVP & Asleep at Wheel)
             def process_roster(lineup, team_name):
                 for p in lineup:
-                    # MVP Tracking
-                    if p.playerId not in player_points:
-                        player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
+                    if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
                     player_points[p.playerId]["Points"] += p.points
-                    
-                    # Bench Points
-                    if p.slot_position == 'BE':
-                        team_bench_points[team_name] += p.points
-                    else:
-                        # Asleep at Wheel Check (Started with 0 points - Proxy for Bye/Inactive/Dud)
-                        if p.points == 0:
-                            asleep_count[team_name] += 1
+                    if p.slot_position == 'BE': team_bench_points[team_name] += p.points
+                    else: 
+                        if p.points == 0: asleep_count[team_name] += 1
 
             process_roster(game.home_lineup, h_name)
             process_roster(game.away_lineup, a_name)
             
-    # Finalize Winners
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
-    mvp = sorted_players[0] if sorted_players else None
-    
     sorted_bench = sorted(team_bench_points.items(), key=lambda x: x[1], reverse=True)
-    bench_king = sorted_bench[0] if sorted_bench else None
-    
     sorted_teams = sorted(league.teams, key=lambda x: x.points_for, reverse=True)
-    best_manager = sorted_teams[0]
-    
-    # Sort Streaks
     longest_streak_team = max(max_streaks, key=max_streaks.get)
-    longest_streak_val = max_streaks[longest_streak_team]
-    
-    # Sort Sleepers
     sleepiest_team = max(asleep_count, key=asleep_count.get)
-    sleepiest_val = asleep_count[sleepiest_team]
     
     return {
-        "MVP": mvp,
-        "Bench King": bench_king,
-        "Single Game": single_game_high,
-        "Blowout": biggest_blowout,
-        "Heartbreaker": heartbreaker,
-        "Streak": {"Team": longest_streak_team, "Length": longest_streak_val},
-        "Sleeper": {"Team": sleepiest_team, "Count": sleepiest_val},
-        "Best Manager": {"Team": best_manager.team_name, "Points": best_manager.points_for, "Logo": best_manager.logo_url}
+        "MVP": sorted_players[0] if sorted_players else None,
+        "Bench King": sorted_bench[0] if sorted_bench else None,
+        "Single Game": single_game_high, "Blowout": biggest_blowout, "Heartbreaker": heartbreaker,
+        "Streak": {"Team": longest_streak_team, "Length": max_streaks[longest_streak_team]},
+        "Sleeper": {"Team": sleepiest_team, "Count": asleep_count[sleepiest_team]},
+        "Best Manager": {"Team": sorted_teams[0].team_name, "Points": sorted_teams[0].points_for, "Logo": sorted_teams[0].logo_url}
     }
 
 # --- C. Monte Carlo Simulator ---
@@ -218,10 +212,8 @@ def run_monte_carlo_simulation(simulations=1000):
     team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
     reg_season_end = league.settings.reg_season_count
     current_w = league.current_week
-    
     try: num_playoff_teams = league.settings.playoff_team_count
     except: num_playoff_teams = 4
-
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
     avg_league_power = sum(team_power.values()) / len(team_power)
     schedule_difficulty = {t.team_id: [] for t in league.teams}
@@ -235,19 +227,15 @@ def run_monte_carlo_simulation(simulations=1000):
                 schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
     results = {t.team_name: 0 for t in league.teams}
-    
     for i in range(simulations):
         sim_standings = {k: v.copy() for k, v in team_data.items()}
         if current_w <= reg_season_end:
              for w in range(current_w, reg_season_end + 1):
                  for tid, stats in sim_standings.items():
-                     power = team_power[tid]
-                     performance = np.random.normal(power, 15)
+                     performance = np.random.normal(team_power[tid], 15)
                      if performance > 115: sim_standings[tid]["wins"] += 1
-
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
-        top_teams = [t["name"] for t in sorted_teams[:num_playoff_teams]]
-        for name in top_teams: results[name] += 1
+        for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
 
     final_output = []
     for team in league.teams:
@@ -255,15 +243,12 @@ def run_monte_carlo_simulation(simulations=1000):
         odds = (results[team.team_name] / simulations) * 100
         opponents_scores = schedule_difficulty[tid]
         avg_opp_strength = sum(opponents_scores) / len(opponents_scores) if opponents_scores else avg_league_power
-        my_power = team_power[tid]
-        diff = my_power - avg_opp_strength
-        
+        diff = team_power[tid] - avg_opp_strength
         if odds > 99: reason = "🔒 Locked."
-        elif odds > 80: reason = "🚀 High Prob."
-        elif odds > 40: reason = "⚖️ Bubble."
+        elif odds > 80: reason = "🚀 High Prob." if diff > 10 else "💪 Grinding."
+        elif odds > 40: reason = "⚖️ Bubble." if diff > 0 else "⚠️ Coin Flip."
         elif odds > 5: reason = "🙏 Miracle."
         else: reason = "💀 Dead."
-            
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
@@ -293,12 +278,9 @@ all_active_players = []
 bench_highlights = []
 
 for game in box_scores:
-    home = game.home_team
-    away = game.away_team
-    
+    home, away = game.home_team, game.away_team
     def get_roster_data(lineup, team_name):
-        starters, bench = [], []
-        p_start, p_bench = 0, 0
+        starters, bench, p_start, p_bench = [], [], 0, 0
         for p in lineup:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
             if p.slot_position == 'BE':
@@ -311,12 +293,7 @@ for game in box_scores:
 
     h_r, h_br, h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
     a_r, a_br, a_s, a_b = get_roster_data(game.away_lineup, away.team_name)
-    
-    matchup_data.append({
-        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url, "Home Roster": h_r,
-        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url, "Away Roster": a_r
-    })
-    
+    matchup_data.append({"Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url, "Home Roster": h_r, "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url, "Away Roster": a_r})
     efficiency_data.append({"Team": home.team_name, "Starters": h_s, "Bench": h_b, "Total Potential": h_s + h_b})
     efficiency_data.append({"Team": away.team_name, "Starters": a_s, "Bench": a_b, "Total Potential": a_s + a_b})
 
@@ -330,8 +307,7 @@ df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascendin
 def get_ai_recap():
     if not openai_key: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
-    bench_king = df_eff.sort_values(by="Bench", ascending=False).iloc[0]['Team']
-    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Inefficient Manager: {bench_king}. Style: Wall Street Report."
+    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: High-frequency trading desk report, urgent and professional."
     try:
         client = OpenAI(api_key=openai_key)
         return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
@@ -340,18 +316,23 @@ def get_ai_recap():
 # ------------------------------------------------------------------
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
-st.title(f"🏛️ Luxury League: Week {selected_week}")
+st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
 if "recap" not in st.session_state:
     with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_ai_recap()
-st.markdown(f'<div class="studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+# APPLIED NEW LUXURY-CARD CLASS AND STUDIO-BOX CLASS
+st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
 
-st.markdown("### 🌟 The Week's Elite")
+st.markdown("### 🌟 The Week's Elite Assets")
 cols = st.columns(5)
 for i, (idx, p) in enumerate(df_players.iterrows()):
     with cols[i]:
-        st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254")
-        st.caption(f"{p['Name']} ({p['Points']})")
+        # APPLIED LUXURY-CARD CLASS TO PLAYER CARDS
+        st.markdown(f"""<div class="luxury-card" style="padding: 10px; text-align: center;">
+            <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=150&h=110" style="border-radius: 10px;">
+            <div style="font-weight: bold; color: #00C9FF; margin-top: 5px;">{p['Name']}</div>
+            <div style="color: #a0aaba;">{p['Points']} pts</div>
+        </div>""", unsafe_allow_html=True)
 
 # TABS
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "🏆 Trophy Room"])
@@ -359,19 +340,20 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📜 The Ledger", "📈 The
 with tab1:
     st.subheader("Weekly Matchups")
     for m in matchup_data:
+        # APPLIED LUXURY-CARD CLASS TO MATCHUPS
         st.markdown(f"""
-        <div style="background-color: #1a1c24; padding: 15px; border-radius: 10px; margin-bottom: 5px; border: 1px solid #333;">
+        <div class="luxury-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="text-align: center; width: 40%;">
-                    <img src="{m['Home Logo']}" width="50" style="border-radius: 50%;">
-                    <div style="font-weight: bold; color: white;">{m['Home']}</div>
-                    <div style="font-size: 20px; color: #FFD700;">{m['Home Score']}</div>
+                    <img src="{m['Home Logo']}" width="60" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px;">
+                    <div style="font-weight: bold; color: white; margin-top: 5px;">{m['Home']}</div>
+                    <div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Home Score']}</div>
                 </div>
-                <div style="color: #666; font-size: 12px;">VS</div>
+                <div style="color: #a0aaba; font-size: 14px; font-weight: bold;">VS</div>
                 <div style="text-align: center; width: 40%;">
-                    <img src="{m['Away Logo']}" width="50" style="border-radius: 50%;">
-                    <div style="font-weight: bold; color: white;">{m['Away']}</div>
-                    <div style="font-size: 20px; color: #FFD700;">{m['Away Score']}</div>
+                    <img src="{m['Away Logo']}" width="60" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px;">
+                    <div style="font-weight: bold; color: white; margin-top: 5px;">{m['Away']}</div>
+                    <div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Away Score']}</div>
                 </div>
             </div>
         </div>
@@ -392,14 +374,16 @@ with tab1:
 
 with tab2:
     st.subheader("Power Rankings")
-    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#FFD700")
+    # UPDATED COLOR TO NEON BLUE
+    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 with tab3:
     st.subheader("Efficiency Audit")
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#FFD700'))
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#333333'))
-    fig.update_layout(barmode='stack', plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white", title="Total Potential")
+    # UPDATED COLORS TO NEON BLUE / DARK GREY
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#2c313a'))
+    fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential")
     st.plotly_chart(fig, use_container_width=True)
     if not df_bench_stars.empty:
         st.markdown("#### 🚨 'Should Have Started'")
@@ -415,9 +399,10 @@ with tab4:
                 st.rerun()
     else:
         df_advanced = st.session_state["df_advanced"]
+        # UPDATED COLOR SCALE TO BLUE/CYAN GRADIENT
         fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating",
-                         color_continuous_scale=["#FF4B4B", "#333333", "#00FF00"], title="Luck Matrix")
-        fig.update_layout(plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white")
+                         color_continuous_scale=["#0072ff", "#1a1c24", "#00C9FF"], title="Luck Matrix")
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
 
 with tab5:
@@ -445,12 +430,25 @@ with tab6:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            with st.container():
-                c1, c2, c3 = st.columns([2, 1, 2])
-                with c1: st.markdown(f"**{game.home_team.team_name}**"); st.markdown(f"Proj: {h_proj:.1f}")
-                with c2: st.caption(f"Fav: {fav} (+{spread:.1f})")
-                with c3: st.markdown(f"**{game.away_team.team_name}**"); st.markdown(f"Proj: {a_proj:.1f}")
-                st.divider()
+            # APPLIED LUXURY-CARD TO NEXT WEEK MATCHUPS
+            st.markdown(f"""
+            <div class="luxury-card" style="padding: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; text-align: center;">
+                    <div style="flex: 2;">
+                        <div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div>
+                        <div style="color: #00C9FF;">Proj: {h_proj:.1f}</div>
+                    </div>
+                    <div style="flex: 1; color: #a0aaba; font-size: 0.9em;">
+                        <div>VS</div>
+                        <div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div>
+                    </div>
+                    <div style="flex: 2;">
+                        <div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div>
+                        <div style="color: #00C9FF;">Proj: {a_proj:.1f}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
 with tab7:
@@ -465,13 +463,14 @@ with tab7:
         awards = st.session_state["awards"]
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
+            # UPDATED AWARD CARDS TO USE NEW LUXURY-CARD CLASS AND CYAN BORDER
+            st.markdown('<div class="luxury-card award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
             if awards['MVP']:
                 p = awards['MVP']
                 st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254", width=150)
                 st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts", delta="Season Total")
         with c2:
-            st.markdown('<div class="award-card"><h3>🐋 The Whale (Best Mgr)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="luxury-card award-card"><h3>🐋 The Whale (Best Mgr)</h3></div>', unsafe_allow_html=True)
             mgr = awards['Best Manager']
             st.image(mgr['Logo'], width=100)
             st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts", delta="Total Points For")
