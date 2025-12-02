@@ -73,7 +73,7 @@ def load_lottieurl(url: str):
 lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
-lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json") # Handshake/Trade animation
+lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
 
 try:
     league_id = st.secrets["league_id"]
@@ -241,7 +241,7 @@ page_options = [
     "💎 The Hedge Fund", 
     "🔮 The Forecast", 
     "🚀 Next Week", 
-    "🤝 The Dealmaker", # NEW PAGE
+    "🤝 The Dealmaker", 
     "🏆 Trophy Room"
 ]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
@@ -324,7 +324,7 @@ def get_season_retrospective(mvp, best_mgr):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
     except: return "Analyst Offline."
 
-# NEW AI BROKER FUNCTION
+# FIXED AI BROKER FUNCTION
 def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
@@ -439,28 +439,19 @@ elif selected_page == "🚀 Next Week":
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div><div style="color: #00C9FF;">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div><div style="color: #00C9FF;">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
-# ------------------------------------------------------------------
-# NEW PAGE: THE DEALMAKER
-# ------------------------------------------------------------------
 elif selected_page == "🤝 The Dealmaker":
     st.header("🤝 The AI Dealmaker")
     st.caption("Select two teams to have the AI negotiate a mutually beneficial trade.")
-    
     col_a, col_b = st.columns(2)
-    with col_a:
-        team_a_name = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
-    with col_b:
-        team_b_name = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
-        
+    with col_a: team_a_name = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
+    with col_b: team_b_name = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
     if st.button("🤖 Generate Trade Proposal"):
         if lottie_trade: st_lottie(lottie_trade, height=200)
         with st.spinner("Analyzing roster deficiencies and surplus..."):
-            # Get Rosters
             team_a = next(t for t in league.teams if t.team_name == team_a_name)
             team_b = next(t for t in league.teams if t.team_name == team_b_name)
-            roster_a = [f"{p.name} ({p.position})" for p in team_a.roster if p.slot_position != 'BE']
-            roster_b = [f"{p.name} ({p.position})" for p in team_b.roster if p.slot_position != 'BE']
-            
+            roster_a = [f"{p.name} ({p.position})" for p in team_a.roster]
+            roster_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(team_a_name, team_b_name, roster_a, roster_b)
             st.markdown(f'<div class="luxury-card studio-box"><h3>🤝 Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
 
