@@ -36,6 +36,15 @@ st.markdown("""
         margin-bottom: 20px;
         color: #e0e0e0;
     }
+    /* Gold Border Card for Awards */
+    .award-card {
+        border: 1px solid #FFD700;
+        background-color: #1a1c24;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -51,6 +60,7 @@ def load_lottieurl(url: str):
 
 lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
+lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 
 try:
     league_id = st.secrets["league_id"]
@@ -100,19 +110,117 @@ def calculate_heavy_analytics(current_week):
         })
     return pd.DataFrame(data_rows)
 
-# --- B. Monte Carlo Simulator (Crystal Ball) ---
+# --- B. Season Awards Engine (Trophy Room) ---
+@st.cache_data(ttl=3600)
+def calculate_season_awards(current_week):
+    # Trackers
+    player_points = {} 
+    team_bench_points = {t.team_name: 0 for t in league.teams}
+    
+    # New Award Trackers
+    single_game_high = {"Team": "", "Score": 0, "Week": 0}
+    biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
+    heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0} # Smallest loss
+    
+    # Streak Tracking
+    current_streaks = {t.team_name: 0 for t in league.teams}
+    max_streaks = {t.team_name: 0 for t in league.teams}
+    
+    # Asleep at the Wheel (0 points in starting lineup)
+    asleep_count = {t.team_name: 0 for t in league.teams}
+    
+    for w in range(1, current_week + 1):
+        box = league.box_scores(week=w)
+        for game in box:
+            h_name = game.home_team.team_name
+            a_name = game.away_team.team_name
+            
+            # 1. Margins & Streaks
+            margin = abs(game.home_score - game.away_score)
+            
+            # Determine Winner/Loser
+            if game.home_score > game.away_score:
+                winner, loser = h_name, a_name
+            else:
+                winner, loser = a_name, h_name
+                
+            # Update Streaks
+            current_streaks[winner] += 1
+            current_streaks[loser] = 0 # Reset loser streak
+            if current_streaks[winner] > max_streaks[winner]:
+                max_streaks[winner] = current_streaks[winner]
+            
+            # Check Blowout
+            if margin > biggest_blowout["Margin"]:
+                biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+                
+            # Check Heartbreaker (Smallest Margin)
+            if margin < heartbreaker["Margin"]:
+                heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            
+            # Check Max Score
+            if game.home_score > single_game_high["Score"]:
+                single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
+            if game.away_score > single_game_high["Score"]:
+                single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
+                
+            # 2. Player Stats (MVP & Asleep at Wheel)
+            def process_roster(lineup, team_name):
+                for p in lineup:
+                    # MVP Tracking
+                    if p.playerId not in player_points:
+                        player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
+                    player_points[p.playerId]["Points"] += p.points
+                    
+                    # Bench Points
+                    if p.slot_position == 'BE':
+                        team_bench_points[team_name] += p.points
+                    else:
+                        # Asleep at Wheel Check (Started with 0 points - Proxy for Bye/Inactive/Dud)
+                        if p.points == 0:
+                            asleep_count[team_name] += 1
+
+            process_roster(game.home_lineup, h_name)
+            process_roster(game.away_lineup, a_name)
+            
+    # Finalize Winners
+    sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
+    mvp = sorted_players[0] if sorted_players else None
+    
+    sorted_bench = sorted(team_bench_points.items(), key=lambda x: x[1], reverse=True)
+    bench_king = sorted_bench[0] if sorted_bench else None
+    
+    sorted_teams = sorted(league.teams, key=lambda x: x.points_for, reverse=True)
+    best_manager = sorted_teams[0]
+    
+    # Sort Streaks
+    longest_streak_team = max(max_streaks, key=max_streaks.get)
+    longest_streak_val = max_streaks[longest_streak_team]
+    
+    # Sort Sleepers
+    sleepiest_team = max(asleep_count, key=asleep_count.get)
+    sleepiest_val = asleep_count[sleepiest_team]
+    
+    return {
+        "MVP": mvp,
+        "Bench King": bench_king,
+        "Single Game": single_game_high,
+        "Blowout": biggest_blowout,
+        "Heartbreaker": heartbreaker,
+        "Streak": {"Team": longest_streak_team, "Length": longest_streak_val},
+        "Sleeper": {"Team": sleepiest_team, "Count": sleepiest_val},
+        "Best Manager": {"Team": best_manager.team_name, "Points": best_manager.points_for, "Logo": best_manager.logo_url}
+    }
+
+# --- C. Monte Carlo Simulator ---
 @st.cache_data(ttl=3600)
 def run_monte_carlo_simulation(simulations=1000):
     team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
     reg_season_end = league.settings.reg_season_count
     current_w = league.current_week
     
-    # Use Dynamic Playoff Spots from Settings
-    # If not found, fallback to 4 (safe default)
-    try:
-        num_playoff_teams = league.settings.playoff_team_count
-    except:
-        num_playoff_teams = 4
+    try: num_playoff_teams = league.settings.playoff_team_count
+    except: num_playoff_teams = 4
 
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
     avg_league_power = sum(team_power.values()) / len(team_power)
@@ -122,8 +230,7 @@ def run_monte_carlo_simulation(simulations=1000):
         for w in range(current_w, reg_season_end + 1):
             future_box = league.box_scores(week=w)
             for game in future_box:
-                h = game.home_team
-                a = game.away_team
+                h, a = game.home_team, game.away_team
                 schedule_difficulty[h.team_id].append(team_power[a.team_id])
                 schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
@@ -136,12 +243,9 @@ def run_monte_carlo_simulation(simulations=1000):
                  for tid, stats in sim_standings.items():
                      power = team_power[tid]
                      performance = np.random.normal(power, 15)
-                     if performance > 115:
-                         sim_standings[tid]["wins"] += 1
+                     if performance > 115: sim_standings[tid]["wins"] += 1
 
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
-        
-        # Use the dynamic variable here
         top_teams = [t["name"] for t in sorted_teams[:num_playoff_teams]]
         for name in top_teams: results[name] += 1
 
@@ -154,17 +258,13 @@ def run_monte_carlo_simulation(simulations=1000):
         my_power = team_power[tid]
         diff = my_power - avg_opp_strength
         
-        if odds > 99: reason = "🔒 **Locked In.** Your roster strength is statistically overwhelming."
-        elif odds > 80:
-            if diff > 10: reason = "🚀 **High Probability.** Combination of elite scoring and a soft remaining schedule."
-            else: reason = "💪 **Strong Contender.** Battling through a tough schedule, but your points buffer is safe."
-        elif odds > 40:
-            if diff > 0: reason = "⚖️ **The Bubble.** You control your destiny with a favorable schedule ahead."
-            else: reason = "⚠️ **Coin Flip.** Brutal upcoming schedule puts your season at risk."
-        elif odds > 5: reason = "🙏 **In the Hunt.** You need to win out and hope for chaos above you."
-        else: reason = "💀 **On Life Support.** Statistically unlikely without a miracle collapse."
+        if odds > 99: reason = "🔒 Locked."
+        elif odds > 80: reason = "🚀 High Prob."
+        elif odds > 40: reason = "⚖️ Bubble."
+        elif odds > 5: reason = "🙏 Miracle."
+        else: reason = "💀 Dead."
             
-        final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Analyst Note": reason})
+        final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
@@ -231,7 +331,7 @@ def get_ai_recap():
     if not openai_key: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
     bench_king = df_eff.sort_values(by="Bench", ascending=False).iloc[0]['Team']
-    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}, Inefficient Manager: {bench_king}. Style: Wall Street Report."
+    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Inefficient Manager: {bench_king}. Style: Wall Street Report."
     try:
         client = OpenAI(api_key=openai_key)
         return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
@@ -254,7 +354,7 @@ for i, (idx, p) in enumerate(df_players.iterrows()):
         st.caption(f"{p['Name']} ({p['Points']})")
 
 # TABS
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "🏆 Trophy Room"])
 
 with tab1:
     st.subheader("Weekly Matchups")
@@ -321,63 +421,75 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
 with tab5:
-    st.subheader("🔮 The Crystal Ball (Playoff Simulator)")
-    st.caption("Monte Carlo Simulation (1,000 Runs) | Incorporating Remaining Schedule Difficulty")
+    st.subheader("🔮 The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             if lottie_forecast: st_lottie(lottie_forecast, height=200)
-            with st.spinner("Calculating schedule difficulty and probabilities..."):
+            with st.spinner("Crunching probabilities..."):
                 st.session_state["playoff_odds"] = run_monte_carlo_simulation()
                 st.rerun()
     else:
         df_odds = st.session_state["playoff_odds"]
-        if df_odds is None:
-            st.success("🎉 Regular Season Complete.")
-        else:
-            st.dataframe(
-                df_odds, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "Playoff Odds": st.column_config.ProgressColumn("Probability", format="%.1f%%", min_value=0, max_value=100),
-                    "Analyst Note": st.column_config.TextColumn("The Why?", width="large")
-                }
-            )
-            if st.button("🔄 Re-Simulate"):
-                del st.session_state["playoff_odds"]; st.rerun()
+        st.dataframe(df_odds, use_container_width=True, hide_index=True, column_config={
+            "Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=100)})
+        if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
 
 with tab6:
-    st.subheader("🚀 Next Week's Market Preview")
-    st.caption("Projected scores for the upcoming matchup period.")
-    
-    # Get Next Week's Matchups
-    next_week = league.current_week
+    st.subheader("🚀 Next Week")
     try:
+        next_week = league.current_week
         next_box_scores = league.box_scores(week=next_week)
-        
         for game in next_box_scores:
-            h_proj = game.home_projected
-            a_proj = game.away_projected
-            if h_proj == 0: h_proj = 100 # Fallback if projections missing
+            h_proj, a_proj = game.home_projected, game.away_projected
+            if h_proj == 0: h_proj = 100
             if a_proj == 0: a_proj = 100
-            
-            # Simple spread calculation
             spread = abs(h_proj - a_proj)
-            favorite = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            
+            fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
             with st.container():
-                col1, col2, col3 = st.columns([2, 1, 2])
-                with col1:
-                    st.markdown(f"**{game.home_team.team_name}**")
-                    st.markdown(f"Proj: {h_proj:.1f}")
-                with col2:
-                    st.markdown(f"**VS**")
-                    if spread < 5: st.caption("🔥 Close Game")
-                    else: st.caption(f"Fav: {favorite} (+{spread:.1f})")
-                with col3:
-                    st.markdown(f"**{game.away_team.team_name}**")
-                    st.markdown(f"Proj: {a_proj:.1f}")
+                c1, c2, c3 = st.columns([2, 1, 2])
+                with c1: st.markdown(f"**{game.home_team.team_name}**"); st.markdown(f"Proj: {h_proj:.1f}")
+                with c2: st.caption(f"Fav: {fav} (+{spread:.1f})")
+                with c3: st.markdown(f"**{game.away_team.team_name}**"); st.markdown(f"Proj: {a_proj:.1f}")
                 st.divider()
-                
-    except Exception as e:
-        st.info("Season is over or projections are unavailable.")
+    except: st.info("Projections unavailable.")
+
+with tab7:
+    st.subheader("🏆 The Trophy Room")
+    if "awards" not in st.session_state:
+        if st.button("🏅 Unveil Yearly Awards"):
+            if lottie_trophy: st_lottie(lottie_trophy, height=200)
+            with st.spinner("Engraving trophies..."):
+                st.session_state["awards"] = calculate_season_awards(current_week)
+                st.rerun()
+    else:
+        awards = st.session_state["awards"]
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<div class="award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
+            if awards['MVP']:
+                p = awards['MVP']
+                st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254", width=150)
+                st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts", delta="Season Total")
+        with c2:
+            st.markdown('<div class="award-card"><h3>🐋 The Whale (Best Mgr)</h3></div>', unsafe_allow_html=True)
+            mgr = awards['Best Manager']
+            st.image(mgr['Logo'], width=100)
+            st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts", delta="Total Points For")
+
+        st.divider()
+        c3, c4, c5 = st.columns(3)
+        with c3:
+            st.markdown("#### 💔 Heartbreaker")
+            st.caption("Smallest Margin of Defeat")
+            hb = awards['Heartbreaker']
+            st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts", delta=f"Week {hb['Week']}")
+        with c4:
+            st.markdown("#### 🔥 The Streak")
+            st.caption("Longest Win Streak")
+            stk = awards['Streak']
+            st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
+        with c5:
+            st.markdown("#### 💤 Asleep at Wheel")
+            st.caption("Starters with 0.0 Pts (Byes/Injuries)")
+            slp = awards['Sleeper']
+            st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
