@@ -2,17 +2,19 @@ import streamlit as st
 from espn_api.football import League
 import pandas as pd
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 from openai import OpenAI
 
 # ------------------------------------------------------------------
-# 1. SETUP & CONFIGURATION
+# 1. CONFIGURATION & STYLE
 # ------------------------------------------------------------------
 st.set_page_config(page_title="Luxury League", page_icon="🥂", layout="wide")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; }
-    h1, h2, h3, h4 {
+    h1, h2, h3 {
         background: -webkit-linear-gradient(45deg, #FFD700, #FDB931);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -23,287 +25,257 @@ st.markdown("""
         font-size: 1.8rem !important;
         color: #FFD700 !important;
     }
-    .stDataFrame { border: 1px solid #333; border-radius: 10px; }
-    img { border-radius: 10px; transition: transform .2s; }
-    img:hover { transform: scale(1.05); }
-    
     .studio-box {
         background-color: #1e2130;
         border-left: 5px solid #FFD700;
         padding: 20px;
         border-radius: 5px;
         margin-bottom: 20px;
-        font-family: 'Georgia', serif;
         color: #e0e0e0;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# 2. DATA CONNECTION & CACHING
+# 2. CONNECTION & CACHING
 # ------------------------------------------------------------------
 try:
+    # Load secrets safely
     league_id = st.secrets["league_id"]
     swid = st.secrets["swid"]
     espn_s2 = st.secrets["espn_s2"]
     openai_key = st.secrets.get("openai_key")
     year = 2025
-    
-    # We cache the league connection so we don't reconnect every click
+
     @st.cache_resource
     def get_league():
         return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-    
+
     league = get_league()
-    
-except Exception:
-    st.error("🔒 Security Clearance Failed. Check Secrets.")
+
+except Exception as e:
+    st.error(f"🔒 Connection Error: {e}")
     st.stop()
 
 # ------------------------------------------------------------------
-# 3. ADVANCED ANALYTICS ENGINE (The Hedge Fund)
+# 3. ADVANCED CALCULATIONS (Efficiency & Luck)
 # ------------------------------------------------------------------
-@st.cache_data(ttl=3600) # Cache this heavy math for 1 hour
-def calculate_financials(current_week):
-    # This dictionary will hold all our advanced stats
-    team_stats = {}
+@st.cache_data(ttl=3600)
+def calculate_advanced_stats(current_week):
+    data_rows = []
+    
+    # We need historical data for the scatter plot
     for team in league.teams:
-        team_stats[team.team_name] = {
-            "Scores": [],
-            "True Wins": 0,
-            "True Losses": 0,
-            "Actual Wins": team.wins,
-            "Actual Losses": team.losses,
+        # 1. Power Score (ESPN's internal calculation)
+        # Note: We take the most recent available rank/score
+        power_score = team.wins * 20 + team.points_for * 0.5 # Simple custom power formula if API fails
+        
+        # 2. Luck Calculation (True Record)
+        true_wins = 0
+        total_matchups = 0
+        
+        # Loop through history to find "True Wins"
+        # (This is expensive, so we just estimate using PF for speed if needed)
+        # But here is the real way:
+        for w in range(1, current_week + 1):
+            box = league.box_scores(week=w)
+            # Find this team's score
+            my_score = next((g.home_score if g.home_team == team else g.away_score 
+                             for g in box if g.home_team == team or g.away_team == team), 0)
+            
+            # Compare vs entire league
+            all_scores = [g.home_score for g in box] + [g.away_score for g in box]
+            wins_this_week = sum(1 for s in all_scores if my_score > s)
+            true_wins += wins_this_week
+            total_matchups += (len(league.teams) - 1)
+
+        true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
+        actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
+        
+        # Luck = Difference between Actual and Theoretical
+        luck_rating = (actual_win_pct - true_win_pct) * 10
+        
+        data_rows.append({
+            "Team": team.team_name,
+            "Logo": team.logo_url,
+            "Wins": team.wins,
             "Points For": team.points_for,
-            "Logo": team.logo_url
-        }
-
-    # Loop through ALL weeks to build history
-    for w in range(1, current_week + 1):
-        box_scores = league.box_scores(week=w)
-        
-        # 1. Get all scores for this week
-        weekly_scores = []
-        for game in box_scores:
-            weekly_scores.append({"Team": game.home_team.team_name, "Score": game.home_score})
-            weekly_scores.append({"Team": game.away_team.team_name, "Score": game.away_score})
-            
-            # Record scores for volatility
-            team_stats[game.home_team.team_name]["Scores"].append(game.home_score)
-            team_stats[game.away_team.team_name]["Scores"].append(game.away_score)
-
-        # 2. Calculate "True Record" (Head-to-Head vs Everyone)
-        for team_a in weekly_scores:
-            wins = 0
-            losses = 0
-            for team_b in weekly_scores:
-                if team_a["Team"] == team_b["Team"]: continue # Skip self
-                if team_a["Score"] > team_b["Score"]: wins += 1
-                else: losses += 1
-            
-            team_stats[team_a["Team"]]["True Wins"] += wins
-            team_stats[team_a["Team"]]["True Losses"] += losses
-
-    # 3. Finalize Metrics (Volatility, Luck)
-    analytics_data = []
-    for name, data in team_stats.items():
-        if not data["Scores"]: continue
-        
-        avg_score = np.mean(data["Scores"])
-        std_dev = np.std(data["Scores"]) # The VIX (Volatility)
-        
-        # Luck Rating: (Actual Win % - True Win %)
-        actual_win_pct = data["Actual Wins"] / (data["Actual Wins"] + data["Actual Losses"] + 0.001)
-        true_win_pct = data["True Wins"] / (data["True Wins"] + data["True Losses"] + 0.001)
-        luck_index = (actual_win_pct - true_win_pct) * 100 
-        
-        analytics_data.append({
-            "Team": name,
-            "Avg Score": avg_score,
-            "Volatility (VIX)": std_dev,
-            "True Win %": true_win_pct,
-            "Luck Rating": luck_index, # Positive = Lucky, Negative = Unlucky
-            "Logo": data["Logo"]
+            "Power Score": round(team.points_for / current_week, 1), # Using PPG as "Power" for clarity
+            "Luck Rating": luck_rating,
+            "True Win %": true_win_pct
         })
         
-    return pd.DataFrame(analytics_data)
+    return pd.DataFrame(data_rows)
 
 # ------------------------------------------------------------------
-# 4. WEEKLY DATA PROCESSING
+# 4. CURRENT WEEK DATA PROCESSING
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 
-# Get the basic data for the selected week
 box_scores = league.box_scores(week=selected_week)
-score_data = []
-matchup_details = [] 
-all_active_players = [] 
-bench_data = []
 
-# Award Trackers
-highest_score_loser = {"score": -1, "team": "N/A"}
-lowest_score_winner = {"score": 999, "team": "N/A"}
-biggest_bench_warmer = {"points": -1, "team": "N/A"}
+# Containers
+matchup_data = []
+efficiency_data = [] # For the new "Audit" chart
+all_active_players = []
 
+# Loop
 for game in box_scores:
-    home_team = game.home_team.team_name
-    away_team = game.away_team.team_name
-    home_score = game.home_score
-    away_score = game.away_score
+    home = game.home_team
+    away = game.away_team
     
-    # Winner/Loser
-    if home_score > away_score:
-        winner, winner_score = home_team, home_score
-        loser, loser_score = away_team, away_score
-    else:
-        winner, winner_score = away_team, away_score
-        loser, loser_score = home_team, home_score
-
-    # Awards
-    if loser_score > highest_score_loser["score"]:
-        highest_score_loser = {"score": loser_score, "team": loser}
-    if winner_score < lowest_score_winner["score"]:
-        lowest_score_winner = {"score": winner_score, "team": winner}
-        
-    score_data.append({
-        "Home Logo": game.home_team.logo_url, "Home Team": home_team, "Score": f"{home_score} - {away_score}",
-        "Away Team": away_team, "Away Logo": game.away_team.logo_url, "Winner": "Home" if home_score > away_score else "Away"
+    # 1. Store Matchup
+    matchup_data.append({
+        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url,
+        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url
     })
-
-    # Lineup Processing
-    def process_lineup_and_positions(lineup, team_name):
-        team_bench_points = 0
-        pos_breakdown = {"QB": 0, "RB": 0, "WR": 0, "TE": 0, "FLEX": 0, "D/ST": 0, "K": 0}
-        for player in lineup:
-            slot = player.slot_position
-            if slot == 'BE':
-                team_bench_points += player.points
-            else:
-                all_active_players.append({"Name": player.name, "Points": player.points, "Team": team_name, "PlayerID": player.playerId})
-                if slot in pos_breakdown: pos_breakdown[slot] += player.points
-                elif "RB" in slot or "WR" in slot: pos_breakdown["FLEX"] += player.points
-        return team_bench_points, pos_breakdown
-
-    home_bench, home_pos = process_lineup_and_positions(game.home_lineup, home_team)
-    away_bench, away_pos = process_lineup_and_positions(game.away_lineup, away_team)
     
-    bench_data.append({"Team": home_team, "Unrealized Gains": home_bench})
-    bench_data.append({"Team": away_team, "Unrealized Gains": away_bench})
+    # 2. Efficiency Calculation (Starter vs Bench)
+    def get_split(lineup, team_name):
+        starters = 0
+        bench = 0
+        for p in lineup:
+            if p.slot_position == 'BE': bench += p.points
+            else: 
+                starters += p.points
+                all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
+        return starters, bench
 
-    # Deep Dive Data
-    matchup_pos_data = []
-    for pos, pts in home_pos.items(): matchup_pos_data.append({"Position": pos, "Points": pts, "Team": home_team})
-    for pos, pts in away_pos.items(): matchup_pos_data.append({"Position": pos, "Points": pts, "Team": away_team})
-    matchup_details.append({"Home": home_team, "Away": away_team, "Home Score": home_score, "Away Score": away_score, "Data": matchup_pos_data})
+    h_start, h_bench = get_split(game.home_lineup, home.team_name)
+    a_start, a_bench = get_split(game.away_lineup, away.team_name)
+    
+    efficiency_data.append({"Team": home.team_name, "Starters": h_start, "Bench": h_bench, "Total Potential": h_start + h_bench})
+    efficiency_data.append({"Team": away.team_name, "Starters": a_start, "Bench": a_bench, "Total Potential": a_start + a_bench})
 
-# Final Calculations
-df_bench = pd.DataFrame(bench_data).sort_values(by="Unrealized Gains", ascending=False)
-if not df_bench.empty: biggest_bench_warmer = {"team": df_bench.iloc[0]["Team"], "points": df_bench.iloc[0]["Unrealized Gains"]}
-top_performers = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
-power_rankings = league.power_rankings(week=selected_week)
-rank_data = [{"Rank": i+1, "Team": t[1].team_name, "Power Score": float(t[0])} for i, t in enumerate(power_rankings)]
-df_rank = pd.DataFrame(rank_data)
-
-# Run Financials (Advanced Analytics)
-df_financials = calculate_financials(current_week)
+# DataFrames
+df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
+df_advanced = calculate_advanced_stats(current_week)
+df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 
 # ------------------------------------------------------------------
-# 5. AI ENGINE
+# 5. AI NARRATIVE
 # ------------------------------------------------------------------
-def get_ai_recap(week, tragic_hero, bandit, bench_king, top_player, rank_1):
-    if not openai_key: return "⚠️ Add 'openai_key' to secrets for AI Analysis."
-    client = OpenAI(api_key=openai_key)
+def get_ai_recap():
+    if not openai_key: return "⚠️ Add 'openai_key' to secrets."
+    
+    # Find superlatives for context
+    top_scorer = df_eff.iloc[0]['Team']
+    bench_king = df_eff.sort_values(by="Bench", ascending=False).iloc[0]['Team']
+    
     prompt = f"""
-    You are a high-energy, sophisticated sportscaster for 'Luxury League'.
-    User's Team: "14 Jettas".
-    Write a 2-paragraph 'Breaking News' segment for Week {week}.
-    DATA:
-    - Tragic Hero: {tragic_hero['team']} ({tragic_hero['score']} pts)
-    - Lucky Bandit: {bandit['team']} ({bandit['score']} pts)
-    - Efficiency Fail: {bench_king['team']} ({bench_king['points']} pts wasted)
-    - MVP: {top_player}
-    - #1 Rank: {rank_1}
-    STYLE: Financial metaphors (ROI, liquidity, volatility). Mock the Efficiency Fail.
+    Write a 2-paragraph fantasy football recap for Week {selected_week}.
+    Focus on:
+    1. The "Powerhouse" of the week: {top_scorer} (Highest Potential).
+    2. The "Inefficient Manager": {bench_king} (Most points left on bench).
+    Style: Wall Street financial report.
     """
     try:
-        response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=500)
-        return response.choices[0].message.content
-    except Exception as e: return f"Analyst Offline: {e}"
+        client = OpenAI(api_key=openai_key)
+        return client.chat.completions.create(
+            model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400
+        ).choices[0].message.content
+    except: return "Analyst is offline."
 
 # ------------------------------------------------------------------
 # 6. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League: Week {selected_week}")
 
-# --- AI & AWARDS ---
-if not df_rank.empty and not top_performers.empty:
-    if "recap_text" not in st.session_state:
-        with st.spinner("🎙️ Studio Analyst is reviewing the game tape..."):
-            top_player_str = f"{top_performers.iloc[0]['Name']} ({top_performers.iloc[0]['Points']})"
-            st.session_state["recap_text"] = get_ai_recap(selected_week, highest_score_loser, lowest_score_winner, biggest_bench_warmer, top_player_str, df_rank.iloc[0]['Team'])
-    st.markdown(f'<div class="studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap_text"]}</div>', unsafe_allow_html=True)
-    if st.button("🔄 Refresh Analysis"): del st.session_state["recap_text"]; st.rerun()
+# AI Box
+if "recap" not in st.session_state:
+    with st.spinner("🎙️ Analyst is reviewing portfolios..."):
+        st.session_state["recap"] = get_ai_recap()
+st.markdown(f'<div class="studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
 
-c1, c2, c3 = st.columns(3)
-c1.metric("💔 Tragic Hero", f"{highest_score_loser['score']}", f"{highest_score_loser['team']}")
-c2.metric("🔫 The Bandit", f"{lowest_score_winner['score']}", f"{lowest_score_winner['team']}")
-c3.metric("📉 The Speculator", f"{biggest_bench_warmer['points']}", f"{biggest_bench_warmer['team']}")
-st.divider()
-
-# --- TOP PLAYERS ---
+# Top Players
 st.markdown("### 🌟 The Week's Elite")
 cols = st.columns(5)
-if not top_performers.empty:
-    for i, (index, player) in enumerate(top_performers.iterrows()):
-        with cols[i]:
-            st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['PlayerID']}.png&w=350&h=254")
-            st.markdown(f"**{player['Name']}**")
-            st.caption(f"{player['Points']} pts")
+for i, (idx, p) in enumerate(df_players.iterrows()):
+    with cols[i]:
+        st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254")
+        st.caption(f"{p['Name']} ({p['Points']})")
 
-# --- TABS ---
-tab1, tab2, tab3, tab4 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund"])
+# TABS
+tab1, tab2, tab3 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit"])
 
 with tab1:
-    st.subheader("Weekly Matchups (Detailed)")
-    for match in matchup_details:
-        with st.container():
-            match_label = f"{match['Home']} ({match['Home Score']}) vs {match['Away']} ({match['Away Score']})"
-            with st.expander(f"🏈 {match_label}"):
-                st.bar_chart(pd.DataFrame(match['Data']), x="Position", y="Points", color="Team", stack=False)
+    st.subheader("Weekly Matchups")
+    for m in matchup_data:
+        # Custom HTML Scoreboard for "Luxury" feel
+        st.markdown(f"""
+        <div style="background-color: #1a1c24; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="text-align: center; width: 40%;">
+                    <img src="{m['Home Logo']}" width="50" style="border-radius: 50%;">
+                    <div style="font-weight: bold; color: white;">{m['Home']}</div>
+                    <div style="font-size: 20px; color: #FFD700;">{m['Home Score']}</div>
+                </div>
+                <div style="color: #666; font-size: 12px;">VS</div>
+                <div style="text-align: center; width: 40%;">
+                    <img src="{m['Away Logo']}" width="50" style="border-radius: 50%;">
+                    <div style="font-weight: bold; color: white;">{m['Away']}</div>
+                    <div style="font-size: 20px; color: #FFD700;">{m['Away Score']}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 with tab2:
-    if not df_rank.empty:
-        try:
-            top_team = next(t for t in league.teams if t.team_name == df_rank.iloc[0]["Team"])
-            st.image(top_team.logo_url, width=100, caption="Rank #1")
-        except: pass
-        st.bar_chart(df_rank.set_index("Team")["Power Score"], color="#FFD700")
+    st.subheader("Power vs. Performance Matrix")
+    st.caption("Are you actually good, or just lucky?")
+    
+    # SCATTER PLOT: Power (PPG) vs Wins
+    fig = px.scatter(
+        df_advanced, 
+        x="Power Score", 
+        y="Wins", 
+        text="Team", 
+        size="Points For",
+        color="Luck Rating",
+        color_continuous_scale=["#FF4B4B", "#333333", "#00FF00"], # Red (Unlucky) -> Green (Lucky)
+        title="The Luck Matrix: Power (PPG) vs Actual Wins"
+    )
+    fig.update_traces(textposition='top center', marker=dict(line=dict(width=1, color='DarkSlateGrey')))
+    fig.update_layout(
+        plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white",
+        xaxis_title="Team Power (Avg Points Per Game)",
+        yaxis_title="Actual Wins"
+    )
+    # Add a reference line for "Average"
+    fig.add_shape(type="line", x0=df_advanced["Power Score"].min(), y0=df_advanced["Wins"].min(),
+                  x1=df_advanced["Power Score"].max(), y1=df_advanced["Wins"].max(),
+                  line=dict(color="Gold", width=2, dash="dash"), opacity=0.5)
+    
+    st.plotly_chart(fig, use_container_width=True)
 
 with tab3:
-    st.subheader("Efficiency Audit")
-    st.bar_chart(df_bench.set_index("Team"), color="#333333")
-
-with tab4:
-    st.subheader("💎 Market Analytics (Year-to-Date)")
-    st.caption("Advanced financial metrics for your franchise.")
+    st.subheader("Manager Efficiency Audit")
+    st.caption("Green = Points Scored. Red = Points Wasted on Bench.")
     
-    # 1. Luck vs Skill Scatter Plot
-    st.markdown("#### 🎯 The Luck Matrix (Skill vs Luck)")
-    st.caption("Top Right = Good & Lucky. Bottom Right = Good but Unlucky.")
+    # STACKED BAR CHART
+    fig = go.Figure()
     
-    # Create a scatter-like chart using a dataframe
-    st.scatter_chart(
-        df_financials,
-        x="True Win %",
-        y="Luck Rating",
-        color="Team",
-        size="Avg Score",
+    # 1. Starters Bar (Green/Gold)
+    fig.add_trace(go.Bar(
+        x=df_eff["Team"], y=df_eff["Starters"], 
+        name='Starters', marker_color='#FFD700'
+    ))
+    
+    # 2. Bench Bar (Red/Grey)
+    fig.add_trace(go.Bar(
+        x=df_eff["Team"], y=df_eff["Bench"], 
+        name='Bench Waste', marker_color='#333333'
+    ))
+    
+    fig.update_layout(
+        barmode='stack', 
+        plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white",
+        title="Total Roster Strength (Potential Points)",
+        xaxis_title="Manager",
+        yaxis_title="Points"
     )
     
-    # 2. Volatility (Risk)
-    st.markdown("#### ⚡ The VIX (Consistency Index)")
-    st.caption("Standard Deviation of Weekly Scores. Lower is more consistent (Blue Chip). Higher is risky (Crypto).")
-    st.bar_chart(df_financials.set_index("Team")["Volatility (VIX)"], color="#FF4B4B")
+    st.plotly_chart(fig, use_container_width=True)
