@@ -2,5 +2,5 @@ streamlit
 espn-api
 pandas
 openai
-Plotly
 numpy
+plotly
