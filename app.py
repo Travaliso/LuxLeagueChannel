@@ -17,9 +17,7 @@ st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layou
 st.markdown("""
     <style>
     /* MAIN BACKGROUND */
-    .stApp {
-        background-color: #080a10;
-    }
+    .stApp { background-color: #080a10; }
 
     /* NEON GRADIENT HEADINGS */
     h1, h2, h3, h4 {
@@ -37,9 +35,7 @@ st.markdown("""
         color: #00C9FF !important;
         text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);
     }
-    div[data-testid="stMetricLabel"] {
-         color: #a0aaba !important;
-    }
+    div[data-testid="stMetricLabel"] { color: #a0aaba !important; }
 
     /* LUXURY CARD STYLING */
     .luxury-card {
@@ -53,32 +49,14 @@ st.markdown("""
     .award-card { border-left: 4px solid #00C9FF; }
     .studio-box { border-left: 4px solid #0072ff; }
 
-    /* SIDEBAR NAVIGATION STYLING */
-    section[data-testid="stSidebar"] {
-        background-color: #0e1117;
-        border-right: 1px solid #333;
-    }
-    /* Style the Radio Buttons to look like Menu Items */
-    div[data-testid="stRadio"] > label {
-        color: #a0aaba !important;
-        font-weight: bold;
-    }
-    div[role="radiogroup"] label {
-        padding: 10px;
-        border-radius: 8px;
-        transition: background-color 0.3s;
-    }
-    div[role="radiogroup"] label:hover {
-        background-color: rgba(0, 201, 255, 0.1);
-        color: #00C9FF !important;
-    }
+    /* SIDEBAR NAVIGATION */
+    section[data-testid="stSidebar"] { background-color: #0e1117; border-right: 1px solid #333; }
+    div[data-testid="stRadio"] > label { color: #a0aaba !important; font-weight: bold; }
+    div[role="radiogroup"] label { padding: 10px; border-radius: 8px; transition: background-color 0.3s; }
+    div[role="radiogroup"] label:hover { background-color: rgba(0, 201, 255, 0.1); color: #00C9FF !important; }
     
-    /* DATAFRAME STYLING */
-    div[data-testid="stDataFrame"] {
-        background-color: #151922;
-        border-radius: 12px;
-        padding: 10px;
-    }
+    /* DATAFRAME */
+    div[data-testid="stDataFrame"] { background-color: #151922; border-radius: 12px; padding: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -117,7 +95,7 @@ except Exception as e:
 # 3. ANALYTICS ENGINES
 # ------------------------------------------------------------------
 
-# --- A. Historical Analytics (Hedge Fund) ---
+# --- A. Historical Analytics ---
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(current_week):
     data_rows = []
@@ -144,7 +122,7 @@ def calculate_heavy_analytics(current_week):
         })
     return pd.DataFrame(data_rows)
 
-# --- B. Season Awards Engine (Trophy Room) ---
+# --- B. Season Awards Engine ---
 @st.cache_data(ttl=3600)
 def calculate_season_awards(current_week):
     player_points = {} 
@@ -208,16 +186,6 @@ def run_monte_carlo_simulation(simulations=1000):
     try: num_playoff_teams = league.settings.playoff_team_count
     except: num_playoff_teams = 4
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
-    avg_league_power = sum(team_power.values()) / len(team_power)
-    schedule_difficulty = {t.team_id: [] for t in league.teams}
-    
-    if current_w <= reg_season_end:
-        for w in range(current_w, reg_season_end + 1):
-            future_box = league.box_scores(week=w)
-            for game in future_box:
-                h, a = game.home_team, game.away_team
-                schedule_difficulty[h.team_id].append(team_power[a.team_id])
-                schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
     results = {t.team_name: 0 for t in league.teams}
     for i in range(simulations):
@@ -232,14 +200,10 @@ def run_monte_carlo_simulation(simulations=1000):
 
     final_output = []
     for team in league.teams:
-        tid = team.team_id
         odds = (results[team.team_name] / simulations) * 100
-        opponents_scores = schedule_difficulty[tid]
-        avg_opp_strength = sum(opponents_scores) / len(opponents_scores) if opponents_scores else avg_league_power
-        diff = team_power[tid] - avg_opp_strength
         if odds > 99: reason = "🔒 Locked."
-        elif odds > 80: reason = "🚀 High Prob." if diff > 10 else "💪 Grinding."
-        elif odds > 40: reason = "⚖️ Bubble." if diff > 0 else "⚠️ Coin Flip."
+        elif odds > 80: reason = "🚀 High Prob."
+        elif odds > 40: reason = "⚖️ Bubble."
         elif odds > 5: reason = "🙏 Miracle."
         else: reason = "💀 Dead."
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
@@ -250,24 +214,12 @@ def run_monte_carlo_simulation(simulations=1000):
 # 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
-
-# 1. Week Selector
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
-
 st.sidebar.markdown("---")
 
-# 2. Page Navigation (Replaces Tabs)
-page_options = [
-    "📜 The Ledger", 
-    "📈 The Hierarchy", 
-    "🔎 The Audit", 
-    "💎 The Hedge Fund", 
-    "🔮 The Forecast", 
-    "🚀 Next Week", 
-    "🏆 Trophy Room"
-]
+page_options = ["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "🏆 Trophy Room"]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 # ------------------------------------------------------------------
@@ -280,8 +232,6 @@ if 'box_scores' not in st.session_state or st.session_state.get('week') != selec
     st.rerun()
 
 box_scores = st.session_state['box_scores']
-
-# Process Week Data
 matchup_data = []
 efficiency_data = [] 
 all_active_players = []
@@ -311,51 +261,57 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# AI Recap Function
-def get_ai_recap():
-    if not openai_key: return "⚠️ Add 'openai_key' to secrets."
+# ------------------------------------------------------------------
+# 6. AI HELPERS (MULTI-MODAL)
+# ------------------------------------------------------------------
+def get_openai_client():
+    if not openai_key: return None
+    return OpenAI(api_key=openai_key)
+
+def get_weekly_recap():
+    client = get_openai_client()
+    if not client: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
-    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: High-frequency trading desk report, urgent and professional."
-    try:
-        client = OpenAI(api_key=openai_key)
-        return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
+    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: Wall Street Report."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_rankings_commentary():
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    top = df_eff.iloc[0]['Team']
+    bottom = df_eff.iloc[-1]['Team']
+    prompt = f"Write a biting, 3-sentence commentary on the Power Rankings. Praise the #1 team {top} and mock the last place team {bottom}. Style: Stephen A. Smith."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=200).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_next_week_preview(games_list):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    # Create a summary string of matchups
+    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
+    prompt = f"Act as a Vegas Sports Bookie. Preview next week's matchups: {matchups_str}. Pick one 'Lock of the Week' and one 'Upset Alert'. Keep it short."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=300).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_season_retrospective(mvp, best_mgr):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    prompt = f"Write a 'State of the Union' address for the Fantasy League. MVP is {mvp}. Best Manager is {best_mgr}. Reflect on the season's glory and tragedy. Style: Presidential."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
-# 6. DASHBOARD UI
+# 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# Only show Overview items on specific pages or all? 
-# Let's keep the Studio & Top Players at the top of EVERY page for context
-if "recap" not in st.session_state:
-    with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_ai_recap()
-
-col_main, col_players = st.columns([2, 1])
-
-with col_main:
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-
-with col_players:
-    st.markdown("### 🌟 Weekly Elite")
-    # Compact player view for side column
-    for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
-         st.markdown(f"""
-            <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
-                <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;">
-                <div>
-                    <div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div>
-                    <div style="color: #fff; font-size: 12px;">{p['Points']} pts</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-st.divider()
-
-# ------------------------------------------------------------------
-# 7. PAGE RENDERING (CONDITIONAL)
-# ------------------------------------------------------------------
-
+# PAGE ROUTING
 if selected_page == "📜 The Ledger":
+    if "recap" not in st.session_state:
+        with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_weekly_recap()
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    
     st.header("Weekly Transactions")
     for m in matchup_data:
         st.markdown(f"""
@@ -373,8 +329,7 @@ if selected_page == "📜 The Ledger":
                     <div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Away Score']}</div>
                 </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
         with st.expander(f"📉 View Lineups"):
             max_len = max(len(m['Home Roster']), len(m['Away Roster']))
             df_matchup = pd.DataFrame({
@@ -390,6 +345,11 @@ if selected_page == "📜 The Ledger":
             })
 
 elif selected_page == "📈 The Hierarchy":
+    # RANKINGS AI COMMENTARY
+    if "rankings_commentary" not in st.session_state:
+        with st.spinner("Analyzing hierarchy..."): st.session_state["rankings_commentary"] = get_rankings_commentary()
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rankings_commentary"]}</div>', unsafe_allow_html=True)
+    
     st.header("Power Rankings")
     st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
@@ -434,10 +394,24 @@ elif selected_page == "🔮 The Forecast":
         if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
 
 elif selected_page == "🚀 Next Week":
-    st.header("Next Week's Market Preview")
+    # NEXT WEEK AI COMMENTARY
+    # We need to prep the data first to feed the AI
     try:
         next_week = league.current_week
         next_box_scores = league.box_scores(week=next_week)
+        games_list = []
+        for game in next_box_scores:
+            h_proj, a_proj = game.home_projected, game.away_projected
+            if h_proj == 0: h_proj = 100
+            if a_proj == 0: a_proj = 100
+            spread = abs(h_proj - a_proj)
+            games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
+        
+        if "next_week_commentary" not in st.session_state:
+            with st.spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        
+        st.header("Next Week's Market Preview")
         for game in next_box_scores:
             h_proj, a_proj = game.home_projected, game.away_projected
             if h_proj == 0: h_proj = 100
@@ -460,20 +434,30 @@ elif selected_page == "🚀 Next Week":
                         <div style="color: #00C9FF;">Proj: {a_proj:.1f}</div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
 elif selected_page == "🏆 Trophy Room":
-    st.header("Season Awards")
+    # SEASON AI COMMENTARY
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Yearly Awards"):
             if lottie_trophy: st_lottie(lottie_trophy, height=200)
             with st.spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
+                
+                # After calculating awards, generate the commentary immediately
+                awards = st.session_state["awards"]
+                mvp_name = awards['MVP']['Name'] if awards['MVP'] else "N/A"
+                best_mgr_name = awards['Best Manager']['Team']
+                st.session_state["season_commentary"] = get_season_retrospective(mvp_name, best_mgr_name)
                 st.rerun()
     else:
         awards = st.session_state["awards"]
+        # Display the AI Commentary first
+        if "season_commentary" in st.session_state:
+             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_commentary"]}</div>', unsafe_allow_html=True)
+        
+        st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="luxury-card award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
@@ -501,6 +485,6 @@ elif selected_page == "🏆 Trophy Room":
             st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
         with c5:
             st.markdown("#### 💤 Asleep at Wheel")
-            st.caption("Starters with 0.0 Pts (Byes/Injuries)")
+            st.caption("Starters with 0.0 Pts")
             slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
