@@ -280,47 +280,64 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 # ... inside the Sidebar ...
 
-if st.sidebar.button("📄 Generate PDF Report"):
-    # Check if we have the necessary data
-    if "recap" not in st.session_state or "awards" not in st.session_state:
-        st.sidebar.error("Please visit 'The Ledger' and 'Trophy Room' first to generate data.")
-    else:
-        pdf = PDF()
-        pdf.add_page()
-        
-        # 1. The Studio Report
-        pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE SUMMARY")
-        # Clean up text (remove markdown * and #)
-        clean_recap = st.session_state["recap"].replace("*", "").replace("#", "")
-        pdf.chapter_body(clean_recap)
-        
-        # 2. The Awards
-        awards = st.session_state["awards"]
-        pdf.chapter_title("THE TROPHY ROOM")
-        
-        if awards['MVP']:
-            pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts) - Owner: {awards['MVP']['Owner']}")
-        
-        if awards['Best Manager']:
-            pdf.chapter_body(f"The Whale (Best Manager): {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
-            
-        hb = awards['Heartbreaker']
-        pdf.chapter_body(f"Heartbreaker: {hb['Loser']} lost to {hb['Winner']} by {hb['Margin']:.2f} pts")
-        
-        slp = awards['Sleeper']
-        pdf.chapter_body(f"Asleep at Wheel: {slp['Team']} started {slp['Count']} players with 0.0 pts")
+# ... inside the Sidebar (bottom of script) ...
 
-        # 3. Forecast
-        if "playoff_odds" in st.session_state:
-            pdf.chapter_title("PLAYOFF PROJECTIONS")
-            df_odds = st.session_state["playoff_odds"].head(5)
+if st.sidebar.button("📄 Generate PDF Report"):
+    # 1. AUTO-GENERATE MISSING DATA
+    # If the user hasn't visited the tabs yet, we run the functions now.
+    
+    if "recap" not in st.session_state:
+        with st.spinner("🎙️ Analyst is writing the script..."):
+            st.session_state["recap"] = get_weekly_recap()
+            
+    if "awards" not in st.session_state:
+        with st.spinner("🏆 Engraving trophies..."):
+            st.session_state["awards"] = calculate_season_awards(current_week)
+            
+    if "playoff_odds" not in st.session_state:
+        with st.spinner("🔮 Running Monte Carlo simulations..."):
+            st.session_state["playoff_odds"] = run_monte_carlo_simulation()
+
+    # 2. GENERATE PDF
+    pdf = PDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
+    
+    # Studio Report
+    clean_recap = st.session_state["recap"].replace("*", "").replace("#", "")
+    pdf.chapter_body(clean_recap)
+    
+    # Awards Section
+    awards = st.session_state["awards"]
+    pdf.chapter_title("THE TROPHY ROOM")
+    
+    if awards['MVP']:
+        pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
+    
+    if awards['Best Manager']:
+        pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
+        
+    hb = awards['Heartbreaker']
+    pdf.chapter_body(f"Heartbreaker: {hb['Loser']} lost to {hb['Winner']} by {hb['Margin']:.2f} pts")
+    
+    slp = awards['Sleeper']
+    pdf.chapter_body(f"Asleep at Wheel: {slp['Team']} started {slp['Count']} players with 0.0 pts")
+
+    # Forecast Section
+    if "playoff_odds" in st.session_state:
+        pdf.chapter_title("PLAYOFF PROJECTIONS")
+        # Ensure we don't crash if odds are empty
+        df_odds = st.session_state["playoff_odds"]
+        if df_odds is not None and not df_odds.empty:
+            df_odds = df_odds.head(5)
             for i, row in df_odds.iterrows():
                 pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
 
-        # Output
-        html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
-        st.sidebar.markdown(html, unsafe_allow_html=True)
-st.sidebar.markdown("---")
+    # Output
+    html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
+    st.sidebar.markdown(html, unsafe_allow_html=True)
 
 # PAGE DEFINITIONS (Ensures logic matches UI exactly)
 P_LEDGER = "📜 The Ledger"
