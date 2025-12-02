@@ -74,7 +74,7 @@ lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-068
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
-lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json") # Graph/Search animation
+lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
 try:
     league_id = st.secrets["league_id"]
@@ -212,47 +212,30 @@ def run_monte_carlo_simulation(simulations=1000):
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- D. Dark Pool (Waiver Wire Analytics) ---
+# --- D. Dark Pool (Robust Scanner) ---
 @st.cache_data(ttl=3600)
 def scan_dark_pool(limit=15):
-    # Fetch free agents (Top 50 available)
-    # Note: 'size' param depends on API version, keeping it simple
     free_agents = league.free_agents(size=50)
-    
     pool_data = []
     for player in free_agents:
-        # We look for players with:
-        # 1. High recent performance (Projected or Actual) - Using total points for simplicity
-        # 2. Position scarcity
-        
-        # Simple Logic: Points per game average
-        # (ESPN API free_agents sometimes returns varied data, we use what's available)
         try:
-            # Check if we have recent stats (this varies by API call)
-            # We'll use 'total_points' and 'projected_total_points' if available
-            avg_pts = player.total_points / league.current_week if league.current_week > 0 else 0
+            # Fallback logic: Use Total Points OR Projected if Total is missing
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            avg_pts = total / league.current_week if league.current_week > 0 else 0
             
-            # Identify "Breakout" (High Project vs Low Own if we had ownership data)
-            # For now, we filter by meaningful production
-            if avg_pts > 5: # Filter out scrubs
+            if avg_pts > 3: # Lower threshold to ensure we catch players
                 pool_data.append({
-                    "Name": player.name,
-                    "Position": player.position,
-                    "Team": player.proTeam,
-                    "Avg Pts": avg_pts,
-                    "Total Pts": player.total_points,
-                    "ID": player.playerId
+                    "Name": player.name, "Position": player.position, "Team": player.proTeam,
+                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId
                 })
-        except:
-            continue
+        except: continue
             
     df = pd.DataFrame(pool_data)
-    if not df.empty:
-        df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
 
 # ------------------------------------------------------------------
-# 4. SIDEBAR NAVIGATION
+# 4. SIDEBAR NAVIGATION (FIXED MAPPING)
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
@@ -260,17 +243,18 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-page_options = [
-    "📜 The Ledger", 
-    "📈 The Hierarchy", 
-    "🔎 The Audit", 
-    "💎 The Hedge Fund", 
-    "🔮 The Forecast", 
-    "🚀 Next Week", 
-    "🤝 The Dealmaker", 
-    "🕵️ The Dark Pool", # NEW PAGE
-    "🏆 Trophy Room"
-]
+# PAGE DEFINITIONS (Ensures logic matches UI exactly)
+P_LEDGER = "📜 The Ledger"
+P_HIERARCHY = "📈 The Hierarchy"
+P_AUDIT = "🔎 The Audit"
+P_HEDGE = "💎 The Hedge Fund"
+P_FORECAST = "🔮 The Forecast"
+P_NEXT = "🚀 Next Week"
+P_DEAL = "🤝 The Dealmaker"
+P_DARK = "🕵️ The Dark Pool"
+P_TROPHY = "🏆 Trophy Room"
+
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_DEAL, P_DARK, P_TROPHY]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 # ------------------------------------------------------------------
@@ -366,7 +350,6 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
     except: return "Analyst Offline."
 
-# NEW AI SCOUT (DARK POOL)
 def get_ai_scouting_report(free_agents_str):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
@@ -382,74 +365,4 @@ def get_ai_scouting_report(free_agents_str):
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
-# 7. DASHBOARD UI
-# ------------------------------------------------------------------
-st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-
-col_main, col_players = st.columns([2, 1])
-with col_players:
-    st.markdown("### 🌟 Weekly Elite")
-    for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
-         st.markdown(f"""
-            <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
-                <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;">
-                <div>
-                    <div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div>
-                    <div style="color: #fff; font-size: 12px;">{p['Points']} pts</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-if selected_page == "📜 The Ledger":
-    if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_weekly_recap()
-    with col_main:
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Weekly Transactions")
-    for m in matchup_data:
-        st.markdown(f"""<div class="luxury-card"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="60" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Home']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 14px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="60" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Away']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
-        with st.expander(f"📉 View Lineups"):
-            max_len = max(len(m['Home Roster']), len(m['Away Roster']))
-            df_matchup = pd.DataFrame({
-                f"{m['Home']}": [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
-                f"{m['Home']} Pts": [p['Score'] for p in m['Home Roster']] + [0] * (max_len - len(m['Home Roster'])),
-                "Pos": [p['Pos'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
-                f"{m['Away']} Pts": [p['Score'] for p in m['Away Roster']] + [0] * (max_len - len(m['Away Roster'])),
-                f"{m['Away']}": [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster'])),
-            })
-            st.dataframe(df_matchup, use_container_width=True, hide_index=True, column_config={f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"), f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")})
-
-elif selected_page == "📈 The Hierarchy":
-    if "rankings_commentary" not in st.session_state:
-        with st.spinner("Analyzing hierarchy..."): st.session_state["rankings_commentary"] = get_rankings_commentary()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rankings_commentary"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
-
-elif selected_page == "🔎 The Audit":
-    with col_main: st.header("Efficiency Audit")
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#2c313a'))
-    fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential")
-    st.plotly_chart(fig, use_container_width=True)
-    if not df_bench_stars.empty: st.markdown("#### 🚨 'Should Have Started'"); st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
-
-elif selected_page == "💎 The Hedge Fund":
-    with col_main: st.header("Market Analytics")
-    if "df_advanced" not in st.session_state:
-        st.info("⚠️ Accessing historical market data requires intensive calculation.")
-        if st.button("🚀 Analyze Market Data"):
-            with st.spinner("Compiling Assets..."): st.session_state["df_advanced"] = calculate_heavy_analytics(current_week); st.rerun()
-    else:
-        df_advanced = st.session_state["df_advanced"]
-        fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#0072ff", "#1a1c24", "#00C9FF"], title="Luck Matrix")
-        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
-        st.plotly_chart(fig, use_container_width=True)
-
-elif selected_page == "🔮 The Forecast":
-    with col_main: st.header("The Crystal Ball")
-    if "playoff_odds" not in st.session_state:
-        if st.button("🎲 Run Simulation"):
-            if lottie_forecast: st_lottie(lottie_forecast, height=200)
-            with st.spinner("Crunching probabilities..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
-    else:
-        df_
+# 7. DASHBOARD
