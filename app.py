@@ -1,37 +1,24 @@
 import streamlit as st
 from espn_api.football import League
+import pandas as pd
 
 st.title("🏈 Fantasy League Recap")
 
 try:
     # Load secrets
     league_id = st.secrets["league_id"]
-    swid = st.secrets["swid"]      # Ask for the value inside the "swid" drawer
-    espn_s2 = st.secrets["espn_s2"] # Ask for the value inside the "espn_s2" drawer    
-    # Try connecting (Updated to 2025)
-    year = 2025 
-
-except Exception as e:
-    # This will print the SPECIFIC error from Python
-    st.error(f"❌ Connection failed. Detailed error below:")
-    st.code(e)
+    swid = st.secrets["swid"]
+    espn_s2 = st.secrets["espn_s2"]
     
-    st.warning("""
-    Common Fixes:
-    1. Check if 'year' is correct in the code.
-    2. Check if SWID in secrets has { } curly brackets.
-    3. Check if League ID is an integer (no quotes) in secrets.
-    """)
-# ... (Keep your imports and secrets loading code from before!) ...
+    # ---------------------------------------------------------
+    # NEW CODE STARTS HERE
+    # ---------------------------------------------------------
 
-    # Connect to league
+    # 1. Connect to League (Updated to 2025)
+    year = 2025 
     league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
     
-    # ---------------------------------------------------------
-    # NEW CODE STARTS HERE: The Dashboard Logic
-    # ---------------------------------------------------------
-
-    # 1. Figure out which week to show
+    # 2. Figure out which week to show
     # If the current week hasn't happened yet, look at the previous week
     week_num = league.current_week - 1
     if week_num == 0:
@@ -39,10 +26,10 @@ except Exception as e:
     
     st.header(f"📺 Luxury League Recap: Week {week_num}")
 
-    # 2. Get the Box Scores
+    # 3. Get the Box Scores
     box_scores = league.box_scores(week=week_num)
     
-    # 3. Calculate Key Stats (The "SportsCenter" Highlights)
+    # 4. Calculate Key Stats (The "SportsCenter" Highlights)
     high_score = 0
     high_score_team = ""
     closest_margin = 999
@@ -77,7 +64,7 @@ except Exception as e:
             "Winner": "Home" if home_score > away_score else "Away"
         })
 
-    # 4. Display "The Ticker" (Metrics)
+    # 5. Display "The Ticker" (Metrics)
     col1, col2, col3 = st.columns(3)
     col1.metric("🔥 High Score", f"{high_score} pts", high_score_team)
     col2.metric("🔪 Nail-Biter", f"{closest_margin:.2f} pts", closest_game)
@@ -85,7 +72,7 @@ except Exception as e:
 
     st.divider()
 
-    # 5. The Scoreboard
+    # 6. The Scoreboard
     st.subheader(f"Week {week_num} Scoreboard")
     df = pd.DataFrame(score_data)
     st.dataframe(df, use_container_width=True, hide_index=True)
