@@ -186,6 +186,16 @@ def run_monte_carlo_simulation(simulations=1000):
     try: num_playoff_teams = league.settings.playoff_team_count
     except: num_playoff_teams = 4
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
+    avg_league_power = sum(team_power.values()) / len(team_power)
+    schedule_difficulty = {t.team_id: [] for t in league.teams}
+    
+    if current_w <= reg_season_end:
+        for w in range(current_w, reg_season_end + 1):
+            future_box = league.box_scores(week=w)
+            for game in future_box:
+                h, a = game.home_team, game.away_team
+                schedule_difficulty[h.team_id].append(team_power[a.team_id])
+                schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
     results = {t.team_name: 0 for t in league.teams}
     for i in range(simulations):
@@ -200,10 +210,14 @@ def run_monte_carlo_simulation(simulations=1000):
 
     final_output = []
     for team in league.teams:
+        tid = team.team_id
         odds = (results[team.team_name] / simulations) * 100
+        opponents_scores = schedule_difficulty[tid]
+        avg_opp_strength = sum(opponents_scores) / len(opponents_scores) if opponents_scores else avg_league_power
+        diff = team_power[tid] - avg_opp_strength
         if odds > 99: reason = "🔒 Locked."
-        elif odds > 80: reason = "🚀 High Prob."
-        elif odds > 40: reason = "⚖️ Bubble."
+        elif odds > 80: reason = "🚀 High Prob." if diff > 10 else "💪 Grinding."
+        elif odds > 40: reason = "⚖️ Bubble." if diff > 0 else "⚠️ Coin Flip."
         elif odds > 5: reason = "🙏 Miracle."
         else: reason = "💀 Dead."
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
@@ -262,7 +276,7 @@ df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
 # ------------------------------------------------------------------
-# 6. AI HELPERS (MULTI-MODAL)
+# 6. AI HELPERS (MULTI-MODAL LONG FORM)
 # ------------------------------------------------------------------
 def get_openai_client():
     if not openai_key: return None
@@ -272,8 +286,9 @@ def get_weekly_recap():
     client = get_openai_client()
     if not client: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
-    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: Wall Street Report."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
+    # INCREASED TOKENS TO 800 AND UPDATED PROMPT FOR LENGTH
+    prompt = f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight the Powerhouse: {top_scorer}. Go into detail about the matchups. Style: Wall Street Report. Do not be brief."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
     except: return "Analyst Offline."
 
 def get_rankings_commentary():
@@ -281,24 +296,26 @@ def get_rankings_commentary():
     if not client: return "⚠️ Analyst Offline."
     top = df_eff.iloc[0]['Team']
     bottom = df_eff.iloc[-1]['Team']
-    prompt = f"Write a biting, 3-sentence commentary on the Power Rankings. Praise the #1 team {top} and mock the last place team {bottom}. Style: Stephen A. Smith."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=200).choices[0].message.content
+    # INCREASED TOKENS TO 600 AND UPDATED PROMPT FOR LENGTH
+    prompt = f"Write a 5-8 sentence commentary on the Power Rankings. Praise the #1 team {top} and ruthlessly mock the last place team {bottom}. Analyze why the bottom team is failing. Style: Stephen A. Smith / Hot Take."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
     except: return "Analyst Offline."
 
 def get_next_week_preview(games_list):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
-    # Create a summary string of matchups
     matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
-    prompt = f"Act as a Vegas Sports Bookie. Preview next week's matchups: {matchups_str}. Pick one 'Lock of the Week' and one 'Upset Alert'. Keep it short."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=300).choices[0].message.content
+    # INCREASED TOKENS TO 800 AND UPDATED PROMPT FOR LENGTH
+    prompt = f"Act as a Vegas Sports Bookie. Provide a DETAILED breakdown (5-10 sentences) of next week's matchups: {matchups_str}. Pick one 'Lock of the Week' and one 'Upset Alert' and explain WHY with data."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
     except: return "Analyst Offline."
 
 def get_season_retrospective(mvp, best_mgr):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
-    prompt = f"Write a 'State of the Union' address for the Fantasy League. MVP is {mvp}. Best Manager is {best_mgr}. Reflect on the season's glory and tragedy. Style: Presidential."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
+    # INCREASED TOKENS TO 1000 AND UPDATED PROMPT FOR LENGTH
+    prompt = f"Write a comprehensive 'State of the Union' address (8-12 sentences) for the Fantasy League. MVP is {mvp}. Best Manager is {best_mgr}. Reflect on the season's glory, the tragedies, and the future. Style: Presidential / Epic."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
@@ -306,12 +323,29 @@ def get_season_retrospective(mvp, best_mgr):
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
+col_main, col_players = st.columns([2, 1])
+
+with col_players:
+    st.markdown("### 🌟 Weekly Elite")
+    for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
+         st.markdown(f"""
+            <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
+                <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;">
+                <div>
+                    <div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div>
+                    <div style="color: #fff; font-size: 12px;">{p['Points']} pts</div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
 # PAGE ROUTING
 if selected_page == "📜 The Ledger":
     if "recap" not in st.session_state:
         with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_weekly_recap()
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     
+    with col_main:
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    
+    st.divider()
     st.header("Weekly Transactions")
     for m in matchup_data:
         st.markdown(f"""
@@ -345,16 +379,18 @@ if selected_page == "📜 The Ledger":
             })
 
 elif selected_page == "📈 The Hierarchy":
-    # RANKINGS AI COMMENTARY
     if "rankings_commentary" not in st.session_state:
         with st.spinner("Analyzing hierarchy..."): st.session_state["rankings_commentary"] = get_rankings_commentary()
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rankings_commentary"]}</div>', unsafe_allow_html=True)
     
+    with col_main:
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rankings_commentary"]}</div>', unsafe_allow_html=True)
+    
+    st.divider()
     st.header("Power Rankings")
     st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 elif selected_page == "🔎 The Audit":
-    st.header("Efficiency Audit")
+    with col_main: st.header("Efficiency Audit")
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#2c313a'))
@@ -365,7 +401,7 @@ elif selected_page == "🔎 The Audit":
         st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
 elif selected_page == "💎 The Hedge Fund":
-    st.header("Market Analytics")
+    with col_main: st.header("Market Analytics")
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
@@ -380,7 +416,7 @@ elif selected_page == "💎 The Hedge Fund":
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == "🔮 The Forecast":
-    st.header("The Crystal Ball")
+    with col_main: st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             if lottie_forecast: st_lottie(lottie_forecast, height=200)
@@ -394,8 +430,6 @@ elif selected_page == "🔮 The Forecast":
         if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
 
 elif selected_page == "🚀 Next Week":
-    # NEXT WEEK AI COMMENTARY
-    # We need to prep the data first to feed the AI
     try:
         next_week = league.current_week
         next_box_scores = league.box_scores(week=next_week)
@@ -409,8 +443,11 @@ elif selected_page == "🚀 Next Week":
         
         if "next_week_commentary" not in st.session_state:
             with st.spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         
+        with col_main:
+            st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        
+        st.divider()
         st.header("Next Week's Market Preview")
         for game in next_box_scores:
             h_proj, a_proj = game.home_projected, game.away_projected
@@ -438,14 +475,11 @@ elif selected_page == "🚀 Next Week":
     except: st.info("Projections unavailable.")
 
 elif selected_page == "🏆 Trophy Room":
-    # SEASON AI COMMENTARY
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Yearly Awards"):
             if lottie_trophy: st_lottie(lottie_trophy, height=200)
             with st.spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
-                
-                # After calculating awards, generate the commentary immediately
                 awards = st.session_state["awards"]
                 mvp_name = awards['MVP']['Name'] if awards['MVP'] else "N/A"
                 best_mgr_name = awards['Best Manager']['Team']
@@ -453,10 +487,11 @@ elif selected_page == "🏆 Trophy Room":
                 st.rerun()
     else:
         awards = st.session_state["awards"]
-        # Display the AI Commentary first
         if "season_commentary" in st.session_state:
-             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_commentary"]}</div>', unsafe_allow_html=True)
+             with col_main:
+                st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_commentary"]}</div>', unsafe_allow_html=True)
         
+        st.divider()
         st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
