@@ -28,7 +28,7 @@ except Exception as e:
     2. Check if SWID in secrets has { } curly brackets.
     3. Check if League ID is an integer (no quotes) in secrets.
     """)
-# ... (Keep your imports and secrets loading code from before) ...
+# ... (Keep your imports and secrets loading code from before!) ...
 
     # Connect to league
     league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
