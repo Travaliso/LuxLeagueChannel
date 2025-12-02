@@ -496,4 +496,11 @@ elif selected_page == "🏆 Trophy Room":
             st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts", delta=f"Week {hb['Week']}")
         with c4:
             st.markdown("#### 🔥 The Streak")
-            st.caption("Longest Win
+            st.caption("Longest Win Streak")
+            stk = awards['Streak']
+            st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
+        with c5:
+            st.markdown("#### 💤 Asleep at Wheel")
+            st.caption("Starters with 0.0 Pts (Byes/Injuries)")
+            slp = awards['Sleeper']
+            st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
