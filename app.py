@@ -206,3 +206,75 @@ with tab1:
         st.markdown(f"""
         <div style="background-color: #1a1c24; padding: 15px; border-radius: 10px; margin-bottom: 5px; border: 1px solid #333;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="text-align: center; width: 40%;">
+                    <img src="{m['Home Logo']}" width="50" style="border-radius: 50%;">
+                    <div style="font-weight: bold; color: white;">{m['Home']}</div>
+                    <div style="font-size: 20px; color: #FFD700;">{m['Home Score']}</div>
+                </div>
+                <div style="color: #666; font-size: 12px;">VS</div>
+                <div style="text-align: center; width: 40%;">
+                    <img src="{m['Away Logo']}" width="50" style="border-radius: 50%;">
+                    <div style="font-weight: bold; color: white;">{m['Away']}</div>
+                    <div style="font-size: 20px; color: #FFD700;">{m['Away Score']}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander(f"📉 View Lineups: {m['Home']} vs {m['Away']}"):
+            max_len = max(len(m['Home Roster']), len(m['Away Roster']))
+            df_matchup = pd.DataFrame({
+                f"{m['Home']} Player": [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
+                f"{m['Home']} Pts": [p['Score'] for p in m['Home Roster']] + [0] * (max_len - len(m['Home Roster'])),
+                "Pos": [p['Pos'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
+                f"{m['Away']} Pts": [p['Score'] for p in m['Away Roster']] + [0] * (max_len - len(m['Away Roster'])),
+                f"{m['Away']} Player": [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster'])),
+            })
+            st.dataframe(df_matchup, use_container_width=True, hide_index=True, column_config={
+                f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"),
+                f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f"),
+            })
+
+with tab2:
+    st.subheader("Power Rankings (Current Week)")
+    # Simple, fast bar chart based on Total Potential Points for this week
+    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#FFD700")
+
+with tab3:
+    st.subheader("Manager Efficiency Audit")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#FFD700'))
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#333333'))
+    fig.update_layout(barmode='stack', plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white", title="Total Potential Points")
+    st.plotly_chart(fig, use_container_width=True)
+    if not df_bench_stars.empty:
+        st.markdown("#### 🚨 The 'Should Have Started' List")
+        st.dataframe(df_bench_stars, use_container_width=True, hide_index=True, column_config={"Score": st.column_config.NumberColumn(format="%.1f pts")})
+
+with tab4:
+    st.subheader("💎 The Hedge Fund")
+    st.caption("Advanced Market Analytics (Requires Historical Calculation)")
+    
+    # LAZY LOADING BUTTON
+    if "df_advanced" not in st.session_state:
+        st.info("⚠️ Accessing historical market data requires intensive calculation.")
+        if st.button("🚀 Analyze Market Data (Run Simulation)"):
+            with st.spinner("Compiling Year-to-Date Assets..."):
+                # Run the heavy math NOW
+                df_advanced = calculate_heavy_analytics(current_week)
+                st.session_state["df_advanced"] = df_advanced
+                st.rerun()
+    else:
+        # Show the Charts (Data is loaded)
+        df_advanced = st.session_state["df_advanced"]
+        
+        st.markdown("#### 🎯 The Luck Matrix (Skill vs Luck)")
+        fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating",
+                         color_continuous_scale=["#FF4B4B", "#333333", "#00FF00"], title="Luck Matrix: True Skill vs Actual Record")
+        fig.update_traces(textposition='top center', marker=dict(line=dict(width=1, color='DarkSlateGrey')))
+        fig.update_layout(plot_bgcolor="#0e1117", paper_bgcolor="#0e1117", font_color="white")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        if st.button("🔄 Refresh Market Data"):
+            del st.session_state["df_advanced"]
+            st.rerun()
