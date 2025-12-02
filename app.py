@@ -212,12 +212,17 @@ def run_monte_carlo_simulation(simulations=1000):
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- D. Dark Pool (Robust Scanner) ---
+# --- D. Dark Pool (Robust Scanner with Injury Filter) ---
 @st.cache_data(ttl=3600)
 def scan_dark_pool(limit=15):
-    free_agents = league.free_agents(size=50)
+    free_agents = league.free_agents(size=60) # Fetch a few more to account for filtered injuries
     pool_data = []
     for player in free_agents:
+        # --- INJURY FILTER ---
+        # Skip players marked as OUT or IR. Keep Questionable.
+        if player.status in ['OUT', 'IR']:
+            continue
+            
         try:
             # Fallback logic: Use Total Points OR Projected if Total is missing
             total = player.total_points if player.total_points > 0 else player.projected_total_points
@@ -226,7 +231,7 @@ def scan_dark_pool(limit=15):
             if avg_pts > 3: # Lower threshold to ensure we catch players
                 pool_data.append({
                     "Name": player.name, "Position": player.position, "Team": player.proTeam,
-                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId
+                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": player.status
                 })
         except: continue
             
@@ -278,12 +283,18 @@ for game in box_scores:
         starters, bench, p_start, p_bench = [], [], 0, 0
         for p in lineup:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
+            
+            # Check injury status for Weekly Elite filter
+            is_injured = p.status in ['OUT', 'IR']
+
             if p.slot_position == 'BE':
                 bench.append(info); p_bench += p.points
                 if p.points > 15: bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
             else:
                 starters.append(info); p_start += p.points
-                all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
+                # ONLY ADD TO ELITE LIST IF NOT INJURED
+                if not is_injured:
+                    all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
         return starters, bench, p_start, p_bench
 
     h_r, h_br, h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
@@ -354,7 +365,7 @@ def get_ai_scouting_report(free_agents_str):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
     prompt = f"""
-    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool):
+    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool), some may be questionable:
     {free_agents_str}
     
     Identify 3 "Must Add" players.
@@ -371,7 +382,7 @@ st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
 col_main, col_players = st.columns([2, 1])
 with col_players:
-    st.markdown("### 🌟 Weekly Elite")
+    st.markdown("### 🌟 Weekly Elite (Healthy)")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
          st.markdown(f"""
             <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
@@ -481,7 +492,7 @@ elif selected_page == P_DEAL:
 
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
-    st.caption("Scouting available free agents for breakout potential.")
+    st.caption("Scouting available free agents (excluding OUT/IR) for breakout potential.")
     if "dark_pool_data" not in st.session_state:
         if st.button("🔭 Scan Free Agents"):
             if lottie_wire: st_lottie(lottie_wire, height=200)
@@ -489,7 +500,7 @@ elif selected_page == P_DARK:
                 df_pool = scan_dark_pool()
                 st.session_state["dark_pool_data"] = df_pool
                 if not df_pool.empty:
-                    pool_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f} avg)" for i, r in df_pool.iterrows()])
+                    pool_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f} avg, Status: {r['Status']})" for i, r in df_pool.iterrows()])
                     st.session_state["scouting_report"] = get_ai_scouting_report(pool_str)
                 st.rerun()
     else:
@@ -499,7 +510,7 @@ elif selected_page == P_DARK:
         if not df_pool.empty:
             st.dataframe(df_pool, use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
             if st.button("🔄 Rescan Wire"): del st.session_state["dark_pool_data"]; st.rerun()
-        else: st.info("No viable free agents found (or API limit reached).")
+        else: st.info("No viable healthy free agents found (or API limit reached).")
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
@@ -541,4 +552,4 @@ elif selected_page == P_TROPHY:
             st.markdown("#### 💤 Asleep at Wheel"); st.caption("Starters with 0.0 Pts"); slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
 else:
-    st.error("Page Not Found. Please check logic.")
+    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
