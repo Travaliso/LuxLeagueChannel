@@ -103,85 +103,68 @@ def calculate_heavy_analytics(current_week):
 # --- B. Monte Carlo Simulator (Crystal Ball) ---
 @st.cache_data(ttl=3600)
 def run_monte_carlo_simulation(simulations=1000):
-    # 1. Base Stats
     team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
-    
-    # 2. Schedule Analysis (Strength of Schedule)
     reg_season_end = league.settings.reg_season_count
     current_w = league.current_week
     
-    # Map Team ID to their average PPG (Power Score)
+    # Use Dynamic Playoff Spots from Settings
+    # If not found, fallback to 4 (safe default)
+    try:
+        num_playoff_teams = league.settings.playoff_team_count
+    except:
+        num_playoff_teams = 4
+
     team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
     avg_league_power = sum(team_power.values()) / len(team_power)
-    
-    # Track opponent difficulty
     schedule_difficulty = {t.team_id: [] for t in league.teams}
     
-    # Loop through FUTURE weeks to find matchups
     if current_w <= reg_season_end:
         for w in range(current_w, reg_season_end + 1):
             future_box = league.box_scores(week=w)
             for game in future_box:
                 h = game.home_team
                 a = game.away_team
-                # Add opponent's power score to your difficulty list
                 schedule_difficulty[h.team_id].append(team_power[a.team_id])
                 schedule_difficulty[a.team_id].append(team_power[h.team_id])
     
-    # 3. Monte Carlo Loop
     results = {t.team_name: 0 for t in league.teams}
     
     for i in range(simulations):
         sim_standings = {k: v.copy() for k, v in team_data.items()}
-        
-        # Simulate remaining games
         if current_w <= reg_season_end:
              for w in range(current_w, reg_season_end + 1):
-                 # Simple simulation: If Team Power > Avg League Power, give them a win with noise
                  for tid, stats in sim_standings.items():
                      power = team_power[tid]
-                     # Random variance (Any given sunday)
                      performance = np.random.normal(power, 15)
-                     if performance > 115: # Avg winning score
+                     if performance > 115:
                          sim_standings[tid]["wins"] += 1
 
-        # Sort and pick Top 6
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
-        top_6 = [t["name"] for t in sorted_teams[:6]]
-        for name in top_6: results[name] += 1
+        
+        # Use the dynamic variable here
+        top_teams = [t["name"] for t in sorted_teams[:num_playoff_teams]]
+        for name in top_teams: results[name] += 1
 
-    # 4. Generate "Why" Analysis
     final_output = []
     for team in league.teams:
         tid = team.team_id
         odds = (results[team.team_name] / simulations) * 100
-        
-        # Calculate SOS (Strength of Schedule)
         opponents_scores = schedule_difficulty[tid]
         avg_opp_strength = sum(opponents_scores) / len(opponents_scores) if opponents_scores else avg_league_power
-        
-        # Determine "Why" Text
         my_power = team_power[tid]
-        diff = my_power - avg_opp_strength # Positive = I am stronger than opponents
+        diff = my_power - avg_opp_strength
         
-        if odds > 99:
-            reason = "🔒 **Locked In.** Your roster strength is statistically overwhelming."
+        if odds > 99: reason = "🔒 **Locked In.** Your roster strength is statistically overwhelming."
         elif odds > 80:
             if diff > 10: reason = "🚀 **High Probability.** Combination of elite scoring and a soft remaining schedule."
             else: reason = "💪 **Strong Contender.** Battling through a tough schedule, but your points buffer is safe."
         elif odds > 40:
             if diff > 0: reason = "⚖️ **The Bubble.** You control your destiny with a favorable schedule ahead."
             else: reason = "⚠️ **Coin Flip.** Brutal upcoming schedule puts your season at risk."
-        elif odds > 5:
-            reason = "🙏 **In the Hunt.** You need to win out and hope for chaos above you."
-        else:
-            reason = "💀 **On Life Support.** Statistically unlikely without a miracle collapse."
+        elif odds > 5: reason = "🙏 **In the Hunt.** You need to win out and hope for chaos above you."
+        else: reason = "💀 **On Life Support.** Statistically unlikely without a miracle collapse."
             
-        final_output.append({
-            "Team": team.team_name,
-            "Playoff Odds": odds,
-            "Analyst Note": reason
-        })
+        final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Analyst Note": reason})
         
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
@@ -247,7 +230,8 @@ df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascendin
 def get_ai_recap():
     if not openai_key: return "⚠️ Add 'openai_key' to secrets."
     top_scorer = df_eff.iloc[0]['Team']
-    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: Wall Street Report."
+    bench_king = df_eff.sort_values(by="Bench", ascending=False).iloc[0]['Team']
+    prompt = f"Write a 2-paragraph fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}, Inefficient Manager: {bench_king}. Style: Wall Street Report."
     try:
         client = OpenAI(api_key=openai_key)
         return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=400).choices[0].message.content
@@ -270,7 +254,7 @@ for i, (idx, p) in enumerate(df_players.iterrows()):
         st.caption(f"{p['Name']} ({p['Points']})")
 
 # TABS
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week"])
 
 with tab1:
     st.subheader("Weekly Matchups")
@@ -339,7 +323,6 @@ with tab4:
 with tab5:
     st.subheader("🔮 The Crystal Ball (Playoff Simulator)")
     st.caption("Monte Carlo Simulation (1,000 Runs) | Incorporating Remaining Schedule Difficulty")
-    
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             if lottie_forecast: st_lottie(lottie_forecast, height=200)
@@ -362,3 +345,39 @@ with tab5:
             )
             if st.button("🔄 Re-Simulate"):
                 del st.session_state["playoff_odds"]; st.rerun()
+
+with tab6:
+    st.subheader("🚀 Next Week's Market Preview")
+    st.caption("Projected scores for the upcoming matchup period.")
+    
+    # Get Next Week's Matchups
+    next_week = league.current_week
+    try:
+        next_box_scores = league.box_scores(week=next_week)
+        
+        for game in next_box_scores:
+            h_proj = game.home_projected
+            a_proj = game.away_projected
+            if h_proj == 0: h_proj = 100 # Fallback if projections missing
+            if a_proj == 0: a_proj = 100
+            
+            # Simple spread calculation
+            spread = abs(h_proj - a_proj)
+            favorite = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
+            
+            with st.container():
+                col1, col2, col3 = st.columns([2, 1, 2])
+                with col1:
+                    st.markdown(f"**{game.home_team.team_name}**")
+                    st.markdown(f"Proj: {h_proj:.1f}")
+                with col2:
+                    st.markdown(f"**VS**")
+                    if spread < 5: st.caption("🔥 Close Game")
+                    else: st.caption(f"Fav: {favorite} (+{spread:.1f})")
+                with col3:
+                    st.markdown(f"**{game.away_team.team_name}**")
+                    st.markdown(f"Proj: {a_proj:.1f}")
+                st.divider()
+                
+    except Exception as e:
+        st.info("Season is over or projections are unavailable.")
