@@ -5,7 +5,8 @@ st.title("🏈 Fantasy League Recap")
 
 try:
     # Load secrets
-    league_id = st.secrets["league_id"]swid = st.secrets["swid"]      # Ask for the value inside the "swid" drawer
+    league_id = st.secrets["league_id"]
+    swid = st.secrets["swid"]      # Ask for the value inside the "swid" drawer
     espn_s2 = st.secrets["espn_s2"] # Ask for the value inside the "espn_s2" drawer    
     # Try connecting (Updated to 2025)
     year = 2025 
