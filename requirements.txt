@@ -1,12 +1,10 @@
 streamlit
 espn-api
 pandas
-openai
 numpy
+openai
 plotly
 streamlit-lottie
-nfl_data_py
+requests
 fpdf
 thefuzz
-python-Levenshtein
-requests
