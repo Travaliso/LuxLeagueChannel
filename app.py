@@ -13,6 +13,7 @@ import base64
 from fpdf import FPDF
 import base64
 from thefuzz import process
+from thefuzz import process
 
 # Helper function to strip emojis for PDF
 def clean_for_pdf(text):
@@ -290,66 +291,7 @@ st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
-# ... inside the Sidebar ...
-
-# ... inside the Sidebar (bottom of script) ...
-
-if st.sidebar.button("📄 Generate PDF Report"):
-    # 1. AUTO-GENERATE MISSING DATA
-    # If the user hasn't visited the tabs yet, we run the functions now.
-    
-    if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is writing the script..."):
-            st.session_state["recap"] = get_weekly_recap()
-            
-    if "awards" not in st.session_state:
-        with st.spinner("🏆 Engraving trophies..."):
-            st.session_state["awards"] = calculate_season_awards(current_week)
-            
-    if "playoff_odds" not in st.session_state:
-        with st.spinner("🔮 Running Monte Carlo simulations..."):
-            st.session_state["playoff_odds"] = run_monte_carlo_simulation()
-
-    # 2. GENERATE PDF
-    pdf = PDF()
-    pdf.add_page()
-    
-    # Title
-    pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
-    
-    # Studio Report
-    clean_recap = st.session_state["recap"].replace("*", "").replace("#", "")
-    pdf.chapter_body(clean_recap)
-    
-    # Awards Section
-    awards = st.session_state["awards"]
-    pdf.chapter_title("THE TROPHY ROOM")
-    
-    if awards['MVP']:
-        pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
-    
-    if awards['Best Manager']:
-        pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
-        
-    hb = awards['Heartbreaker']
-    pdf.chapter_body(f"Heartbreaker: {hb['Loser']} lost to {hb['Winner']} by {hb['Margin']:.2f} pts")
-    
-    slp = awards['Sleeper']
-    pdf.chapter_body(f"Asleep at Wheel: {slp['Team']} started {slp['Count']} players with 0.0 pts")
-
-    # Forecast Section
-    if "playoff_odds" in st.session_state:
-        pdf.chapter_title("PLAYOFF PROJECTIONS")
-        # Ensure we don't crash if odds are empty
-        df_odds = st.session_state["playoff_odds"]
-        if df_odds is not None and not df_odds.empty:
-            df_odds = df_odds.head(5)
-            for i, row in df_odds.iterrows():
-                pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
-
-    # Output
-    html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
-    st.sidebar.markdown(html, unsafe_allow_html=True)
+st.sidebar.markdown("---")
 
 # PAGE DEFINITIONS (Ensures logic matches UI exactly)
 P_LEDGER = "📜 The Ledger"
@@ -358,11 +300,13 @@ P_AUDIT = "🔎 The Audit"
 P_HEDGE = "💎 The Hedge Fund"
 P_FORECAST = "🔮 The Forecast"
 P_NEXT = "🚀 Next Week"
+P_PROP = "📊 The Prop Desk" # <--- NEW PAGE
 P_DEAL = "🤝 The Dealmaker"
 P_DARK = "🕵️ The Dark Pool"
 P_TROPHY = "🏆 Trophy Room"
 
-page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_DEAL, P_DARK, P_TROPHY]
+# Update the list to include the new page
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 # ------------------------------------------------------------------
@@ -487,7 +431,7 @@ st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
 col_main, col_players = st.columns([2, 1])
 with col_players:
-    st.markdown("### 🌟 Weekly Elite (Healthy)")
+    st.markdown("### 🌟 Weekly Elite")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
          st.markdown(f"""
             <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
@@ -579,6 +523,80 @@ elif selected_page == P_NEXT:
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div><div style="color: #00C9FF;">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div><div style="color: #00C9FF;">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
+# --- NEW BLOCK: THE PROP DESK ---
+elif selected_page == P_PROP:
+    st.header("📊 The Prop Desk (Vegas vs. ESPN)")
+    st.caption("Comparing ESPN projections against real money Vegas lines to find 'Traps' and 'Smash Spots'.")
+    
+    # 1. Check for API Key
+    odds_api_key = st.secrets.get("odds_api_key")
+    if not odds_api_key:
+        st.warning("⚠️ Please add 'odds_api_key' to your secrets.toml file to enable this feature.")
+    else:
+        # 2. Lazy Load Vegas Data
+        if "vegas_data" not in st.session_state:
+            with st.spinner("Calling the bookies in Las Vegas..."):
+                st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
+        
+        df_vegas = st.session_state["vegas_data"]
+        
+        if df_vegas is not None and not df_vegas.empty:
+            # 3. Matchup Processing (Get User's Team or All Teams)
+            # For simplicity, we scan ALL players in next week's matchups
+            next_week = league.current_week
+            box = league.box_scores(week=next_week)
+            
+            trust_data = []
+            
+            # Loop through all games next week
+            for game in box:
+                # Combine both lineups
+                all_players = game.home_lineup + game.away_lineup
+                for player in all_players:
+                    if player.slot_position == 'BE': continue 
+                    
+                    # Fuzzy Match
+                    # We match player.name to the Vegas dataframe 'Player' column
+                    match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
+                    
+                    if score > 85: 
+                        vegas_row = df_vegas[df_vegas['Player'] == match].iloc[0]
+                        vegas_pts = vegas_row['Vegas Score']
+                        espn_pts = player.projected_points
+                        if espn_pts == 0: espn_pts = 0.1 # Avoid divide by zero/weirdness
+                        
+                        delta = vegas_pts - espn_pts
+                        
+                        # Determine Verdict
+                        if delta > 3: status = "🚀 SMASH (Vegas Higher)"
+                        elif delta < -3: status = "⚠️ TRAP (ESPN High)"
+                        else: status = "⚖️ Fair Value"
+                        
+                        trust_data.append({
+                            "Player": player.name,
+                            "Team": player.proTeam,
+                            "ESPN Proj": espn_pts,
+                            "Vegas Implied": round(vegas_pts, 2),
+                            "Delta": round(delta, 2),
+                            "Verdict": status
+                        })
+            
+            # 4. Render Table
+            if trust_data:
+                df_trust = pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False)
+                st.dataframe(
+                    df_trust,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f", help="Positive = Vegas likes them more than ESPN.")
+                    }
+                )
+            else:
+                st.info("No prop lines found for active players yet. (Lines usually drop Thursday/Friday).")
+        else:
+            st.error("Could not fetch odds. Check API Key quota or try again later.")
+
 elif selected_page == P_DEAL:
     st.header("🤝 The AI Dealmaker")
     st.caption("Select two teams to have the AI negotiate a mutually beneficial trade.")
@@ -658,6 +676,85 @@ elif selected_page == P_TROPHY:
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
 else:
     st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
+    
+# ------------------------------------------------------------------
+# 8. THE PROP DESK ENGINE (Vegas Integration)
+# ------------------------------------------------------------------
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    # 1. Fetch Odds from The-Odds-API
+    # We fetch specific markets: Passing Yds, Rushing Yds, Receiving Yds, Anytime TD
+    SPORT = 'americanfootball_nfl'
+    REGIONS = 'us'
+    MARKETS = 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td'
+    ODDS_FORMAT = 'american'
+    DATE_FORMAT = 'iso'
+    
+    url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/events/upcoming/odds'
+    params = {
+        'api_key': api_key,
+        'regions': REGIONS,
+        'markets': MARKETS,
+        'oddsFormat': ODDS_FORMAT,
+        'dateFormat': DATE_FORMAT,
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+    except:
+        return None
+
+    # 2. Process & Normalize Data
+    player_props = {} 
+    
+    for event in data:
+        for bookmaker in event['bookmakers']:
+            # We only need one reliable bookmaker (e.g., DraftKings or FanDuel)
+            if bookmaker['key'] in ['draftkings', 'fanduel']:
+                for market in bookmaker['markets']:
+                    key = market['key']
+                    
+                    for outcome in market['outcomes']:
+                        player_name = outcome['description']
+                        if player_name not in player_props:
+                            player_props[player_name] = {'pass_yds': 0, 'rush_yds': 0, 'rec_yds': 0, 'td_prob': 0}
+                        
+                        # Extract the Line (Point) or Odds
+                        if key == 'player_pass_yds':
+                            player_props[player_name]['pass_yds'] = outcome.get('point', 0)
+                        elif key == 'player_rush_yds':
+                            player_props[player_name]['rush_yds'] = outcome.get('point', 0)
+                        elif key == 'player_reception_yds':
+                            player_props[player_name]['rec_yds'] = outcome.get('point', 0)
+                        elif key == 'player_anytime_td':
+                            # Convert American Odds to Implied Probability
+                            odds = outcome.get('price', 0)
+                            if odds > 0: prob = 100 / (odds + 100)
+                            else: prob = abs(odds) / (abs(odds) + 100)
+                            player_props[player_name]['td_prob'] = prob
+
+    # 3. Calculate "Vegas Implied Fantasy Points"
+    vegas_data = []
+    for name, stats in player_props.items():
+        # Standard Scoring Calculation
+        # Passing: 0.04 pts/yd
+        # Rushing/Rec: 0.1 pts/yd
+        # TD: 6 pts * Implied Probability (Expected Value)
+        
+        implied_score = (stats['pass_yds'] * 0.04) + \
+                        (stats['rush_yds'] * 0.1) + \
+                        (stats['rec_yds'] * 0.1) + \
+                        (stats['td_prob'] * 6)
+                        
+        if implied_score > 1: # Filter out noise
+            vegas_data.append({"Player": name, "Vegas Score": implied_score})
+            
+    return pd.DataFrame(vegas_data)
+
+    
 
 # ------------------------------------------------------------------
 # 8. THE PROP DESK ENGINE (Vegas Integration)
