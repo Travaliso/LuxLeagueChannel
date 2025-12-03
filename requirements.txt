@@ -8,3 +8,4 @@ streamlit-lottie
 requests
 fpdf
 thefuzz
+nfl_data_py
