@@ -331,56 +331,13 @@ def ai_response(prompt, tokens=600):
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 col_main, col_players = st.columns([2, 1])
+
 with col_players:
     st.markdown("### 🌟 Weekly Elite")
+    # This uses the 'df_players' we filtered in Section 5 (Healthy players only)
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
          st.markdown(f"""<div style="display: flex; align-items: center; background: rgba(17, 25, 40, 0.75); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 8px; margin-right: 12px; border: 1px solid rgba(0, 201, 255, 0.3);"><div><div style="color: #ffffff; font-weight: 700; font-size: 14px; text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);">{p['Name']}</div><div style="color: #a0aaba; font-size: 12px; font-weight: 500;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
 
-elif selected_page == P_DARK:
-    st.header("🕵️ The Dark Pool (Waiver Wire)")
-    st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
-    
-    if "dark_pool_data" not in st.session_state:
-        if st.button("🔭 Scan Free Agents"):
-            with luxury_spinner("Scouting the wire..."):
-                df_pool = scan_dark_pool()
-                st.session_state["dark_pool_data"] = df_pool
-                
-                # Only run AI if we actually found players
-                if not df_pool.empty:
-                    # Create a summary string for the AI
-                    p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
-                    st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
-                else:
-                    st.session_state["scout_rpt"] = "No viable assets found on the wire."
-                st.rerun()
-    else:
-        df_pool = st.session_state["dark_pool_data"]
-        
-        # Display AI Report
-        if "scout_rpt" in st.session_state and not df_pool.empty:
-            st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
-        
-        # Display Data Table
-        if not df_pool.empty:
-            st.dataframe(
-                df_pool, 
-                use_container_width=True, 
-                hide_index=True, 
-                column_config={
-                    "Avg Pts": st.column_config.NumberColumn(format="%.1f"), 
-                    "Total Pts": st.column_config.NumberColumn(format="%.1f")
-                }
-            )
-        else:
-            st.warning("⚠️ No players found.")
-            st.caption("The scanner looked at the top 100 free agents but filtered them all out based on Injury Status (OUT/IR) or Low Points (< 1.0 avg).")
-            
-        if st.button("🔄 Rescan"): 
-            del st.session_state["dark_pool_data"]
-            if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
-            st.rerun()
-            
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
@@ -431,4 +388,161 @@ elif selected_page == P_FORECAST:
     with col_main: st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
-            with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun
+            with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
+    else:
+        df_odds = st.session_state["playoff_odds"]
+        st.dataframe(df_odds, use_container_width=True, hide_index=True, column_config={"Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=100)})
+        if st.button("🔄 Re-Simulate"): del st.session_state["playoff_odds"]; st.rerun()
+
+elif selected_page == P_NEXT:
+    try:
+        next_week = league.current_week
+        next_box_scores = league.box_scores(week=next_week)
+        games_list = []
+        for game in next_box_scores:
+            h_proj, a_proj = game.home_projected, game.away_projected
+            if h_proj == 0: h_proj = 100
+            if a_proj == 0: a_proj = 100
+            spread = abs(h_proj - a_proj)
+            games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
+        if "next_week_commentary" not in st.session_state:
+            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_list}. Pick 'Lock of the Week' and 'Upset Alert'.")
+        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        st.divider(); st.header("Next Week's Market Preview")
+        for game in next_box_scores:
+            h_proj, a_proj = game.home_projected, game.away_projected
+            if h_proj == 0: h_proj = 100
+            if a_proj == 0: a_proj = 100
+            spread = abs(h_proj - a_proj)
+            fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div><div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div><div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
+    except: st.info("Projections unavailable.")
+
+elif selected_page == P_PROP:
+    st.header("📊 The Prop Desk (Vegas vs. ESPN)")
+    if not odds_api_key: st.warning("Please add 'odds_api_key' to your secrets.")
+    else:
+        if "vegas_data" not in st.session_state:
+            with luxury_spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
+        df_vegas = st.session_state["vegas_data"]
+        if df_vegas is not None and not df_vegas.empty:
+            if "Status" in df_vegas.columns and df_vegas.iloc[0]["Status"] == "Market Closed":
+                st.markdown("""<div class="luxury-card" style="border-left: 4px solid #FFD700;"><h3 style="color: #FFD700; margin-top: 0;">🏦 Market Status: ADJUSTMENT PERIOD</h3><p style="color: #e0e0e0;"><strong>Why is this empty?</strong> It is early in the week. Major books pull player props on Tuesdays.</p></div>""", unsafe_allow_html=True)
+            else:
+                next_week = league.current_week
+                box = league.box_scores(week=next_week)
+                trust_data = []
+                for game in box:
+                    all_players = game.home_lineup + game.away_lineup
+                    for player in all_players:
+                        if player.slot_position == 'BE': continue
+                        match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
+                        if score > 85:
+                            vegas_pts = df_vegas[df_vegas['Player'] == match].iloc[0]['Vegas Score']
+                            espn_pts = player.projected_points
+                            if espn_pts == 0: espn_pts = 0.1
+                            delta = vegas_pts - espn_pts
+                            status = "🚀 SMASH (Vegas Higher)" if delta > 3 else "⚠️ TRAP (ESPN High)" if delta < -3 else "⚖️ Fair Value"
+                            trust_data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
+                if trust_data:
+                    st.dataframe(pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), use_container_width=True, hide_index=True, column_config={"Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f")})
+                else: st.info("No prop lines found yet.")
+        else: st.error("Could not fetch odds.")
+
+elif selected_page == P_DEAL:
+    st.header("🤝 The AI Dealmaker")
+    c1, c2 = st.columns(2)
+    with c1: t1 = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
+    with c2: t2 = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
+    if st.button("🤖 Generate Trade"):
+        with luxury_spinner("Analyzing roster deficiencies..."):
+            team_a = next(t for t in league.teams if t.team_name == t1)
+            team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
+            r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
+            r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
+            proposal = ai_response(f"Act as Trade Broker. Propose a fair trade between Team A ({t1}): {r_a} and Team B ({t2}): {r_b}. Explain why.")
+            st.markdown(f'<div class="luxury-card studio-box"><h3>Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
+
+elif selected_page == P_DARK:
+    st.header("🕵️ The Dark Pool (Waiver Wire)")
+    st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
+    
+    if "dark_pool_data" not in st.session_state:
+        if st.button("🔭 Scan Free Agents"):
+            with luxury_spinner("Scouting the wire..."):
+                df_pool = scan_dark_pool()
+                st.session_state["dark_pool_data"] = df_pool
+                
+                # Only run AI if we actually found players
+                if not df_pool.empty:
+                    # Create a summary string for the AI
+                    p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
+                    st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
+                else:
+                    st.session_state["scout_rpt"] = "No viable assets found on the wire."
+                st.rerun()
+    else:
+        df_pool = st.session_state["dark_pool_data"]
+        
+        # Display AI Report
+        if "scout_rpt" in st.session_state and not df_pool.empty:
+            st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
+        
+        # Display Data Table
+        if not df_pool.empty:
+            st.dataframe(
+                df_pool, 
+                use_container_width=True, 
+                hide_index=True, 
+                column_config={
+                    "Avg Pts": st.column_config.NumberColumn(format="%.1f"), 
+                    "Total Pts": st.column_config.NumberColumn(format="%.1f")
+                }
+            )
+        else:
+            st.warning("⚠️ No players found.")
+            st.caption("The scanner looked at the top 100 free agents but filtered them all out based on Injury Status (OUT/IR) or Low Points (< 1.0 avg).")
+            
+        if st.button("🔄 Rescan"): 
+            del st.session_state["dark_pool_data"]
+            if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
+            st.rerun()
+
+elif selected_page == P_TROPHY:
+    if "awards" not in st.session_state:
+        if st.button("🏅 Unveil Awards"):
+            with luxury_spinner("Engraving trophies..."):
+                st.session_state["awards"] = calculate_season_awards(current_week)
+                st.session_state["season_comm"] = ai_response(f"Write a 'State of the Union' for the league based on awards. MVP: {st.session_state['awards']['MVP']['Name']}.", 1000)
+                st.rerun()
+    else:
+        awards = st.session_state["awards"]
+        if "season_comm" in st.session_state:
+             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+        st.divider(); st.header("Season Awards")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<div class="luxury-card award-card"><h3>👑 MVP</h3></div>', unsafe_allow_html=True)
+            if awards['MVP']:
+                p = awards['MVP']
+                st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254", width=150)
+                st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts")
+        with c2:
+            st.markdown('<div class="luxury-card award-card"><h3>🐋 The Whale</h3></div>', unsafe_allow_html=True)
+            mgr = awards['Best Manager']
+            st.image(mgr['Logo'], width=100)
+            st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts")
+        st.divider()
+        c3, c4, c5 = st.columns(3)
+        with c3:
+            st.markdown("#### 💔 Heartbreaker"); hb = awards['Heartbreaker']
+            st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts")
+        with c4:
+            st.markdown("#### 🔥 The Streak"); stk = awards['Streak']
+            st.metric(label=stk['Team'], value=f"{stk['Length']} Games")
+        with c5:
+            st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
+            st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
+else:
+    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
