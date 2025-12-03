@@ -294,20 +294,43 @@ def run_monte_carlo_simulation(simulations=1000):
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
+# --- UPDATED DARK POOL SCANNER ---
 @st.cache_data(ttl=3600)
-def scan_dark_pool(limit=15):
-    free_agents = league.free_agents(size=100)
+def scan_dark_pool(limit=20):
+    # Expanded search size to 150 to find healthy players
+    free_agents = league.free_agents(size=150)
     pool_data = []
+    
     for player in free_agents:
         try:
-            status = getattr(player, 'injuryStatus', 'ACTIVE')
-            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
-            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
+            # 1. Safe Status Check
+            raw_status = getattr(player, 'injuryStatus', 'NORMAL')
+            if raw_status is None: raw_status = 'NORMAL'
+            status = str(raw_status).upper()
+            
+            # 2. Filter Dead Weight (Keep Questionable)
+            if status in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']:
+                continue
+                
+            # 3. Points Calculation
             total = player.total_points if player.total_points > 0 else player.projected_total_points
-            avg_pts = total / league.current_week if league.current_week > 0 else 0
-            if avg_pts > 1.0:
-                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
+            # Avoid divide by zero for Week 1
+            weeks = league.current_week if league.current_week > 0 else 1
+            avg_pts = total / weeks
+            
+            # 4. Lower Threshold (0.5) to ensure we capture depth pieces
+            if avg_pts > 0.5:
+                pool_data.append({
+                    "Name": player.name, 
+                    "Position": player.position, 
+                    "Team": player.proTeam, 
+                    "Avg Pts": avg_pts, 
+                    "Total Pts": total, 
+                    "ID": player.playerId, 
+                    "Status": status
+                })
         except: continue
+            
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
@@ -338,15 +361,13 @@ def process_dynasty_leaderboard(df_history):
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
-# --- F. NEXT GEN STATS ENGINE (UPDATED WITH ADVANCED METRICS) ---
+# --- F. NEXT GEN STATS ENGINE ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data(year):
     try:
-        # Fetch raw data
         df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year])
         df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
         df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
-        # Fetch seasonal data for WOPR/Target Share
         df_seas = nfl.import_seasonal_data([year])
         return df_rec, df_rush, df_pass, df_seas
     except: return None, None, None, None
@@ -359,47 +380,37 @@ def analyze_nextgen_metrics(roster, year):
     for player in roster:
         p_name = player.name
         pos = player.position
-        
-        # Fix: Safely get ID and Team
         pid = getattr(player, 'playerId', None)
         p_team = getattr(player, 'proTeam', 'N/A')
 
-        # WR/TE Analysis
-        if pos in ['WR', 'TE']:
+        if pos in ['WR', 'TE'] and not df_rec.empty:
             match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
             if match_result and match_result[1] > 90:
                 match_name = match_result[0]
-                # NGS Stats
                 player_stats = df_rec[df_rec['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep = stats.get('avg_separation', 0)
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
                     
-                    # Seasonal Stats (WOPR/Target Share)
-                    # We match on name again in the seasonal dataframe
-                    # Note: nfl_data_py names might slightly differ, but usually consistent enough
+                    # Seasonal
                     seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
+                    wopr = 0
                     if seas_match and seas_match[1] > 90:
                         seas_stats = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0]
                         wopr = seas_stats.get('wopr', 0)
-                        tgt_sh = seas_stats.get('tgt_sh', 0)
-                    else:
-                        wopr, tgt_sh = 0, 0
 
                     verdict = "HOLD"
-                    if wopr > 0.7: verdict = "💎 ELITE (Alpha WR1)"
-                    elif sep > 3.5: verdict = "⚡ SEPARATOR (Open)"
-                    elif tgt_sh > 0.25: verdict = "📈 VOLUME KING"
+                    if wopr > 0.7: verdict = "💎 ELITE"
+                    elif sep > 3.5: verdict = "⚡ SEPARATOR"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
                     
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "WOPR (Opp Share)", "Value": f"{wopr:.2f}", 
+                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
                         "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict
                     })
 
-        # RB Analysis
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -410,19 +421,16 @@ def analyze_nextgen_metrics(roster, year):
                     ryoe = stats.get('rush_yards_over_expected_per_att', 0)
                     eff = stats.get('efficiency', 0) 
                     box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
-                    
                     verdict = "HOLD"
-                    if ryoe > 1.0: verdict = "💎 ELITE (Creator)"
-                    elif box_8 > 30: verdict = "💪 WORKHORSE (Stacked Box)"
+                    if ryoe > 1.0: verdict = "💎 ELITE"
+                    elif box_8 > 30: verdict = "💪 WORKHORSE"
                     elif ryoe < -0.5: verdict = "🚫 PLODDER"
-                    
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
                         "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
                         "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict
                     })
         
-        # QB Analysis
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -432,20 +440,17 @@ def analyze_nextgen_metrics(roster, year):
                     stats = player_stats.mean(numeric_only=True)
                     cpoe = stats.get('completion_percentage_above_expectation', 0)
                     time_throw = stats.get('avg_time_to_throw', 0)
-                    
                     verdict = "HOLD"
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
-                    elif time_throw > 3.0: verdict = "⏳ HOLDER (Sack Risk)"
+                    elif time_throw > 3.0: verdict = "⏳ HOLDER"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
-                    
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
                         "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time/Throw", "Verdict": verdict
+                        "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict
                     })
 
     return pd.DataFrame(insights)
-
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
@@ -588,7 +593,8 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-# HERO ROW (Weekly Elite)
+
+# HERO ROW
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
 def render_hero_card(col, player):
@@ -610,6 +616,7 @@ if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
 if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
 st.markdown("---")
 
+# PAGE ROUTING
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
@@ -676,8 +683,6 @@ elif selected_page == P_LAB:
         - **CPOE:** Completion Percentage Over Expectation.
         - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
         - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
-        - **8-Man Box:** Percentage of attempts against a stacked box (8+ defenders).
-        - **Aggressiveness:** Percentage of attempts into tight windows (<1 yard separation).
         """)
     
     team_list = [t.team_name for t in league.teams]
@@ -716,7 +721,6 @@ elif selected_page == P_LAB:
                 """, unsafe_allow_html=True)
     elif "ngs_data" in st.session_state:
         st.info("No Next Gen Data found for this roster (or API connection failed).")
-
 
 elif selected_page == P_FORECAST:
     st.header("The Crystal Ball")
@@ -795,15 +799,20 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
-            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
             st.markdown(f'<div class="luxury-card studio-box"><h3>Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
 
+# --- UPDATED DARK POOL SECTION (RESET LOGIC) ---
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
-    if "dark_pool_data" not in st.session_state:
+    st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
+    
+    # Check if data exists in state
+    has_data = "dark_pool_data" in st.session_state
+    
+    if not has_data:
         if st.button("🔭 Scan Free Agents"):
             with luxury_spinner("Scouting the wire..."):
                 df_pool = scan_dark_pool()
@@ -815,12 +824,17 @@ elif selected_page == P_DARK:
                     st.session_state["scout_rpt"] = "No viable assets found."
                 st.rerun()
     else:
-        if "scout_rpt" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
+        # Render the data
+        if "scout_rpt" in st.session_state: 
+            st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
+        
         if not st.session_state["dark_pool_data"].empty:
             st.dataframe(st.session_state["dark_pool_data"], use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
         else:
             st.warning("⚠️ No players found.")
-        if st.button("🔄 Rescan"): 
+            st.caption("Try clicking 'Rescan' below to refresh.")
+        
+        if st.button("🔄 Rescan Wire"): 
             del st.session_state["dark_pool_data"]
             if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
             st.rerun()
