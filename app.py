@@ -45,49 +45,26 @@ st.markdown("""
     h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
     div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 10px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.8rem; }
+    
+    /* AWARD BLURBS */
+    .award-blurb { color: #a0aaba; font-size: 0.8rem; margin-top: 15px; margin-bottom: 10px; font-style: italic; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
 
-    /* 4. LUXURY CARDS */
+    /* 4. CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
         border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);
         padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
     
-    /* AWARD CARD - TALLER & CENTERED */
     .award-card { 
-        border-left: 4px solid #00C9FF; 
-        transition: transform 0.3s; 
-        min-height: 320px; /* FORCE HEIGHT TO PREVENT OVERLAP */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
+        border-left: 4px solid #00C9FF; transition: transform 0.3s; min-height: 320px; 
+        display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
     }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
     
-    /* NARRATIVE BLURB STYLE */
-    .award-blurb { 
-        color: #a0aaba; 
-        font-size: 0.85rem; 
-        margin-top: 15px; 
-        font-style: italic; 
-        line-height: 1.4;
-        border-top: 1px solid rgba(255,255,255,0.1);
-        padding-top: 10px;
-        width: 100%;
-    }
-    
     .shame-card { 
-        background: rgba(40, 10, 10, 0.8); 
-        border: 1px solid #FF4B4B; 
-        border-left: 4px solid #FF4B4B; 
-        min-height: 250px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
+        background: rgba(40, 10, 10, 0.8); border: 1px solid #FF4B4B; border-left: 4px solid #FF4B4B; 
+        min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
     }
     .studio-box { border-left: 4px solid #7209b7; }
 
@@ -98,37 +75,18 @@ st.markdown("""
         display: flex; flex-direction: column; justify-content: flex-end;
         backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
-    .gold { 
-        height: 280px; width: 100%; 
-        background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); 
-        border: 1px solid #FFD700; border-bottom: none;
-    }
-    .silver { 
-        height: 220px; width: 100%; 
-        background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); 
-        border: 1px solid #C0C0C0; border-bottom: none;
-    }
-    .bronze { 
-        height: 180px; width: 100%; 
-        background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); 
-        border: 1px solid #CD7F32; border-bottom: none;
-    }
+    .gold { height: 280px; width: 100%; background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #FFD700; border-bottom: none; }
+    .silver { height: 220px; width: 100%; background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #C0C0C0; border-bottom: none; }
+    .bronze { height: 180px; width: 100%; background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #CD7F32; border-bottom: none; }
     .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
 
-    /* 6. SIDEBAR & MENU FIX */
+    /* 6. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
     div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
-    div[role="radiogroup"] label { 
-        padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; 
-        margin-bottom: 5px; border: 1px solid transparent; background-color: transparent;
-    }
+    div[role="radiogroup"] label { padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; margin-bottom: 5px; border: 1px solid transparent; background-color: transparent; }
     div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
-    div[role="radiogroup"] label[data-checked="true"] {
-        background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important;
-        border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important;
-    }
+    div[role="radiogroup"] label[data-checked="true"] { background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important; border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important; }
     div[role="radiogroup"] label > div:first-child { display: none !important; }
-    div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
 
     /* 7. LOADING OVERLAY */
@@ -164,21 +122,18 @@ except Exception as e:
     st.error(f"🔒 Connection Error: {e}")
     st.stop()
 
-# LOGO HELPER (Fixes missing images)
-def get_logo(team):
-    # Generic NFL Logo if user has no avatar
-    fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
-    try:
-        return team.logo_url if team.logo_url else fallback
-    except:
-        return fallback
-
 def load_lottieurl(url: str):
     try:
         r = requests.get(url)
         if r.status_code != 200: return None
         return r.json()
     except: return None
+
+# LOGO HELPER (Fixes missing images)
+def get_logo(team):
+    fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
+    try: return team.logo_url if team.logo_url else fallback
+    except: return fallback
 
 @contextmanager
 def luxury_spinner(text="Initializing Protocol..."):
@@ -282,8 +237,9 @@ def calculate_heavy_analytics(current_week):
     return pd.DataFrame(data_rows)
 
 @st.cache_data(ttl=3600)
-def calculate_season_awards_v2(current_week):
+def calculate_season_awards(current_week):
     player_points = {}
+    # FIXED: Initialize with Logo to prevent KeyError
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in league.teams}
     
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
@@ -308,8 +264,10 @@ def calculate_season_awards_v2(current_week):
                     player_points[p.playerId]["Points"] += p.points
                     if p.slot_position == 'BE': team_stats[team_name]["Bench"] += p.points
                     else: team_stats[team_name]["Starters"] += p.points
+                    
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
                     if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
+                    
                     acq = getattr(p, 'acquisitionType', 'DRAFT')
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
 
@@ -332,6 +290,7 @@ def calculate_season_awards_v2(current_week):
     sorted_teams_pts = sorted(league.teams, key=lambda x: x.points_for)
     toilet = sorted_teams_pts[0]
     
+    # Podium Logic: Sort by Wins then Points
     podium_sort = sorted(league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
     podium = podium_sort[:3]
     
@@ -462,7 +421,6 @@ def analyze_nextgen_metrics_v3(roster, year):
                     if wopr > 0.7: verdict = "💎 ELITE"
                     elif sep > 3.5: verdict = "⚡ SEPARATOR"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
-                    
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
 
         elif pos == 'RB' and not df_rush.empty:
@@ -514,7 +472,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     with luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
-        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards_v2(current_week)
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
         if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
         pdf = PDF()
@@ -671,7 +629,7 @@ if selected_page == P_LEDGER:
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(146, 254, 157, 0.8);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -715,7 +673,15 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    st.header("🧬 The Lab (Next Gen Biometrics)")
+    col_head, col_btn = st.columns([3, 1])
+    with col_head:
+        st.header("🧬 The Lab (Next Gen Biometrics)")
+    with col_btn:
+         if st.button("🧪 Analyze Roster"):
+             with luxury_spinner("Calibrating Satellites..."):
+                 st.session_state["trigger_lab"] = True
+                 st.rerun()
+
     with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
         st.markdown("""
         - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
@@ -732,13 +698,12 @@ elif selected_page == P_LAB:
     team_list = [t.team_name for t in league.teams]
     target_team = st.selectbox("Select Test Subject:", team_list)
     
-    if st.button("🧪 Analyze Roster Efficiency"):
-        if lottie_lab: st_lottie(lottie_lab, height=200)
-        with luxury_spinner("Calibrating Tracking Satellites..."):
-            roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-            df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
-            st.session_state["ngs_data"] = df_ngs
-            st.rerun()
+    if st.session_state.get("trigger_lab"):
+        roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+        df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
+        st.session_state["ngs_data"] = df_ngs
+        st.session_state["trigger_lab"] = False
+        st.rerun()
             
     if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
         st.markdown("### 🔬 Biometric Results")
@@ -843,6 +808,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -897,7 +863,7 @@ elif selected_page == P_TROPHY:
             
             # Do heavy work
             with luxury_spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards_v2(current_week)
+                st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
                 
                 # Safely get names for AI prompt
@@ -1014,7 +980,7 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF; margin: 0;">The Hoarder</h4>
                 <div style="font-size: 1.1rem; font-weight: bold; color: white;">{hoa['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{hoa['Pts']:.1f} Bench Pts</div>
-                <div class="award-blurb">Most points left rotting on the bench.</div>
+                <div class="award-blurb">Most points left on the bench.</div>
             </div>""", unsafe_allow_html=True)
 
         # 4. TOILET BOWL
