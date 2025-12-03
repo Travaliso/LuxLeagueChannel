@@ -8,49 +8,10 @@ from openai import OpenAI
 from streamlit_lottie import st_lottie
 import requests
 import random
-from fpdf import FPDF
 import base64
 from fpdf import FPDF
-import base64
-from thefuzz import process
 from thefuzz import process
 
-# Helper function to strip emojis for PDF
-def clean_for_pdf(text):
-    # This encodes the text to latin-1 and ignores errors (removing emojis), 
-    # then decodes it back to a string that FPDF can handle.
-    if not isinstance(text, str): return str(text)
-    return text.encode('latin-1', 'ignore').decode('latin-1')
-
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 15)
-        self.set_text_color(0, 201, 255)
-        # We clean the header text too, just in case
-        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
-        self.ln(5)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-
-    def chapter_title(self, title):
-        self.set_font('Arial', 'B', 12)
-        self.set_text_color(0, 114, 255)
-        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
-        self.ln(2)
-
-    def chapter_body(self, body):
-        self.set_font('Arial', '', 10)
-        self.set_text_color(50)
-        self.multi_cell(0, 6, clean_for_pdf(body))
-        self.ln()
-
-def create_download_link(val, filename):
-    b64 = base64.b64encode(val)
-    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 # ------------------------------------------------------------------
 # 1. CONFIGURATION & NEON LUXURY CSS
 # ------------------------------------------------------------------
@@ -58,10 +19,7 @@ st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layou
 
 st.markdown("""
     <style>
-    /* MAIN BACKGROUND */
     .stApp { background-color: #080a10; }
-
-    /* NEON GRADIENT HEADINGS */
     h1, h2, h3, h4 {
         background: linear-gradient(90deg, #00C9FF, #0072ff);
         -webkit-background-clip: text;
@@ -70,16 +28,12 @@ st.markdown("""
         font-weight: 800 !important;
         letter-spacing: 1px;
     }
-
-    /* METRIC NUMBERS */
     div[data-testid="stMetricValue"] {
         font-size: 2rem !important;
         color: #00C9FF !important;
         text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);
     }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; }
-
-    /* LUXURY CARD STYLING */
     .luxury-card {
         background: linear-gradient(145deg, #151922, #1a1c24);
         border-radius: 16px;
@@ -90,20 +44,16 @@ st.markdown("""
     }
     .award-card { border-left: 4px solid #00C9FF; }
     .studio-box { border-left: 4px solid #0072ff; }
-
-    /* SIDEBAR NAVIGATION */
     section[data-testid="stSidebar"] { background-color: #0e1117; border-right: 1px solid #333; }
     div[data-testid="stRadio"] > label { color: #a0aaba !important; font-weight: bold; }
     div[role="radiogroup"] label { padding: 10px; border-radius: 8px; transition: background-color 0.3s; }
     div[role="radiogroup"] label:hover { background-color: rgba(0, 201, 255, 0.1); color: #00C9FF !important; }
-    
-    /* DATAFRAME */
     div[data-testid="stDataFrame"] { background-color: #151922; border-radius: 12px; padding: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# 2. CONNECTION & SETUP
+# 2. HELPER CLASSES & FUNCTIONS (PDF, Lottie, Vegas)
 # ------------------------------------------------------------------
 def load_lottieurl(url: str):
     try:
@@ -112,25 +62,89 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
+# PDF Helpers
+def clean_for_pdf(text):
+    if not isinstance(text, str): return str(text)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 201, 255)
+        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
+        self.ln(5)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(0, 114, 255)
+        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
+        self.ln(2)
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.set_text_color(50)
+        self.multi_cell(0, 6, clean_for_pdf(body))
+        self.ln()
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
+
+# Vegas Prop Desk Engine
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    try:
+        url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+        params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+        response = requests.get(url, params=params)
+        if response.status_code != 200: return None
+        data = response.json()
+        
+        player_props = {}
+        for event in data:
+            for bookmaker in event['bookmakers']:
+                if bookmaker['key'] in ['draftkings', 'fanduel']:
+                    for market in bookmaker['markets']:
+                        key = market['key']
+                        for outcome in market['outcomes']:
+                            name = outcome['description']
+                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                            elif key == 'player_anytime_td':
+                                odds = outcome.get('price', 0)
+                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
+                                player_props[name]['td'] = prob
+        
+        vegas_data = []
+        for name, s in player_props.items():
+            score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
+            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+        return pd.DataFrame(vegas_data)
+    except: return None
+
+# Load Animations
 lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
 lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
+# League Connection
 try:
     league_id = st.secrets["league_id"]
     swid = st.secrets["swid"]
     espn_s2 = st.secrets["espn_s2"]
     openai_key = st.secrets.get("openai_key")
+    odds_api_key = st.secrets.get("odds_api_key")
     year = 2025
-
     @st.cache_resource
-    def get_league():
-        return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-
+    def get_league(): return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
     league = get_league()
-
 except Exception as e:
     st.error(f"🔒 Connection Error: {e}")
     st.stop()
@@ -138,38 +152,28 @@ except Exception as e:
 # ------------------------------------------------------------------
 # 3. ANALYTICS ENGINES
 # ------------------------------------------------------------------
-
-# --- A. Historical Analytics ---
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(current_week):
     data_rows = []
     for team in league.teams:
         power_score = round(team.points_for / current_week, 1)
-        true_wins = 0
-        total_matchups = 0
+        true_wins, total_matchups = 0, 0
         for w in range(1, current_week + 1):
             box = league.box_scores(week=w)
-            my_score = next((g.home_score if g.home_team == team else g.away_score 
-                             for g in box if g.home_team == team or g.away_team == team), 0)
+            my_score = next((g.home_score if g.home_team == team else g.away_score for g in box if g.home_team == team or g.away_team == team), 0)
             all_scores = [g.home_score for g in box] + [g.away_score for g in box]
             wins_this_week = sum(1 for s in all_scores if my_score > s)
             true_wins += wins_this_week
             total_matchups += (len(league.teams) - 1)
-
         true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
         luck_rating = (actual_win_pct - true_win_pct) * 10
-        
-        data_rows.append({
-            "Team": team.team_name, "Wins": team.wins, "Points For": team.points_for,
-            "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct
-        })
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
     return pd.DataFrame(data_rows)
 
-# --- B. Season Awards Engine ---
 @st.cache_data(ttl=3600)
 def calculate_season_awards(current_week):
-    player_points = {} 
+    player_points = {}
     team_bench_points = {t.team_name: 0 for t in league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
@@ -185,7 +189,7 @@ def calculate_season_awards(current_week):
             margin = abs(game.home_score - game.away_score)
             if game.home_score > game.away_score: winner, loser = h_name, a_name
             else: winner, loser = a_name, h_name
-                
+            
             current_streaks[winner] += 1
             current_streaks[loser] = 0
             if current_streaks[winner] > max_streaks[winner]: max_streaks[winner] = current_streaks[winner]
@@ -194,7 +198,7 @@ def calculate_season_awards(current_week):
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
-                
+            
             def process_roster(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
@@ -202,7 +206,6 @@ def calculate_season_awards(current_week):
                     if p.slot_position == 'BE': team_bench_points[team_name] += p.points
                     else: 
                         if p.points == 0: asleep_count[team_name] += 1
-
             process_roster(game.home_lineup, h_name)
             process_roster(game.away_lineup, a_name)
             
@@ -221,7 +224,6 @@ def calculate_season_awards(current_week):
         "Best Manager": {"Team": sorted_teams[0].team_name, "Points": sorted_teams[0].points_for, "Logo": sorted_teams[0].logo_url}
     }
 
-# --- C. Monte Carlo Simulator ---
 @st.cache_data(ttl=3600)
 def run_monte_carlo_simulation(simulations=1000):
     team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
@@ -245,47 +247,29 @@ def run_monte_carlo_simulation(simulations=1000):
     final_output = []
     for team in league.teams:
         odds = (results[team.team_name] / simulations) * 100
-        if odds > 99: reason = "🔒 Locked."
-        elif odds > 80: reason = "🚀 High Prob."
-        elif odds > 40: reason = "⚖️ Bubble."
-        elif odds > 5: reason = "🙏 Miracle."
-        else: reason = "💀 Dead."
+        reason = "🔒 Locked." if odds > 99 else "🚀 High Prob." if odds > 80 else "⚖️ Bubble." if odds > 40 else "🙏 Miracle." if odds > 5 else "💀 Dead."
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
-        
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- D. Dark Pool (Robust Scanner with Injury Filter) ---
 @st.cache_data(ttl=3600)
 def scan_dark_pool(limit=15):
-    free_agents = league.free_agents(size=60) # Fetch a few more to account for filtered injuries
+    free_agents = league.free_agents(size=60)
     pool_data = []
     for player in free_agents:
         try:
-            # FIX: Use injuryStatus instead of status, and use getattr for safety
             status = getattr(player, 'injuryStatus', 'ACTIVE')
-            
-            # --- INJURY FILTER ---
-            # Skip players marked as OUT or IR. Keep Questionable.
-            if status in ['OUT', 'IR']:
-                continue
-            
-            # Fallback logic: Use Total Points OR Projected if Total is missing
+            if status in ['OUT', 'IR']: continue
             total = player.total_points if player.total_points > 0 else player.projected_total_points
             avg_pts = total / league.current_week if league.current_week > 0 else 0
-            
-            if avg_pts > 3: # Lower threshold to ensure we catch players
-                pool_data.append({
-                    "Name": player.name, "Position": player.position, "Team": player.proTeam,
-                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status
-                })
+            if avg_pts > 3:
+                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status})
         except: continue
-            
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
 
 # ------------------------------------------------------------------
-# 4. SIDEBAR NAVIGATION (FIXED MAPPING)
+# 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
@@ -293,24 +277,43 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-# PAGE DEFINITIONS (Ensures logic matches UI exactly)
-P_LEDGER = "📜 The Ledger"
-P_HIERARCHY = "📈 The Hierarchy"
-P_AUDIT = "🔎 The Audit"
-P_HEDGE = "💎 The Hedge Fund"
-P_FORECAST = "🔮 The Forecast"
-P_NEXT = "🚀 Next Week"
-P_PROP = "📊 The Prop Desk" # <--- NEW PAGE
-P_DEAL = "🤝 The Dealmaker"
-P_DARK = "🕵️ The Dark Pool"
-P_TROPHY = "🏆 Trophy Room"
-
-# Update the list to include the new page
+P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room"
 page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
+st.sidebar.markdown("---")
+if st.sidebar.button("📄 Generate PDF Report"):
+    if "recap" not in st.session_state:
+        with st.spinner("🎙️ Analyst is writing the script..."):
+            st.session_state["recap"] = "Analysis Generated for PDF." # Fallback if API fails
+    if "awards" not in st.session_state:
+        with st.spinner("🏆 Engraving trophies..."):
+            st.session_state["awards"] = calculate_season_awards(current_week)
+    if "playoff_odds" not in st.session_state:
+        with st.spinner("🔮 Running Monte Carlo simulations..."):
+            st.session_state["playoff_odds"] = run_monte_carlo_simulation()
+
+    pdf = PDF()
+    pdf.add_page()
+    pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
+    pdf.chapter_body(st.session_state["recap"].replace("*", "").replace("#", ""))
+    
+    awards = st.session_state["awards"]
+    pdf.chapter_title("THE TROPHY ROOM")
+    if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
+    if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
+    
+    if "playoff_odds" in st.session_state:
+        pdf.chapter_title("PLAYOFF PROJECTIONS")
+        df_odds = st.session_state["playoff_odds"]
+        if df_odds is not None and not df_odds.empty:
+            for i, row in df_odds.head(5).iterrows(): pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
+
+    html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
+    st.sidebar.markdown(html, unsafe_allow_html=True)
+
 # ------------------------------------------------------------------
-# 5. DATA LOADING & PROCESSING
+# 5. DATA PROCESSING & AI
 # ------------------------------------------------------------------
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     if lottie_loading: st_lottie(lottie_loading, height=200, key="loading")
@@ -319,10 +322,7 @@ if 'box_scores' not in st.session_state or st.session_state.get('week') != selec
     st.rerun()
 
 box_scores = st.session_state['box_scores']
-matchup_data = []
-efficiency_data = [] 
-all_active_players = []
-bench_highlights = []
+matchup_data, efficiency_data, all_active_players, bench_highlights = [], [], [], []
 
 for game in box_scores:
     home, away = game.home_team, game.away_team
@@ -330,20 +330,15 @@ for game in box_scores:
         starters, bench, p_start, p_bench = [], [], 0, 0
         for p in lineup:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
-            
-            # FIX: Check injury status safely for Weekly Elite filter
-            # Use getattr to prevent crashes if 'injuryStatus' is missing
             status = getattr(p, 'injuryStatus', 'ACTIVE')
             is_injured = status in ['OUT', 'IR']
-
+            
             if p.slot_position == 'BE':
                 bench.append(info); p_bench += p.points
                 if p.points > 15: bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
             else:
                 starters.append(info); p_start += p.points
-                # ONLY ADD TO ELITE LIST IF NOT INJURED
-                if not is_injured:
-                    all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
+                if not is_injured: all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
         return starters, bench, p_start, p_bench
 
     h_r, h_br, h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
@@ -356,97 +351,28 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# ------------------------------------------------------------------
-# 6. AI HELPERS
-# ------------------------------------------------------------------
-def get_openai_client():
-    if not openai_key: return None
-    return OpenAI(api_key=openai_key)
-
-def get_weekly_recap():
-    client = get_openai_client()
-    if not client: return "⚠️ Add 'openai_key' to secrets."
-    top_scorer = df_eff.iloc[0]['Team']
-    prompt = f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight the Powerhouse: {top_scorer}. Go into detail about the matchups. Style: Wall Street Report. Do not be brief."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_rankings_commentary():
+def get_openai_client(): return OpenAI(api_key=openai_key) if openai_key else None
+def ai_response(prompt, tokens=600):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
-    top = df_eff.iloc[0]['Team']
-    bottom = df_eff.iloc[-1]['Team']
-    prompt = f"Write a 5-8 sentence commentary on the Power Rankings. Praise the #1 team {top} and ruthlessly mock the last place team {bottom}. Analyze why the bottom team is failing. Style: Stephen A. Smith / Hot Take."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_next_week_preview(games_list):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
-    prompt = f"Act as a Vegas Sports Bookie. Provide a DETAILED breakdown (5-10 sentences) of next week's matchups: {matchups_str}. Pick one 'Lock of the Week' and one 'Upset Alert' and explain WHY with data."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_season_retrospective(mvp, best_mgr):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    prompt = f"Write a comprehensive 'State of the Union' address (8-12 sentences) for the Fantasy League. MVP is {mvp}. Best Manager is {best_mgr}. Reflect on the season's glory, the tragedies, and the future. Style: Presidential / Epic."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    prompt = f"""
-    Act as a high-stakes Trade Broker. Analyze these two rosters and propose a fair, win-win trade.
-    
-    Team A ({team_a}): {', '.join(roster_a)}
-    Team B ({team_b}): {', '.join(roster_b)}
-    
-    Identify surplus/needs for both. Suggest a specific player-for-player swap. Explain the 'Why' for both sides.
-    Style: Jerry Maguire / Wolf of Wall Street.
-    """
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_ai_scouting_report(free_agents_str):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    prompt = f"""
-    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool), some may be questionable:
-    {free_agents_str}
-    
-    Identify 3 "Must Add" players.
-    For each, provide a 1-sentence "Scouting Report" on why they are a hidden gem (e.g. recent volume, injury opportunity).
-    Style: Scouting Notebook (Gritty, technical).
-    """
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=500).choices[0].message.content
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
-# 7. DASHBOARD UI
+# 6. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-
 col_main, col_players = st.columns([2, 1])
 with col_players:
     st.markdown("### 🌟 Weekly Elite")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
-         st.markdown(f"""
-            <div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;">
-                <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;">
-                <div>
-                    <div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div>
-                    <div style="color: #fff; font-size: 12px;">{p['Points']} pts</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
+         st.markdown(f"""<div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;"><div><div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div><div style="color: #fff; font-size: 12px;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
 
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is reviewing portfolios..."): st.session_state["recap"] = get_weekly_recap()
-    with col_main:
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+        with st.spinner("🎙️ Analyst is reviewing portfolios..."): 
+            st.session_state["recap"] = ai_response(f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {df_eff.iloc[0]['Team']}. Style: Wall Street Report.", 800)
+    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Weekly Transactions")
     for m in matchup_data:
         st.markdown(f"""<div class="luxury-card"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="60" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Home']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 14px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="60" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Away']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
@@ -462,9 +388,9 @@ if selected_page == P_LEDGER:
             st.dataframe(df_matchup, use_container_width=True, hide_index=True, column_config={f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"), f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")})
 
 elif selected_page == P_HIERARCHY:
-    if "rankings_commentary" not in st.session_state:
-        with st.spinner("Analyzing hierarchy..."): st.session_state["rankings_commentary"] = get_rankings_commentary()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rankings_commentary"]}</div>', unsafe_allow_html=True)
+    if "rank_comm" not in st.session_state:
+        with st.spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = ai_response(f"Write a 5-8 sentence commentary on Power Rankings. Praise {df_eff.iloc[0]['Team']} and mock {df_eff.iloc[-1]['Team']}. Style: Stephen A. Smith.")
+    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 elif selected_page == P_AUDIT:
@@ -503,16 +429,10 @@ elif selected_page == P_NEXT:
     try:
         next_week = league.current_week
         next_box_scores = league.box_scores(week=next_week)
-        games_list = []
-        for game in next_box_scores:
-            h_proj, a_proj = game.home_projected, game.away_projected
-            if h_proj == 0: h_proj = 100
-            if a_proj == 0: a_proj = 100
-            spread = abs(h_proj - a_proj)
-            games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
-        if "next_week_commentary" not in st.session_state:
-            with st.spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        if "next_comm" not in st.session_state:
+            games_str = ", ".join([f"{g.home_team.team_name} vs {g.away_team.team_name}" for g in next_box_scores])
+            with st.spinner("Checking Vegas lines..."): st.session_state["next_comm"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_str}. Pick 'Lock of the Week' and 'Upset Alert'.")
+        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Next Week's Market Preview")
         for game in next_box_scores:
             h_proj, a_proj = game.home_projected, game.away_projected
@@ -523,312 +443,100 @@ elif selected_page == P_NEXT:
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div><div style="color: #00C9FF;">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div><div style="color: #00C9FF;">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
-# --- NEW BLOCK: THE PROP DESK ---
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk (Vegas vs. ESPN)")
-    st.caption("Comparing ESPN projections against real money Vegas lines to find 'Traps' and 'Smash Spots'.")
-    
-    # 1. Check for API Key
-    odds_api_key = st.secrets.get("odds_api_key")
-    if not odds_api_key:
-        st.warning("⚠️ Please add 'odds_api_key' to your secrets.toml file to enable this feature.")
+    if not odds_api_key: st.warning("Please add 'odds_api_key' to your secrets.")
     else:
-        # 2. Lazy Load Vegas Data
         if "vegas_data" not in st.session_state:
-            with st.spinner("Calling the bookies in Las Vegas..."):
-                st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
-        
+            with st.spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
         df_vegas = st.session_state["vegas_data"]
-        
         if df_vegas is not None and not df_vegas.empty:
-            # 3. Matchup Processing (Get User's Team or All Teams)
-            # For simplicity, we scan ALL players in next week's matchups
             next_week = league.current_week
             box = league.box_scores(week=next_week)
-            
             trust_data = []
-            
-            # Loop through all games next week
             for game in box:
-                # Combine both lineups
                 all_players = game.home_lineup + game.away_lineup
                 for player in all_players:
-                    if player.slot_position == 'BE': continue 
-                    
-                    # Fuzzy Match
-                    # We match player.name to the Vegas dataframe 'Player' column
+                    if player.slot_position == 'BE': continue
                     match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
-                    
-                    if score > 85: 
-                        vegas_row = df_vegas[df_vegas['Player'] == match].iloc[0]
-                        vegas_pts = vegas_row['Vegas Score']
+                    if score > 85:
+                        vegas_pts = df_vegas[df_vegas['Player'] == match].iloc[0]['Vegas Score']
                         espn_pts = player.projected_points
-                        if espn_pts == 0: espn_pts = 0.1 # Avoid divide by zero/weirdness
-                        
+                        if espn_pts == 0: espn_pts = 0.1
                         delta = vegas_pts - espn_pts
-                        
-                        # Determine Verdict
-                        if delta > 3: status = "🚀 SMASH (Vegas Higher)"
-                        elif delta < -3: status = "⚠️ TRAP (ESPN High)"
-                        else: status = "⚖️ Fair Value"
-                        
-                        trust_data.append({
-                            "Player": player.name,
-                            "Team": player.proTeam,
-                            "ESPN Proj": espn_pts,
-                            "Vegas Implied": round(vegas_pts, 2),
-                            "Delta": round(delta, 2),
-                            "Verdict": status
-                        })
-            
-            # 4. Render Table
+                        status = "🚀 SMASH (Vegas Higher)" if delta > 3 else "⚠️ TRAP (ESPN High)" if delta < -3 else "⚖️ Fair Value"
+                        trust_data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
             if trust_data:
-                df_trust = pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False)
-                st.dataframe(
-                    df_trust,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f", help="Positive = Vegas likes them more than ESPN.")
-                    }
-                )
-            else:
-                st.info("No prop lines found for active players yet. (Lines usually drop Thursday/Friday).")
-        else:
-            st.error("Could not fetch odds. Check API Key quota or try again later.")
+                st.dataframe(pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), use_container_width=True, hide_index=True, column_config={"Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f")})
+            else: st.info("No prop lines found yet.")
+        else: st.error("Could not fetch odds.")
 
 elif selected_page == P_DEAL:
     st.header("🤝 The AI Dealmaker")
-    st.caption("Select two teams to have the AI negotiate a mutually beneficial trade.")
-    col_a, col_b = st.columns(2)
-    with col_a: team_a_name = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
-    with col_b: team_b_name = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
-    if st.button("🤖 Generate Trade Proposal"):
+    c1, c2 = st.columns(2)
+    with c1: t1 = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
+    with c2: t2 = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
+    if st.button("🤖 Generate Trade"):
         if lottie_trade: st_lottie(lottie_trade, height=200)
-        with st.spinner("Analyzing roster deficiencies and surplus..."):
-            team_a = next(t for t in league.teams if t.team_name == team_a_name)
-            team_b = next(t for t in league.teams if t.team_name == team_b_name)
-            roster_a = [f"{p.name} ({p.position})" for p in team_a.roster]
-            roster_b = [f"{p.name} ({p.position})" for p in team_b.roster]
-            proposal = get_ai_trade_proposal(team_a_name, team_b_name, roster_a, roster_b)
-            st.markdown(f'<div class="luxury-card studio-box"><h3>🤝 Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
+        with st.spinner("Analyzing..."):
+            team_a = next(t for t in league.teams if t.team_name == t1)
+            team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
+            r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
+            r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
+            proposal = ai_response(f"Act as Trade Broker. Propose a fair trade between Team A ({t1}): {r_a} and Team B ({t2}): {r_b}. Explain why.")
+            st.markdown(f'<div class="luxury-card studio-box"><h3>Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
 
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
-    st.caption("Scouting available free agents (excluding OUT/IR) for breakout potential.")
-    if "dark_pool_data" not in st.session_state:
+    if "dark_pool" not in st.session_state:
         if st.button("🔭 Scan Free Agents"):
             if lottie_wire: st_lottie(lottie_wire, height=200)
-            with st.spinner("Scouting the wire..."):
+            with st.spinner("Scouting..."):
                 df_pool = scan_dark_pool()
-                st.session_state["dark_pool_data"] = df_pool
+                st.session_state["dark_pool"] = df_pool
                 if not df_pool.empty:
-                    pool_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f} avg, Status: {r['Status']})" for i, r in df_pool.iterrows()])
-                    st.session_state["scouting_report"] = get_ai_scouting_report(pool_str)
+                    p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
+                    st.session_state["scout_rpt"] = ai_response(f"You are an NFL Scout. Analyze free agents: {p_str}. Identify 3 'Must Adds'.", 500)
                 st.rerun()
     else:
-        df_pool = st.session_state["dark_pool_data"]
-        if "scouting_report" in st.session_state:
-            st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scouting_report"]}</div>', unsafe_allow_html=True)
-        if not df_pool.empty:
-            st.dataframe(df_pool, use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
-            if st.button("🔄 Rescan Wire"): del st.session_state["dark_pool_data"]; st.rerun()
-        else: st.info("No viable healthy free agents found (or API limit reached).")
+        if "scout_rpt" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
+        st.dataframe(st.session_state["dark_pool"], use_container_width=True, hide_index=True)
+        if st.button("🔄 Rescan"): del st.session_state["dark_pool"]; st.rerun()
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
-        if st.button("🏅 Unveil Yearly Awards"):
+        if st.button("🏅 Unveil Awards"):
             if lottie_trophy: st_lottie(lottie_trophy, height=200)
-            with st.spinner("Engraving trophies..."):
+            with st.spinner("Engraving..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
-                awards = st.session_state["awards"]
-                mvp_name = awards['MVP']['Name'] if awards['MVP'] else "N/A"
-                best_mgr_name = awards['Best Manager']['Team']
-                st.session_state["season_commentary"] = get_season_retrospective(mvp_name, best_mgr_name)
+                st.session_state["season_comm"] = ai_response(f"Write a 'State of the Union' for the league based on awards. MVP: {st.session_state['awards']['MVP']['Name']}.", 1000)
                 st.rerun()
     else:
         awards = st.session_state["awards"]
-        if "season_commentary" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_commentary"]}</div>', unsafe_allow_html=True)
+        if "season_comm" in st.session_state:
+             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="luxury-card award-card"><h3>👑 MVP (Best Player)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="luxury-card award-card"><h3>👑 MVP</h3></div>', unsafe_allow_html=True)
             if awards['MVP']:
                 p = awards['MVP']
                 st.image(f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=350&h=254", width=150)
-                st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts", delta="Season Total")
+                st.metric(label=p['Name'], value=f"{p['Points']:.1f} pts")
         with c2:
-            st.markdown('<div class="luxury-card award-card"><h3>🐋 The Whale (Best Mgr)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="luxury-card award-card"><h3>🐋 The Whale</h3></div>', unsafe_allow_html=True)
             mgr = awards['Best Manager']
             st.image(mgr['Logo'], width=100)
-            st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts", delta="Total Points For")
+            st.metric(label=mgr['Team'], value=f"{mgr['Points']:.1f} pts")
         st.divider()
         c3, c4, c5 = st.columns(3)
         with c3:
-            st.markdown("#### 💔 Heartbreaker"); st.caption("Smallest Margin of Defeat"); hb = awards['Heartbreaker']
-            st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts", delta=f"Week {hb['Week']}")
+            st.markdown("#### 💔 Heartbreaker"); hb = awards['Heartbreaker']
+            st.metric(label=f"{hb['Loser']} lost by", value=f"{hb['Margin']:.2f} pts")
         with c4:
-            st.markdown("#### 🔥 The Streak"); st.caption("Longest Win Streak"); stk = awards['Streak']
-            st.metric(label=stk['Team'], value=f"{stk['Length']} Games", delta="Undefeated Run")
+            st.markdown("#### 🔥 The Streak"); stk = awards['Streak']
+            st.metric(label=stk['Team'], value=f"{stk['Length']} Games")
         with c5:
-            st.markdown("#### 💤 Asleep at Wheel"); st.caption("Starters with 0.0 Pts"); slp = awards['Sleeper']
-            st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
-else:
-    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
-    
-# ------------------------------------------------------------------
-# 8. THE PROP DESK ENGINE (Vegas Integration)
-# ------------------------------------------------------------------
-@st.cache_data(ttl=3600)
-def get_vegas_props(api_key):
-    # 1. Fetch Odds from The-Odds-API
-    # We fetch specific markets: Passing Yds, Rushing Yds, Receiving Yds, Anytime TD
-    SPORT = 'americanfootball_nfl'
-    REGIONS = 'us'
-    MARKETS = 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td'
-    ODDS_FORMAT = 'american'
-    DATE_FORMAT = 'iso'
-    
-    url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/events/upcoming/odds'
-    params = {
-        'api_key': api_key,
-        'regions': REGIONS,
-        'markets': MARKETS,
-        'oddsFormat': ODDS_FORMAT,
-        'dateFormat': DATE_FORMAT,
-    }
-
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            return None
-        data = response.json()
-    except:
-        return None
-
-    # 2. Process & Normalize Data
-    player_props = {} 
-    
-    for event in data:
-        for bookmaker in event['bookmakers']:
-            # We only need one reliable bookmaker (e.g., DraftKings or FanDuel)
-            if bookmaker['key'] in ['draftkings', 'fanduel']:
-                for market in bookmaker['markets']:
-                    key = market['key']
-                    
-                    for outcome in market['outcomes']:
-                        player_name = outcome['description']
-                        if player_name not in player_props:
-                            player_props[player_name] = {'pass_yds': 0, 'rush_yds': 0, 'rec_yds': 0, 'td_prob': 0}
-                        
-                        # Extract the Line (Point) or Odds
-                        if key == 'player_pass_yds':
-                            player_props[player_name]['pass_yds'] = outcome.get('point', 0)
-                        elif key == 'player_rush_yds':
-                            player_props[player_name]['rush_yds'] = outcome.get('point', 0)
-                        elif key == 'player_reception_yds':
-                            player_props[player_name]['rec_yds'] = outcome.get('point', 0)
-                        elif key == 'player_anytime_td':
-                            # Convert American Odds to Implied Probability
-                            odds = outcome.get('price', 0)
-                            if odds > 0: prob = 100 / (odds + 100)
-                            else: prob = abs(odds) / (abs(odds) + 100)
-                            player_props[player_name]['td_prob'] = prob
-
-    # 3. Calculate "Vegas Implied Fantasy Points"
-    vegas_data = []
-    for name, stats in player_props.items():
-        # Standard Scoring Calculation
-        # Passing: 0.04 pts/yd
-        # Rushing/Rec: 0.1 pts/yd
-        # TD: 6 pts * Implied Probability (Expected Value)
-        
-        implied_score = (stats['pass_yds'] * 0.04) + \
-                        (stats['rush_yds'] * 0.1) + \
-                        (stats['rec_yds'] * 0.1) + \
-                        (stats['td_prob'] * 6)
-                        
-        if implied_score > 1: # Filter out noise
-            vegas_data.append({"Player": name, "Vegas Score": implied_score})
-            
-    return pd.DataFrame(vegas_data)
-
-    
-
-# ------------------------------------------------------------------
-# 8. THE PROP DESK ENGINE (Vegas Integration)
-# ------------------------------------------------------------------
-@st.cache_data(ttl=3600)
-def get_vegas_props(api_key):
-    # 1. Fetch Odds from The-Odds-API
-    # We fetch specific markets: Passing Yds, Rushing Yds, Receiving Yds, Anytime TD
-    SPORT = 'americanfootball_nfl'
-    REGIONS = 'us'
-    MARKETS = 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td'
-    ODDS_FORMAT = 'american'
-    DATE_FORMAT = 'iso'
-    
-    url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/events/upcoming/odds'
-    params = {
-        'api_key': api_key,
-        'regions': REGIONS,
-        'markets': MARKETS,
-        'oddsFormat': ODDS_FORMAT,
-        'dateFormat': DATE_FORMAT,
-    }
-
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            return None
-        data = response.json()
-    except:
-        return None
-
-    # 2. Process & Normalize Data
-    player_props = {} 
-    
-    for event in data:
-        for bookmaker in event['bookmakers']:
-            # We only need one reliable bookmaker (e.g., DraftKings or FanDuel)
-            if bookmaker['key'] in ['draftkings', 'fanduel']:
-                for market in bookmaker['markets']:
-                    key = market['key']
-                    
-                    for outcome in market['outcomes']:
-                        player_name = outcome['description']
-                        if player_name not in player_props:
-                            player_props[player_name] = {'pass_yds': 0, 'rush_yds': 0, 'rec_yds': 0, 'td_prob': 0}
-                        
-                        # Extract the Line (Point) or Odds
-                        if key == 'player_pass_yds':
-                            player_props[player_name]['pass_yds'] = outcome.get('point', 0)
-                        elif key == 'player_rush_yds':
-                            player_props[player_name]['rush_yds'] = outcome.get('point', 0)
-                        elif key == 'player_reception_yds':
-                            player_props[player_name]['rec_yds'] = outcome.get('point', 0)
-                        elif key == 'player_anytime_td':
-                            # Convert American Odds to Implied Probability
-                            odds = outcome.get('price', 0)
-                            if odds > 0: prob = 100 / (odds + 100)
-                            else: prob = abs(odds) / (abs(odds) + 100)
-                            player_props[player_name]['td_prob'] = prob
-
-    # 3. Calculate "Vegas Implied Fantasy Points"
-    vegas_data = []
-    for name, stats in player_props.items():
-        # Standard Scoring Calculation
-        # Passing: 0.04 pts/yd
-        # Rushing/Rec: 0.1 pts/yd
-        # TD: 6 pts * Implied Probability (Expected Value)
-        
-        implied_score = (stats['pass_yds'] * 0.04) + \
-                        (stats['rush_yds'] * 0.1) + \
-                        (stats['rec_yds'] * 0.1) + \
-                        (stats['td_prob'] * 6)
-                        
-        if implied_score > 1: # Filter out noise
-            vegas_data.append({"Player": name, "Vegas Score": implied_score})
-            
-    return pd.DataFrame(vegas_data)
+            st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
+            st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
