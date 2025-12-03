@@ -1,3 +1,480 @@
+import streamlit as st
+from espn_api.football import League
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from openai import OpenAI
+from streamlit_lottie import st_lottie
+import requests
+import random
+import base64
+from fpdf import FPDF
+from thefuzz import process
+import time
+from contextlib import contextmanager
+import nfl_data_py as nfl
+
+# ------------------------------------------------------------------
+# 1. CONFIGURATION & VISION UI THEME
+# ------------------------------------------------------------------
+st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
+
+# SETTINGS
+START_YEAR = 2021 
+
+st.markdown("""
+    <style>
+    /* 1. HIDE DEFAULT STREAMLIT ELEMENTS */
+    header[data-testid="stHeader"] { display: none; }
+    footer { display: none; }
+    .block-container { padding-top: 1rem !important; }
+
+    /* 2. MAIN BACKGROUND */
+    .stApp {
+        background-color: #060b26; 
+        background-image: 
+            repeating-linear-gradient(to bottom, transparent, transparent 4px, rgba(0, 0, 0, 0.2) 4px, rgba(0, 0, 0, 0.2) 8px),
+            radial-gradient(circle at 0% 0%, rgba(58, 12, 163, 0.4) 0%, transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%);
+        background-attachment: fixed;
+        background-size: cover;
+    }
+
+    /* 3. TYPOGRAPHY */
+    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
+    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
+
+    /* 4. CARDS */
+    .luxury-card {
+        background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
+        border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 24px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+    .award-card { border-left: 4px solid #00C9FF; }
+    .studio-box { border-left: 4px solid #7209b7; }
+
+    /* 5. SIDEBAR & MENU FIX */
+    section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
+    div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
+    div[role="radiogroup"] label { 
+        padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; 
+        margin-bottom: 5px; border: 1px solid transparent; background-color: transparent;
+    }
+    div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
+    div[role="radiogroup"] label[data-checked="true"] {
+        background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important;
+        border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important;
+    }
+    div[role="radiogroup"] label > div:first-child { display: none !important; }
+    div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
+
+    /* 6. TABLES */
+    div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
+
+    /* 7. LOADING OVERLAY */
+    @keyframes shine { to { background-position: 200% center; } }
+    .luxury-loader-text {
+        font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px;
+        background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%);
+        background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: shine 3s linear infinite;
+    }
+    .loader-sub { font-family: monospace; color: #00C9FF; font-size: 1.2rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 3px; animation: blink 1.5s infinite ease-in-out; }
+    .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ------------------------------------------------------------------
+# 2. CONNECTION & HELPER FUNCTIONS
+# ------------------------------------------------------------------
+try:
+    league_id = st.secrets["league_id"]
+    swid = st.secrets["swid"]
+    espn_s2 = st.secrets["espn_s2"]
+    openai_key = st.secrets.get("openai_key")
+    odds_api_key = st.secrets.get("odds_api_key")
+    year = 2025
+
+    @st.cache_resource
+    def get_league():
+        return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+
+    league = get_league()
+
+except Exception as e:
+    st.error(f"🔒 Connection Error: {e}")
+    st.stop()
+
+def load_lottieurl(url: str):
+    try:
+        r = requests.get(url)
+        if r.status_code != 200: return None
+        return r.json()
+    except: return None
+
+@contextmanager
+def luxury_spinner(text="Initializing Protocol..."):
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(f'<div class="luxury-overlay"><div class="luxury-loader-text">LUXURY LEAGUE</div><div class="loader-sub">⚡ {text}</div></div>', unsafe_allow_html=True)
+    try: yield
+    finally: placeholder.empty()
+
+def clean_for_pdf(text):
+    if not isinstance(text, str): return str(text)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 201, 255)
+        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
+        self.ln(5)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(0, 114, 255)
+        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
+        self.ln(2)
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.set_text_color(50)
+        self.multi_cell(0, 6, clean_for_pdf(body))
+        self.ln()
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
+
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 422: return pd.DataFrame({"Status": ["Market Closed"]}) 
+        if response.status_code != 200: return None
+        data = response.json()
+        if not data: return pd.DataFrame({"Status": ["Market Closed"]}) 
+        
+        player_props = {}
+        for event in data:
+            for bookmaker in event['bookmakers']:
+                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
+                    for market in bookmaker['markets']:
+                        key = market['key']
+                        for outcome in market['outcomes']:
+                            name = outcome['description']
+                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                            elif key == 'player_anytime_td':
+                                odds = outcome.get('price', 0)
+                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
+                                player_props[name]['td'] = prob
+        vegas_data = []
+        for name, s in player_props.items():
+            score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
+            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+        return pd.DataFrame(vegas_data)
+    except: return None
+
+lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
+lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
+lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
+lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
+lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
+lottie_lab = load_lottieurl("https://lottie.host/49907932-975d-453d-b8f1-2d6408468123/bF2y8T8k7s.json")
+
+# ------------------------------------------------------------------
+# 3. ANALYTICS ENGINES
+# ------------------------------------------------------------------
+@st.cache_data(ttl=3600)
+def calculate_heavy_analytics(current_week):
+    data_rows = []
+    for team in league.teams:
+        power_score = round(team.points_for / current_week, 1)
+        true_wins, total_matchups = 0, 0
+        for w in range(1, current_week + 1):
+            box = league.box_scores(week=w)
+            my_score = next((g.home_score if g.home_team == team else g.away_score for g in box if g.home_team == team or g.away_team == team), 0)
+            all_scores = [g.home_score for g in box] + [g.away_score for g in box]
+            wins_this_week = sum(1 for s in all_scores if my_score > s)
+            true_wins += wins_this_week
+            total_matchups += (len(league.teams) - 1)
+        true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
+        actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
+        luck_rating = (actual_win_pct - true_win_pct) * 10
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
+    return pd.DataFrame(data_rows)
+
+@st.cache_data(ttl=3600)
+def calculate_season_awards(current_week):
+    player_points = {}
+    team_bench_points = {t.team_name: 0 for t in league.teams}
+    single_game_high = {"Team": "", "Score": 0, "Week": 0}
+    biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
+    heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
+    current_streaks = {t.team_name: 0 for t in league.teams}
+    max_streaks = {t.team_name: 0 for t in league.teams}
+    asleep_count = {t.team_name: 0 for t in league.teams}
+    
+    for w in range(1, current_week + 1):
+        box = league.box_scores(week=w)
+        for game in box:
+            h_name, a_name = game.home_team.team_name, game.away_team.team_name
+            margin = abs(game.home_score - game.away_score)
+            if game.home_score > game.away_score: winner, loser = h_name, a_name
+            else: winner, loser = a_name, h_name
+            
+            current_streaks[winner] += 1
+            current_streaks[loser] = 0
+            if current_streaks[winner] > max_streaks[winner]: max_streaks[winner] = current_streaks[winner]
+            
+            if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
+            if game.home_score > single_game_high["Score"]: single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
+            if game.away_score > single_game_high["Score"]: single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
+            
+            def process_roster(lineup, team_name):
+                for p in lineup:
+                    if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
+                    player_points[p.playerId]["Points"] += p.points
+                    if p.slot_position == 'BE': team_bench_points[team_name] += p.points
+                    else: 
+                        if p.points == 0: asleep_count[team_name] += 1
+            process_roster(game.home_lineup, h_name)
+            process_roster(game.away_lineup, a_name)
+            
+    sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
+    sorted_bench = sorted(team_bench_points.items(), key=lambda x: x[1], reverse=True)
+    sorted_teams = sorted(league.teams, key=lambda x: x.points_for, reverse=True)
+    longest_streak_team = max(max_streaks, key=max_streaks.get)
+    sleepiest_team = max(asleep_count, key=asleep_count.get)
+    
+    return {
+        "MVP": sorted_players[0] if sorted_players else None,
+        "Bench King": sorted_bench[0] if sorted_bench else None,
+        "Single Game": single_game_high, "Blowout": biggest_blowout, "Heartbreaker": heartbreaker,
+        "Streak": {"Team": longest_streak_team, "Length": max_streaks[longest_streak_team]},
+        "Sleeper": {"Team": sleepiest_team, "Count": asleep_count[sleepiest_team]},
+        "Best Manager": {"Team": sorted_teams[0].team_name, "Points": sorted_teams[0].points_for, "Logo": sorted_teams[0].logo_url}
+    }
+
+@st.cache_data(ttl=3600)
+def run_monte_carlo_simulation(simulations=1000):
+    team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
+    reg_season_end = league.settings.reg_season_count
+    current_w = league.current_week
+    try: num_playoff_teams = league.settings.playoff_team_count
+    except: num_playoff_teams = 4
+    team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
+    
+    results = {t.team_name: 0 for t in league.teams}
+    for i in range(simulations):
+        sim_standings = {k: v.copy() for k, v in team_data.items()}
+        if current_w <= reg_season_end:
+             for w in range(current_w, reg_season_end + 1):
+                 for tid, stats in sim_standings.items():
+                     performance = np.random.normal(team_power[tid], 15)
+                     if performance > 115: sim_standings[tid]["wins"] += 1
+        sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
+        for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
+
+    final_output = []
+    for team in league.teams:
+        odds = (results[team.team_name] / simulations) * 100
+        reason = "🔒 Locked." if odds > 99 else "🚀 High Prob." if odds > 80 else "⚖️ Bubble." if odds > 40 else "🙏 Miracle." if odds > 5 else "💀 Dead."
+        final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
+    return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
+
+@st.cache_data(ttl=3600)
+def scan_dark_pool(limit=20):
+    # Fetch 150 to find healthy players
+    free_agents = league.free_agents(size=150)
+    pool_data = []
+    
+    for player in free_agents:
+        try:
+            # 1. Safe Status Check
+            raw_status = getattr(player, 'injuryStatus', 'NORMAL')
+            if raw_status is None: raw_status = 'NORMAL'
+            status = str(raw_status).upper()
+            
+            # 2. Filter Dead Weight (Keep Questionable)
+            if any(k in status for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): 
+                continue
+                
+            # 3. Points Calculation
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            weeks = league.current_week if league.current_week > 0 else 1
+            avg_pts = total / weeks
+            
+            # 4. Lower Threshold for results
+            if avg_pts > 0.5:
+                pool_data.append({
+                    "Name": player.name, 
+                    "Position": player.position, 
+                    "Team": player.proTeam, 
+                    "Avg Pts": avg_pts, 
+                    "Total Pts": total, 
+                    "ID": player.playerId, 
+                    "Status": status
+                })
+        except: continue
+            
+    df = pd.DataFrame(pool_data)
+    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    return df
+
+@st.cache_data(ttl=3600)
+def get_dynasty_data(current_year, start_year):
+    all_seasons_data = []
+    for y in range(start_year, current_year + 1):
+        try:
+            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
+            for team in hist_league.teams:
+                if team.owners:
+                    owner_id = team.owners[0]['id']
+                    owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
+                else:
+                    owner_id = f"Unknown_{team.team_id}"
+                    owner_name = f"Team {team.team_id}"
+                made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
+                is_champ = 1 if team.final_standing == 1 else 0
+                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
+        except Exception as e: continue
+    return pd.DataFrame(all_seasons_data)
+
+def process_dynasty_leaderboard(df_history):
+    if df_history.empty: return pd.DataFrame()
+    leaderboard = df_history.groupby("Owner ID").agg({"Manager": "last", "Wins": "sum", "Losses": "sum", "Points For": "sum", "Champ": "sum", "Playoffs": "sum", "Year": "count"}).reset_index()
+    leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
+    leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
+    return leaderboard.sort_values(by="Wins", ascending=False)
+
+# --- F. NEXT GEN STATS ENGINE ---
+@st.cache_data(ttl=3600 * 12) 
+def load_nextgen_data(year):
+    try:
+        df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year])
+        df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
+        df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
+        df_seas = nfl.import_seasonal_data([year])
+        return df_rec, df_rush, df_pass, df_seas
+    except: return None, None, None, None
+
+def analyze_nextgen_metrics(roster, year):
+    df_rec, df_rush, df_pass, df_seas = load_nextgen_data(year)
+    if df_rec is None or df_rec.empty: return pd.DataFrame()
+
+    insights = []
+    for player in roster:
+        p_name = player.name
+        pos = player.position
+        pid = getattr(player, 'playerId', None)
+        p_team = getattr(player, 'proTeam', 'N/A')
+
+        if pos in ['WR', 'TE'] and not df_rec.empty:
+            match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_rec[df_rec['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    sep = stats.get('avg_separation', 0)
+                    yac_exp = stats.get('avg_yac_above_expectation', 0)
+                    seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
+                    wopr = 0
+                    if seas_match and seas_match[1] > 90:
+                        seas_stats = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0]
+                        wopr = seas_stats.get('wopr', 0)
+
+                    verdict = "HOLD"
+                    if wopr > 0.7: verdict = "💎 ELITE"
+                    elif sep > 3.5: verdict = "⚡ SEPARATOR"
+                    elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
+                    
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
+
+        elif pos == 'RB' and not df_rush.empty:
+            match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_rush[df_rush['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    ryoe = stats.get('rush_yards_over_expected_per_att', 0)
+                    eff = stats.get('efficiency', 0) 
+                    box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
+                    verdict = "HOLD"
+                    if ryoe > 1.0: verdict = "💎 ELITE"
+                    elif box_8 > 30: verdict = "💪 WORKHORSE"
+                    elif ryoe < -0.5: verdict = "🚫 PLODDER"
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
+        
+        elif pos == 'QB' and not df_pass.empty:
+            match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_pass[df_pass['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    cpoe = stats.get('completion_percentage_above_expectation', 0)
+                    time_throw = stats.get('avg_time_to_throw', 0)
+                    verdict = "HOLD"
+                    if cpoe > 5.0: verdict = "🎯 SNIPER"
+                    elif time_throw > 3.0: verdict = "⏳ HOLDER"
+                    elif cpoe < -2.0: verdict = "📉 SHAKY"
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
+
+    return pd.DataFrame(insights)
+
+# ------------------------------------------------------------------
+# 4. SIDEBAR NAVIGATION
+# ------------------------------------------------------------------
+st.sidebar.title("🥂 The Concierge")
+current_week = league.current_week - 1
+if current_week == 0: current_week = 1
+selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
+st.sidebar.markdown("---")
+
+P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🧬 The Lab", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
+selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
+
+st.sidebar.markdown("---")
+if st.sidebar.button("📄 Generate PDF Report"):
+    with luxury_spinner("Compiling Intelligence Report..."):
+        if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
+        if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
+
+        pdf = PDF()
+        pdf.add_page()
+        pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
+        pdf.chapter_body(st.session_state["recap"].replace("*", "").replace("#", ""))
+        
+        awards = st.session_state["awards"]
+        pdf.chapter_title("THE TROPHY ROOM")
+        if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
+        if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
+        
+        if "playoff_odds" in st.session_state:
+            pdf.chapter_title("PLAYOFF PROJECTIONS")
+            df_odds = st.session_state["playoff_odds"]
+            if df_odds is not None and not df_odds.empty:
+                for i, row in df_odds.head(5).iterrows(): pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
+
+        html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
+        st.sidebar.markdown(html, unsafe_allow_html=True)
+
 # ------------------------------------------------------------------
 # 6. AI HELPERS (MULTI-MODAL LONG FORM)
 # ------------------------------------------------------------------
