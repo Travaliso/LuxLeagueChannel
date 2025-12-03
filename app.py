@@ -338,18 +338,21 @@ def process_dynasty_leaderboard(df_history):
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
-# --- F. NEXT GEN STATS ENGINE (FIXED: Pass ID for Headshot) ---
+# --- F. NEXT GEN STATS ENGINE (UPDATED WITH ADVANCED METRICS) ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data(year):
     try:
+        # Fetch raw data
         df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year])
         df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
         df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
-        return df_rec, df_rush, df_pass
-    except: return None, None, None
+        # Fetch seasonal data for WOPR/Target Share
+        df_seas = nfl.import_seasonal_data([year])
+        return df_rec, df_rush, df_pass, df_seas
+    except: return None, None, None, None
 
 def analyze_nextgen_metrics(roster, year):
-    df_rec, df_rush, df_pass = load_nextgen_data(year)
+    df_rec, df_rush, df_pass, df_seas = load_nextgen_data(year)
     if df_rec is None or df_rec.empty: return pd.DataFrame()
 
     insights = []
@@ -361,22 +364,42 @@ def analyze_nextgen_metrics(roster, year):
         pid = getattr(player, 'playerId', None)
         p_team = getattr(player, 'proTeam', 'N/A')
 
-        if pos in ['WR', 'TE'] and not df_rec.empty:
+        # WR/TE Analysis
+        if pos in ['WR', 'TE']:
             match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
             if match_result and match_result[1] > 90:
                 match_name = match_result[0]
+                # NGS Stats
                 player_stats = df_rec[df_rec['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep = stats.get('avg_separation', 0)
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
-                    share = stats.get('percent_share_of_intended_air_yards', 0)
-                    verdict = "HOLD"
-                    if sep > 3.5: verdict = "💎 ELITE"
-                    elif share > 35 and sep < 2.5: verdict = "⚠️ TRAP"
-                    elif yac_exp > 2.0: verdict = "🚀 MONSTER"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "Separation", "Value": f"{sep:.1f} yds", "Alpha Stat": f"{share:.0f}% Air Share", "Verdict": verdict})
+                    
+                    # Seasonal Stats (WOPR/Target Share)
+                    # We match on name again in the seasonal dataframe
+                    # Note: nfl_data_py names might slightly differ, but usually consistent enough
+                    seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
+                    if seas_match and seas_match[1] > 90:
+                        seas_stats = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0]
+                        wopr = seas_stats.get('wopr', 0)
+                        tgt_sh = seas_stats.get('tgt_sh', 0)
+                    else:
+                        wopr, tgt_sh = 0, 0
 
+                    verdict = "HOLD"
+                    if wopr > 0.7: verdict = "💎 ELITE (Alpha WR1)"
+                    elif sep > 3.5: verdict = "⚡ SEPARATOR (Open)"
+                    elif tgt_sh > 0.25: verdict = "📈 VOLUME KING"
+                    elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Metric": "WOPR (Opp Share)", "Value": f"{wopr:.2f}", 
+                        "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict
+                    })
+
+        # RB Analysis
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -386,11 +409,20 @@ def analyze_nextgen_metrics(roster, year):
                     stats = player_stats.mean(numeric_only=True)
                     ryoe = stats.get('rush_yards_over_expected_per_att', 0)
                     eff = stats.get('efficiency', 0) 
+                    box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
+                    
                     verdict = "HOLD"
-                    if ryoe > 1.0: verdict = "💎 ELITE"
+                    if ryoe > 1.0: verdict = "💎 ELITE (Creator)"
+                    elif box_8 > 30: verdict = "💪 WORKHORSE (Stacked Box)"
                     elif ryoe < -0.5: verdict = "🚫 PLODDER"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{eff:.2f} Eff", "Verdict": verdict})
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
+                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict
+                    })
         
+        # QB Analysis
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -399,10 +431,18 @@ def analyze_nextgen_metrics(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe = stats.get('completion_percentage_above_expectation', 0)
+                    time_throw = stats.get('avg_time_to_throw', 0)
+                    
                     verdict = "HOLD"
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
+                    elif time_throw > 3.0: verdict = "⏳ HOLDER (Sack Risk)"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": "Accuracy", "Verdict": verdict})
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
+                        "Alpha Stat": f"{time_throw:.2f}s Time/Throw", "Verdict": verdict
+                    })
 
     return pd.DataFrame(insights)
 
@@ -635,6 +675,9 @@ elif selected_page == P_LAB:
         - **Separation:** Yards of distance from nearest defender at catch.
         - **CPOE:** Completion Percentage Over Expectation.
         - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
+        - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
+        - **8-Man Box:** Percentage of attempts against a stacked box (8+ defenders).
+        - **Aggressiveness:** Percentage of attempts into tight windows (<1 yard separation).
         """)
     
     team_list = [t.team_name for t in league.teams]
