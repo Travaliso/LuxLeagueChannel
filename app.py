@@ -456,34 +456,95 @@ elif selected_page == P_NEXT:
 
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk (Vegas vs. ESPN)")
-    if not odds_api_key: st.warning("Please add 'odds_api_key' to your secrets.")
+    
+    if not odds_api_key:
+        st.warning("Please add 'odds_api_key' to your secrets.")
     else:
+        # 1. Fetch Data
         if "vegas_data" not in st.session_state:
-            with st.spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
+            with st.spinner("Calling the bookies in Las Vegas..."):
+                st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
+        
         df_vegas = st.session_state["vegas_data"]
+        
+        # 2. Check Data Validity
         if df_vegas is not None and not df_vegas.empty:
+            
+            # --- SCENARIO A: MARKET CLOSED (Tuesdays) ---
             if "Status" in df_vegas.columns and df_vegas.iloc[0]["Status"] == "Market Closed":
-                st.info("📉 The Prop Desk is closed. Player props typically release Thursday-Sunday.")
+                # Display the Educational "Insider" Card
+                st.markdown("""
+                <div class="luxury-card" style="border-left: 4px solid #FFD700;">
+                    <h3 style="color: #FFD700; margin-top: 0;">🏦 Market Status: ADJUSTMENT PERIOD</h3>
+                    <p style="color: #e0e0e0;">
+                        <strong>Why is this empty?</strong> It is early in the week. Major books (DraftKings, FanDuel) 
+                        pull player props on Tuesdays to adjust algorithms for injury reports and waiver wire movement.
+                    </p>
+                    <hr style="border-color: #333;">
+                    <h4 style="margin-bottom: 5px;">🧠 The Strategy (Arbitrage)</h4>
+                    <p style="color: #a0aaba; font-size: 0.9em;">
+                        When markets reopen (Thursday-Sunday), use this tool to find <strong>Alpha</strong>:
+                    </p>
+                    <ul style="color: #e0e0e0;">
+                        <li><strong>⚠️ The Trap:</strong> ESPN projects 15 pts, but Vegas sets the line at 8.5 pts. <em style="color: #FF4B4B">Bench him.</em></li>
+                        <li><strong>🚀 The Smash:</strong> ESPN projects 10 pts, but Vegas sets the line at 16.5 pts. <em style="color: #00C9FF">Start him.</em></li>
+                    </ul>
+                    <br>
+                    <div style="text-align: center; color: #FFD700; font-weight: bold;">
+                        Check back Thursday Morning for Smart Money lines.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # --- SCENARIO B: MARKET OPEN (Thursday - Sunday) ---
             else:
+                st.caption("Comparing ESPN projections against real money Vegas lines to find market inefficiencies.")
+                
                 next_week = league.current_week
                 box = league.box_scores(week=next_week)
                 trust_data = []
+                
                 for game in box:
                     all_players = game.home_lineup + game.away_lineup
                     for player in all_players:
                         if player.slot_position == 'BE': continue
+                        
                         match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
+                        
                         if score > 85:
                             vegas_pts = df_vegas[df_vegas['Player'] == match].iloc[0]['Vegas Score']
                             espn_pts = player.projected_points
                             if espn_pts == 0: espn_pts = 0.1
+                            
                             delta = vegas_pts - espn_pts
-                            status = "🚀 SMASH (Vegas Higher)" if delta > 3 else "⚠️ TRAP (ESPN High)" if delta < -3 else "⚖️ Fair Value"
-                            trust_data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
+                            
+                            # Verdict Logic
+                            if delta > 3: status = "🚀 SMASH (Vegas Higher)"
+                            elif delta < -3: status = "⚠️ TRAP (ESPN High)"
+                            else: status = "⚖️ Fair Value"
+                            
+                            trust_data.append({
+                                "Player": player.name, 
+                                "Team": player.proTeam, 
+                                "ESPN Proj": espn_pts, 
+                                "Vegas Implied": round(vegas_pts, 2), 
+                                "Delta": round(delta, 2), 
+                                "Verdict": status
+                            })
+                
                 if trust_data:
-                    st.dataframe(pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), use_container_width=True, hide_index=True, column_config={"Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f")})
-                else: st.info("No prop lines found yet.")
-        else: st.error("Could not fetch odds.")
+                    st.dataframe(
+                        pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), 
+                        use_container_width=True, 
+                        hide_index=True, 
+                        column_config={
+                            "Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f", help="Positive = Vegas likes them more.")
+                        }
+                    )
+                else:
+                    st.info("Markets are open, but no props found for your specific starters yet.")
+        else:
+            st.error("Could not fetch odds (API Key issue or Service Down).")
 
 elif selected_page == P_DEAL:
     st.header("🤝 The AI Dealmaker")
