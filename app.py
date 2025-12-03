@@ -32,7 +32,7 @@ st.markdown("""
         background-size: cover;
     }
 
-    /* TEXT & METRICS */
+    /* TYPOGRAPHY */
     h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
@@ -53,37 +53,64 @@ st.markdown("""
     div[role="radiogroup"] label:hover { background-color: rgba(0, 201, 255, 0.1); color: #ffffff !important; transform: translateX(5px); }
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
 
-    /* --- CUSTOM LUXURY LOADER ANIMATION --- */
-    @keyframes shine {
-        to { background-position: 200% center; }
+    /* --- FULL SCREEN LUXURY OVERLAY --- */
+    .luxury-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(6, 11, 38, 0.92); /* Dark opaque background */
+        backdrop-filter: blur(10px); /* Glass effect */
+        z-index: 999999; /* Sits on top of everything */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
+
+    /* SHIMMERING TEXT ANIMATION */
+    @keyframes shine {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+    }
+    
     .luxury-loader-text {
-        font-size: 2.5rem;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-size: 4rem;
         font-weight: 900;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #00C9FF 0%, #ffffff 50%, #0072ff 100%);
+        letter-spacing: 8px;
+        /* The Liquid Metal Gradient */
+        background: linear-gradient(
+            90deg, 
+            #1a1c24 0%, 
+            #00C9FF 25%, 
+            #ffffff 50%, 
+            #00C9FF 75%, 
+            #1a1c24 100%
+        );
         background-size: 200% auto;
         color: transparent;
         -webkit-background-clip: text;
         background-clip: text;
-        animation: shine 2s linear infinite;
-        text-align: center;
-        letter-spacing: 4px;
+        animation: shine 3s linear infinite;
     }
+    
     .loader-sub {
-        color: #a0aaba;
-        font-size: 0.9rem;
-        text-align: center;
-        margin-top: 10px;
         font-family: monospace;
+        color: #00C9FF;
+        font-size: 1.2rem;
+        margin-top: 20px;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        animation: blink 1.5s infinite ease-in-out;
     }
-    .loader-container {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 60px;
-        background: rgba(17, 25, 40, 0.9);
-        border-radius: 20px;
-        border: 1px solid rgba(0, 201, 255, 0.2);
-        margin: 20px 0;
+
+    @keyframes blink {
+        0% { opacity: 0.4; }
+        50% { opacity: 1; }
+        100% { opacity: 0.4; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -98,13 +125,14 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
-# CUSTOM LUXURY SPINNER CONTEXT MANAGER
+# --- THE NEW OVERLAY CONTEXT MANAGER ---
 @contextmanager
-def luxury_spinner(text="Processing Protocol..."):
+def luxury_spinner(text="Initializing Protocol..."):
+    # Create the Full Screen Overlay
     placeholder = st.empty()
     with placeholder.container():
         st.markdown(f"""
-            <div class="loader-container">
+            <div class="luxury-overlay">
                 <div class="luxury-loader-text">LUXURY LEAGUE</div>
                 <div class="loader-sub">⚡ {text}</div>
             </div>
@@ -112,6 +140,7 @@ def luxury_spinner(text="Processing Protocol..."):
     try:
         yield
     finally:
+        # Clear the overlay when done
         placeholder.empty()
 
 # PDF Helpers
@@ -145,11 +174,10 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine
+# Vegas Prop Desk Engine (With 422 Fallback)
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # Attempt to fetch Player Props first
-    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
     try:
         response = requests.get(url, params=params)
@@ -181,6 +209,13 @@ def get_vegas_props(api_key):
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
         return pd.DataFrame(vegas_data)
     except: return None
+
+# Load Animations
+lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
+lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
+lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
+lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
+lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
 # League Connection
 try:
