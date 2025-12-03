@@ -93,25 +93,62 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine
+# ------------------------------------------------------------------
+# REPLACEMENT FUNCTION: GET VEGAS PROPS (DEBUG MODE)
+# ------------------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
+    # 1. SETUP REQUEST
+    url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params = {
+        'api_key': api_key,
+        'regions': 'us',
+        'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td',
+        'oddsFormat': 'american',
+        'dateFormat': 'iso'
+    }
+
     try:
-        url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
-        params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+        # 2. ATTEMPT CONNECTION
         response = requests.get(url, params=params)
-        if response.status_code != 200: return None
+        
+        # --- DEBUGGING PRINTS (These will show up on your app) ---
+        if response.status_code == 401:
+            st.error(f"❌ Vegas Error 401: Unauthorized. Check your API Key in secrets.toml.")
+            return None
+        elif response.status_code == 422:
+            st.error(f"❌ Vegas Error 422: Invalid Request. Market might be unavailable.")
+            return None
+        elif response.status_code != 200:
+            st.error(f"❌ Vegas Error {response.status_code}: {response.text}")
+            return None
+            
+        # 3. CHECK DATA
         data = response.json()
         
+        # Check if we actually got odds back
+        has_props = False
+        for event in data:
+            for book in event['bookmakers']:
+                if 'player_' in str(book['markets']): # Check if player props exist
+                    has_props = True
+                    break
+        
+        if not has_props:
+            st.warning("⚠️ Connection Successful (200 OK), but Vegas has no Player Props listed yet. Try again Thursday/Friday.")
+            return None
+
+        # 4. PROCESS DATA (If we made it this far)
         player_props = {}
         for event in data:
             for bookmaker in event['bookmakers']:
-                if bookmaker['key'] in ['draftkings', 'fanduel']:
+                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
                     for market in bookmaker['markets']:
                         key = market['key']
                         for outcome in market['outcomes']:
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -124,9 +161,12 @@ def get_vegas_props(api_key):
         for name, s in player_props.items():
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+            
         return pd.DataFrame(vegas_data)
-    except: return None
 
+    except Exception as e:
+        st.error(f"❌ Python Logic Error: {e}")
+        return None
 # Load Animations
 lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
