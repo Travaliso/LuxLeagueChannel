@@ -29,7 +29,7 @@ st.markdown("""
     footer { display: none; }
     .block-container { padding-top: 1rem !important; }
 
-    /* 2. MAIN BACKGROUND - "Midnight Vision" */
+    /* 2. MAIN BACKGROUND */
     .stApp {
         background-color: #060b26; 
         background-image: 
@@ -45,7 +45,7 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
 
-    /* 4. LUXURY CARDS */
+    /* 4. CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
         border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
@@ -150,7 +150,6 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
@@ -185,7 +184,6 @@ def get_vegas_props(api_key):
         return pd.DataFrame(vegas_data)
     except: return None
 
-# Load Animations
 lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
 lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
@@ -316,36 +314,26 @@ def scan_dark_pool(limit=15):
 @st.cache_data(ttl=3600)
 def get_dynasty_data(current_year, start_year):
     all_seasons_data = []
-    # Loop from start_year to current_year
     for y in range(start_year, current_year + 1):
         try:
             hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
             for team in hist_league.teams:
-                # DNA Match: Extract Owner ID (The "DNA")
-                # Handle cases where owner info might be missing in old data
                 if team.owners:
                     owner_id = team.owners[0]['id']
                     owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
                 else:
-                    owner_id = f"Unknown_{team.team_id}" # Fallback
+                    owner_id = f"Unknown_{team.team_id}"
                     owner_name = f"Team {team.team_id}"
 
                 made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
                 is_champ = 1 if team.final_standing == 1 else 0
                 
                 all_seasons_data.append({
-                    "Year": y,
-                    "Owner ID": owner_id,
-                    "Manager": owner_name,
-                    "Team Name": team.team_name,
-                    "Wins": team.wins,
-                    "Losses": team.losses,
-                    "Points For": team.points_for,
-                    "Champ": is_champ,
-                    "Playoffs": made_playoffs
+                    "Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name,
+                    "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for,
+                    "Champ": is_champ, "Playoffs": made_playoffs
                 })
-        except Exception as e: continue # Skip years that fail (e.g. cancelled 2020 covid year logic?)
-            
+        except Exception as e: continue
     return pd.DataFrame(all_seasons_data)
 
 def process_dynasty_leaderboard(df_history):
@@ -503,13 +491,9 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# --- HORIZONTAL HERO ROW (Weekly Elite) ---
+# HERO ROW - TOP PLAYERS (Full Width)
 st.markdown("### 🌟 Weekly Elite")
-
-# Create 3 columns for the top 3 players
 hero_c1, hero_c2, hero_c3 = st.columns(3)
-
-# Helper to render a player card
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""
@@ -523,23 +507,18 @@ def render_hero_card(col, player):
             </div>
         </div>
         """, unsafe_allow_html=True)
-
-# Loop through top 3 players and place them in columns
 top_3 = df_players.head(3).reset_index(drop=True)
 if len(top_3) >= 1: render_hero_card(hero_c1, top_3.iloc[0])
 if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
 if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
-
 st.markdown("---")
 
-# PAGE ROUTING
 if selected_page == P_LEDGER:
-    # ... rest of code continues here ...
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
             st.session_state["recap"] = get_weekly_recap()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Weekly Transactions")
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    st.header("Weekly Transactions")
     m_col1, m_col2 = st.columns(2)
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
@@ -559,20 +538,23 @@ if selected_page == P_LEDGER:
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
         with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
+    st.header("Power Rankings")
+    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 elif selected_page == P_AUDIT:
-    with col_main: st.header("Efficiency Audit")
+    st.header("Efficiency Audit")
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255, 255, 255, 0.1)'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential", height=500)
     st.plotly_chart(fig, use_container_width=True)
-    if not df_bench_stars.empty: st.markdown("#### 🚨 'Should Have Started'"); st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
+    if not df_bench_stars.empty: 
+        st.markdown("#### 🚨 'Should Have Started'")
+        st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
 elif selected_page == P_HEDGE:
-    with col_main: st.header("Market Analytics")
+    st.header("Market Analytics")
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
@@ -585,7 +567,7 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_FORECAST:
-    with col_main: st.header("The Crystal Ball")
+    st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -605,10 +587,13 @@ elif selected_page == P_NEXT:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
+        
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.header("Next Week's Market Preview")
+        
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        
+        st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
             h_proj, a_proj = game.home_projected, game.away_projected
@@ -616,9 +601,27 @@ elif selected_page == P_NEXT:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
+            
             curr_col = nc1 if i % 2 == 0 else nc2
             with curr_col:
-                st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div><div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.8em;"><div>VS</div><div style="color: #00C9FF; margin-top: 5px;">Fav: {fav}</div><div style="color: #fff;">+{spread:.1f}</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div><div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="luxury-card" style="padding: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; text-align: center;">
+                        <div style="flex: 2;">
+                            <div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div>
+                            <div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div>
+                        </div>
+                        <div style="flex: 1; color: #a0aaba; font-size: 0.8em;">
+                            <div>VS</div>
+                            <div style="color: #00C9FF; margin-top: 5px;">Fav: {fav}</div>
+                            <div style="color: #fff;">+{spread:.1f}</div>
+                        </div>
+                        <div style="flex: 2;">
+                            <div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div>
+                            <div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div>
+                        </div>
+                    </div>
+                </div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
 elif selected_page == P_PROP:
@@ -661,6 +664,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -700,7 +704,7 @@ elif selected_page == P_TROPHY:
     else:
         awards = st.session_state["awards"]
         if "season_comm" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
@@ -725,14 +729,13 @@ elif selected_page == P_TROPHY:
         with c5:
             st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
-
+            
 elif selected_page == P_VAULT:
     st.header("⏳ The Dynasty Vault (All-Time History)")
     st.caption(f"Tracking league history from {START_YEAR} to Present.")
     if "dynasty_leaderboard" not in st.session_state:
         if st.button("🔓 Unlock The Vault"):
             with luxury_spinner(f"Traveling back to {START_YEAR}..."):
-                # Pass year correctly to get_dynasty_data
                 df_raw = get_dynasty_data(year, START_YEAR)
                 st.session_state["dynasty_raw"] = df_raw
                 st.session_state["dynasty_leaderboard"] = process_dynasty_leaderboard(df_raw)
@@ -746,6 +749,5 @@ elif selected_page == P_VAULT:
         fig = px.line(df_chart, x="Year", y="Wins", color="Manager", markers=True, title="The Rise and Fall of Empires")
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", xaxis=dict(tickmode='linear', tick0=START_YEAR, dtick=1))
         st.plotly_chart(fig, use_container_width=True)
-
 else:
     st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
