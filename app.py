@@ -19,7 +19,13 @@ st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layou
 
 st.markdown("""
     <style>
-    .stApp { background-color: #080a10; }
+    /* MAIN BACKGROUND - "Midnight Horizon" Gradient */
+    .stApp {
+        /* Deep, rich dark gradient that stays fixed while you scroll */
+        background: radial-gradient(circle at 10% 20%, #1a1c29 0%, #080a10 90%);
+        background-attachment: fixed;
+        background-size: cover;
+    }
     h1, h2, h3, h4 {
         background: linear-gradient(90deg, #00C9FF, #0072ff);
         -webkit-background-clip: text;
