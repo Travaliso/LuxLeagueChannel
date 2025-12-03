@@ -60,7 +60,7 @@ st.markdown("""
     .award-card { 
         border-left: 4px solid #00C9FF; 
         transition: transform 0.3s; 
-        min-height: 320px; /* FORCE HEIGHT TO PREVENT OVERLAP */
+        min-height: 320px; 
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -162,7 +162,7 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
-# LOGO HELPER (Fixes missing images)
+# LOGO HELPER
 def get_logo(team):
     fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
     try: return team.logo_url if team.logo_url else fallback
@@ -270,9 +270,9 @@ def calculate_heavy_analytics(current_week):
     return pd.DataFrame(data_rows)
 
 @st.cache_data(ttl=3600)
-def calculate_season_awards(current_week):
+def calculate_season_awards_v2(current_week):
     player_points = {}
-    # FIX: Initialize Logo in team_stats
+    # INIT WITH LOGO TO PREVENT KEY ERROR
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in league.teams}
     
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
@@ -303,11 +303,9 @@ def calculate_season_awards(current_week):
                     else:
                         team_stats[team_name]["Starters"] += p.points
                     
-                    # Injury Count
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
                     if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
                     
-                    # Waiver Points (Approx)
                     acq = getattr(p, 'acquisitionType', 'DRAFT')
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
 
@@ -316,7 +314,7 @@ def calculate_season_awards(current_week):
 
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     
-    # FIXED: Pass Logo into Oracle List
+    # BUILD LISTS WITH LOGOS
     oracle_list = []
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
@@ -331,7 +329,7 @@ def calculate_season_awards(current_week):
     sorted_teams_pts = sorted(league.teams, key=lambda x: x.points_for)
     toilet = sorted_teams_pts[0]
     
-    # Podium Logic
+    # Podium Logic: Sort by Wins then Points
     podium_sort = sorted(league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
     podium = podium_sort[:3]
     
@@ -381,8 +379,7 @@ def scan_dark_pool(limit=15):
             status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
             if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
             total = player.total_points if player.total_points > 0 else player.projected_total_points
-            weeks = league.current_week if league.current_week > 0 else 1
-            avg_pts = total / weeks
+            avg_pts = total / league.current_week if league.current_week > 0 else 0
             if avg_pts > 0.5:
                 pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
         except: continue
@@ -514,7 +511,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     with luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
-        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards_v2(current_week)
         if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
         pdf = PDF()
@@ -715,15 +712,14 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    with st.container():
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.header("🧬 The Lab (Next Gen Biometrics)")
-        with c2:
-             if st.button("🧪 Analyze Roster"):
-                 with luxury_spinner("Calibrating Satellites..."):
-                     st.session_state["trigger_lab"] = True
-                     st.rerun()
+    col_head, col_btn = st.columns([3, 1])
+    with col_head:
+        st.header("🧬 The Lab (Next Gen Biometrics)")
+    with col_btn:
+         if st.button("🧪 Analyze Roster"):
+             with luxury_spinner("Calibrating Satellites..."):
+                 st.session_state["trigger_lab"] = True
+                 st.rerun()
 
     with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
         st.markdown("""
@@ -743,7 +739,6 @@ elif selected_page == P_LAB:
     
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-        # FORCE V3 (FALLBACK LOGIC)
         df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
         st.session_state["ngs_data"] = df_ngs
         st.session_state["trigger_lab"] = False
@@ -852,7 +847,6 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
-            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -907,7 +901,7 @@ elif selected_page == P_TROPHY:
             
             # Do heavy work
             with luxury_spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards(current_week)
+                st.session_state["awards"] = calculate_season_awards_v2(current_week)
                 awards_data = st.session_state["awards"]
                 
                 # Safely get names for AI prompt
