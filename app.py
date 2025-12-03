@@ -19,6 +19,9 @@ from contextlib import contextmanager
 # ------------------------------------------------------------------
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
 
+# SETTINGS
+START_YEAR = 2021 # <--- UPDATE THIS TO YOUR LEAGUE'S START YEAR
+
 st.markdown("""
     <style>
     /* 1. HIDE DEFAULT STREAMLIT ELEMENTS */
@@ -51,44 +54,20 @@ st.markdown("""
     .award-card { border-left: 4px solid #00C9FF; }
     .studio-box { border-left: 4px solid #7209b7; }
 
-    /* 5. SIDEBAR & MENU FIX (HIDING RADIO CIRCLES) */
+    /* 5. SIDEBAR & MENU FIX */
     section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
-    
-    /* Target the container of the radio buttons */
     div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
-    
-    /* The clickable label items */
     div[role="radiogroup"] label { 
-        padding: 12px 15px !important; 
-        border-radius: 10px !important; 
-        transition: all 0.3s ease; 
-        margin-bottom: 5px; 
-        border: 1px solid transparent;
-        background-color: transparent;
+        padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; 
+        margin-bottom: 5px; border: 1px solid transparent; background-color: transparent;
     }
-    
-    /* HOVER STATE */
-    div[role="radiogroup"] label:hover { 
-        background-color: rgba(255, 255, 255, 0.05) !important; 
-        color: #ffffff !important; 
-        transform: translateX(5px); 
-    }
-    
-    /* ACTIVE/SELECTED STATE */
+    div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
     div[role="radiogroup"] label[data-checked="true"] {
         background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important;
-        border-left: 4px solid #00C9FF !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
+        border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important;
     }
-
-    /* CRITICAL FIX: HIDE THE RADIO CIRCLES */
-    div[role="radiogroup"] label > div:first-child {
-        display: none !important;
-    }
-    div[data-testid="stMarkdownContainer"] p {
-        font-size: 1rem;
-    }
+    div[role="radiogroup"] label > div:first-child { display: none !important; }
+    div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
 
     /* 6. TABLES */
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
@@ -101,7 +80,6 @@ st.markdown("""
         background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: shine 3s linear infinite;
     }
     .loader-sub { font-family: monospace; color: #00C9FF; font-size: 1.2rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 3px; animation: blink 1.5s infinite ease-in-out; }
-    @keyframes blink { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
     .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     </style>
     """, unsafe_allow_html=True)
@@ -172,6 +150,7 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
+# Vegas Prop Desk Engine
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
@@ -333,6 +312,53 @@ def scan_dark_pool(limit=15):
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
 
+# --- E. DYNASTY VAULT ENGINE (Time Machine) ---
+@st.cache_data(ttl=3600)
+def get_dynasty_data(current_year, start_year):
+    all_seasons_data = []
+    # Loop from start_year to current_year
+    for y in range(start_year, current_year + 1):
+        try:
+            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
+            for team in hist_league.teams:
+                # DNA Match: Extract Owner ID (The "DNA")
+                # Handle cases where owner info might be missing in old data
+                if team.owners:
+                    owner_id = team.owners[0]['id']
+                    owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
+                else:
+                    owner_id = f"Unknown_{team.team_id}" # Fallback
+                    owner_name = f"Team {team.team_id}"
+
+                made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
+                is_champ = 1 if team.final_standing == 1 else 0
+                
+                all_seasons_data.append({
+                    "Year": y,
+                    "Owner ID": owner_id,
+                    "Manager": owner_name,
+                    "Team Name": team.team_name,
+                    "Wins": team.wins,
+                    "Losses": team.losses,
+                    "Points For": team.points_for,
+                    "Champ": is_champ,
+                    "Playoffs": made_playoffs
+                })
+        except Exception as e: continue # Skip years that fail (e.g. cancelled 2020 covid year logic?)
+            
+    return pd.DataFrame(all_seasons_data)
+
+def process_dynasty_leaderboard(df_history):
+    if df_history.empty: return pd.DataFrame()
+    leaderboard = df_history.groupby("Owner ID").agg({
+        "Manager": "last", 
+        "Wins": "sum", "Losses": "sum", "Points For": "sum",
+        "Champ": "sum", "Playoffs": "sum", "Year": "count"
+    }).reset_index()
+    leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
+    leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
+    return leaderboard.sort_values(by="Wins", ascending=False)
+
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
@@ -342,8 +368,8 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room"
-page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY]
+P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -476,33 +502,18 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-st.markdown("### 🌟 Weekly Elite")
-hero_c1, hero_c2, hero_c3 = st.columns(3)
-def render_hero_card(col, player):
-    with col:
-        st.markdown(f"""
-        <div class="luxury-card" style="padding: 15px; display: flex; align-items: center; justify-content: start;">
-            <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" 
-                 style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5); box-shadow: 0 0 10px rgba(0, 201, 255, 0.2);">
-            <div>
-                <div style="color: #ffffff; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">{player['Name']}</div>
-                <div style="color: #00C9FF; font-size: 14px; font-weight: 600;">{player['Points']} PTS</div>
-                <div style="color: #a0aaba; font-size: 11px;">{player['Team']}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-top_3 = df_players.head(3).reset_index(drop=True)
-if len(top_3) >= 1: render_hero_card(hero_c1, top_3.iloc[0])
-if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
-if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
-st.markdown("---")
+col_main, col_players = st.columns([2, 1])
+with col_players:
+    st.markdown("### 🌟 Weekly Elite")
+    for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
+         st.markdown(f"""<div style="display: flex; align-items: center; background: rgba(17, 25, 40, 0.75); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 8px; margin-right: 12px; border: 1px solid rgba(0, 201, 255, 0.3);"><div><div style="color: #ffffff; font-weight: 700; font-size: 14px; text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);">{p['Name']}</div><div style="color: #a0aaba; font-size: 12px; font-weight: 500;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
 
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
-            st.session_state["recap"] = ai_response(f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {df_eff.iloc[0]['Team']}. Style: Wall Street Report.", 800)
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.header("Weekly Transactions")
+            st.session_state["recap"] = get_weekly_recap()
+    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    st.divider(); st.header("Weekly Transactions")
     m_col1, m_col2 = st.columns(2)
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
@@ -522,23 +533,20 @@ if selected_page == P_LEDGER:
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
         with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
-    st.header("Power Rankings")
-    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
+    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
+    st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 elif selected_page == P_AUDIT:
-    st.header("Efficiency Audit")
+    with col_main: st.header("Efficiency Audit")
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255, 255, 255, 0.1)'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential", height=500)
     st.plotly_chart(fig, use_container_width=True)
-    if not df_bench_stars.empty: 
-        st.markdown("#### 🚨 'Should Have Started'")
-        st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
+    if not df_bench_stars.empty: st.markdown("#### 🚨 'Should Have Started'"); st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
 elif selected_page == P_HEDGE:
-    st.header("Market Analytics")
+    with col_main: st.header("Market Analytics")
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
@@ -551,7 +559,7 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_FORECAST:
-    st.header("The Crystal Ball")
+    with col_main: st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -573,8 +581,8 @@ elif selected_page == P_NEXT:
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        st.header("Next Week's Market Preview")
+        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        st.divider(); st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
             h_proj, a_proj = game.home_projected, game.away_projected
@@ -666,7 +674,7 @@ elif selected_page == P_TROPHY:
     else:
         awards = st.session_state["awards"]
         if "season_comm" in st.session_state:
-             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
@@ -691,3 +699,27 @@ elif selected_page == P_TROPHY:
         with c5:
             st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
+
+elif selected_page == P_VAULT:
+    st.header("⏳ The Dynasty Vault (All-Time History)")
+    st.caption(f"Tracking league history from {START_YEAR} to Present.")
+    if "dynasty_leaderboard" not in st.session_state:
+        if st.button("🔓 Unlock The Vault"):
+            with luxury_spinner(f"Traveling back to {START_YEAR}..."):
+                # Pass year correctly to get_dynasty_data
+                df_raw = get_dynasty_data(year, START_YEAR)
+                st.session_state["dynasty_raw"] = df_raw
+                st.session_state["dynasty_leaderboard"] = process_dynasty_leaderboard(df_raw)
+                st.rerun()
+    else:
+        st.subheader("🏛️ All-Time Leaderboard")
+        df_lead = st.session_state["dynasty_leaderboard"]
+        st.dataframe(df_lead, use_container_width=True, hide_index=True, column_config={"Manager": st.column_config.TextColumn("Manager", width="medium"), "Win %": st.column_config.ProgressColumn("Win %", format="%.1f%%", min_value=0, max_value=100), "Champ": st.column_config.NumberColumn("🏆 Rings"), "Playoffs": st.column_config.NumberColumn("🎟️ Playoff Apps"), "Points For": st.column_config.NumberColumn("Total Pts", format="%.0f")})
+        st.subheader("📉 Empire History")
+        df_chart = st.session_state["dynasty_raw"]
+        fig = px.line(df_chart, x="Year", y="Wins", color="Manager", markers=True, title="The Rise and Fall of Empires")
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", xaxis=dict(tickmode='linear', tick0=START_YEAR, dtick=1))
+        st.plotly_chart(fig, use_container_width=True)
+
+else:
+    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
