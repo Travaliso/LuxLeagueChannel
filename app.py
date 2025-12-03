@@ -11,100 +11,79 @@ import random
 import base64
 from fpdf import FPDF
 from thefuzz import process
+import time
+from contextlib import contextmanager
 
 # ------------------------------------------------------------------
-# 1. CONFIGURATION & VISION UI THEME (The "Reference Image" Look)
+# 1. CONFIGURATION & VISION UI THEME
 # ------------------------------------------------------------------
-st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layout="wide")
+st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
-    /* MAIN BACKGROUND - Recreating the "Vision UI" Deep Blue/Purple Gradient */
+    /* MAIN BACKGROUND */
     .stApp {
-        background-color: #060b26; /* Deepest Midnight Blue base */
+        background-color: #060b26; 
         background-image: 
-            /* 1. The Horizontal Scanlines (Texture) */
-            repeating-linear-gradient(
-                to bottom,
-                transparent,
-                transparent 4px,
-                rgba(0, 0, 0, 0.2) 4px,
-                rgba(0, 0, 0, 0.2) 8px
-            ),
-            /* 2. The Ambient Glows (Purple Top-Left, Blue Bottom-Right) */
+            repeating-linear-gradient(to bottom, transparent, transparent 4px, rgba(0, 0, 0, 0.2) 4px, rgba(0, 0, 0, 0.2) 8px),
             radial-gradient(circle at 0% 0%, rgba(58, 12, 163, 0.4) 0%, transparent 50%),
             radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%);
         background-attachment: fixed;
         background-size: cover;
     }
 
-    /* TYPOGRAPHY - Clean, White, Modern */
-    h1, h2, h3, h4 {
-        color: #ffffff !important;
-        font-family: 'Helvetica Neue', sans-serif;
-        font-weight: 700 !important;
-        letter-spacing: 0.5px;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-    
-    /* GRADIENT TEXT ACCENTS (For "Weekly Elite", etc) */
-    .gradient-text {
-        background: linear-gradient(90deg, #00C9FF, #92FE9D);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    /* METRIC NUMBERS - Glowing White/Blue */
-    div[data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
-        color: #ffffff !important;
-        font-weight: 700;
-        text-shadow: 0 0 15px rgba(0, 201, 255, 0.6);
-    }
+    /* TEXT & METRICS */
+    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
 
-    /* GLASSMORPHISM CARDS (The "Floating" Look) */
+    /* CARDS */
     .luxury-card {
-        background: rgba(17, 25, 40, 0.75); /* Semi-transparent dark blue */
-        backdrop-filter: blur(16px) saturate(180%); /* The Blur Effect */
-        -webkit-backdrop-filter: blur(16px) saturate(180%);
-        border-radius: 20px; /* Softer rounded corners */
-        border: 1px solid rgba(255, 255, 255, 0.08); /* Thin white border */
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); /* Deep shadow */
+        background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
+        border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 24px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
-    
-    /* Specific Card Accents */
-    .award-card { border-left: 4px solid #00C9FF; } /* Electric Blue border */
-    .studio-box { border-left: 4px solid #7209b7; } /* Purple border */
+    .award-card { border-left: 4px solid #00C9FF; }
+    .studio-box { border-left: 4px solid #7209b7; }
 
-    /* SIDEBAR - Dark Glass */
-    section[data-testid="stSidebar"] { 
-        background-color: rgba(10, 14, 35, 0.95);
-        border-right: 1px solid rgba(255,255,255,0.05); 
-    }
-    
-    /* NAVIGATION BUTTONS */
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
     div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; }
-    div[role="radiogroup"] label { 
-        padding: 12px; 
-        border-radius: 12px; 
-        transition: all 0.3s ease;
-        margin-bottom: 5px;
-    }
-    div[role="radiogroup"] label:hover { 
-        background-color: rgba(0, 201, 255, 0.1); 
-        color: #ffffff !important;
-        transform: translateX(5px); /* Slight movement on hover */
-    }
+    div[role="radiogroup"] label { padding: 12px; border-radius: 12px; transition: all 0.3s ease; margin-bottom: 5px; }
+    div[role="radiogroup"] label:hover { background-color: rgba(0, 201, 255, 0.1); color: #ffffff !important; transform: translateX(5px); }
+    div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
 
-    /* DATAFRAMES - Transparent Tables */
-    div[data-testid="stDataFrame"] { 
-        background-color: rgba(17, 25, 40, 0.5); 
-        border-radius: 15px; 
-        padding: 15px; 
-        border: 1px solid rgba(255,255,255,0.05);
+    /* --- CUSTOM LUXURY LOADER ANIMATION --- */
+    @keyframes shine {
+        to { background-position: 200% center; }
+    }
+    .luxury-loader-text {
+        font-size: 2.5rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        background: linear-gradient(90deg, #00C9FF 0%, #ffffff 50%, #0072ff 100%);
+        background-size: 200% auto;
+        color: transparent;
+        -webkit-background-clip: text;
+        background-clip: text;
+        animation: shine 2s linear infinite;
+        text-align: center;
+        letter-spacing: 4px;
+    }
+    .loader-sub {
+        color: #a0aaba;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 10px;
+        font-family: monospace;
+    }
+    .loader-container {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 60px;
+        background: rgba(17, 25, 40, 0.9);
+        border-radius: 20px;
+        border: 1px solid rgba(0, 201, 255, 0.2);
+        margin: 20px 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -118,6 +97,22 @@ def load_lottieurl(url: str):
         if r.status_code != 200: return None
         return r.json()
     except: return None
+
+# CUSTOM LUXURY SPINNER CONTEXT MANAGER
+@contextmanager
+def luxury_spinner(text="Processing Protocol..."):
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(f"""
+            <div class="loader-container">
+                <div class="luxury-loader-text">LUXURY LEAGUE</div>
+                <div class="loader-sub">⚡ {text}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    try:
+        yield
+    finally:
+        placeholder.empty()
 
 # PDF Helpers
 def clean_for_pdf(text):
@@ -150,10 +145,11 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine (With 422 Fallback)
+# Vegas Prop Desk Engine
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    # Attempt to fetch Player Props first
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
     try:
         response = requests.get(url, params=params)
@@ -185,13 +181,6 @@ def get_vegas_props(api_key):
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
         return pd.DataFrame(vegas_data)
     except: return None
-
-# Load Animations
-lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
-lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
-lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
-lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
-lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
 # League Connection
 try:
@@ -342,39 +331,37 @@ selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="c
 
 st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
-    if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is writing the script..."): st.session_state["recap"] = "Analysis Generated for PDF."
-    if "awards" not in st.session_state:
-        with st.spinner("🏆 Engraving trophies..."): st.session_state["awards"] = calculate_season_awards(current_week)
-    if "playoff_odds" not in st.session_state:
-        with st.spinner("🔮 Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation()
+    with luxury_spinner("Compiling Intelligence Report..."):
+        if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
+        if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
-    pdf = PDF()
-    pdf.add_page()
-    pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
-    pdf.chapter_body(st.session_state["recap"].replace("*", "").replace("#", ""))
-    
-    awards = st.session_state["awards"]
-    pdf.chapter_title("THE TROPHY ROOM")
-    if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
-    if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
-    
-    if "playoff_odds" in st.session_state:
-        pdf.chapter_title("PLAYOFF PROJECTIONS")
-        df_odds = st.session_state["playoff_odds"]
-        if df_odds is not None and not df_odds.empty:
-            for i, row in df_odds.head(5).iterrows(): pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
+        pdf = PDF()
+        pdf.add_page()
+        pdf.chapter_title(f"WEEK {selected_week} EXECUTIVE BRIEFING")
+        pdf.chapter_body(st.session_state["recap"].replace("*", "").replace("#", ""))
+        
+        awards = st.session_state["awards"]
+        pdf.chapter_title("THE TROPHY ROOM")
+        if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
+        if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
+        
+        if "playoff_odds" in st.session_state:
+            pdf.chapter_title("PLAYOFF PROJECTIONS")
+            df_odds = st.session_state["playoff_odds"]
+            if df_odds is not None and not df_odds.empty:
+                for i, row in df_odds.head(5).iterrows(): pdf.chapter_body(f"{row['Team']}: {row['Playoff Odds']:.1f}%")
 
-    html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
-    st.sidebar.markdown(html, unsafe_allow_html=True)
+        html = create_download_link(pdf.output(dest="S").encode("latin-1"), f"Luxury_League_Week_{selected_week}.pdf")
+        st.sidebar.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
 # 5. DATA PROCESSING & AI
 # ------------------------------------------------------------------
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
-    if lottie_loading: st_lottie(lottie_loading, height=200, key="loading")
-    st.session_state['box_scores'] = league.box_scores(week=selected_week)
-    st.session_state['week'] = selected_week
+    with luxury_spinner(f"Accessing Week {selected_week} Data..."):
+        st.session_state['box_scores'] = league.box_scores(week=selected_week)
+        st.session_state['week'] = selected_week
     st.rerun()
 
 box_scores = st.session_state['box_scores']
@@ -425,7 +412,7 @@ with col_players:
 
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is reviewing portfolios..."): 
+        with luxury_spinner("Analyst is reviewing portfolios..."): 
             st.session_state["recap"] = ai_response(f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {df_eff.iloc[0]['Team']}. Style: Wall Street Report.", 800)
     with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Weekly Transactions")
@@ -444,7 +431,7 @@ if selected_page == P_LEDGER:
 
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
-        with st.spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = ai_response(f"Write a 5-8 sentence commentary on Power Rankings. Praise {df_eff.iloc[0]['Team']} and mock {df_eff.iloc[-1]['Team']}. Style: Stephen A. Smith.")
+        with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = ai_response(f"Write a 5-8 sentence commentary on Power Rankings. Praise {df_eff.iloc[0]['Team']} and mock {df_eff.iloc[-1]['Team']}. Style: Stephen A. Smith.")
     with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
@@ -462,7 +449,7 @@ elif selected_page == P_HEDGE:
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
-            with st.spinner("Compiling Assets..."): st.session_state["df_advanced"] = calculate_heavy_analytics(current_week); st.rerun()
+            with luxury_spinner("Compiling Assets..."): st.session_state["df_advanced"] = calculate_heavy_analytics(current_week); st.rerun()
     else:
         df_advanced = st.session_state["df_advanced"]
         fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#7209b7", "#4361ee", "#4cc9f0"], title="Luck Matrix")
@@ -473,8 +460,7 @@ elif selected_page == P_FORECAST:
     with col_main: st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
-            if lottie_forecast: st_lottie(lottie_forecast, height=200)
-            with st.spinner("Crunching probabilities..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
+            with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
     else:
         df_odds = st.session_state["playoff_odds"]
         st.dataframe(df_odds, use_container_width=True, hide_index=True, column_config={"Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=100)})
@@ -492,7 +478,7 @@ elif selected_page == P_NEXT:
             spread = abs(h_proj - a_proj)
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
-            with st.spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_list}. Pick 'Lock of the Week' and 'Upset Alert'.")
+            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_list}. Pick 'Lock of the Week' and 'Upset Alert'.")
         with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Next Week's Market Preview")
         for game in next_box_scores:
@@ -509,7 +495,7 @@ elif selected_page == P_PROP:
     if not odds_api_key: st.warning("Please add 'odds_api_key' to your secrets.")
     else:
         if "vegas_data" not in st.session_state:
-            with st.spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
+            with luxury_spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
         df_vegas = st.session_state["vegas_data"]
         if df_vegas is not None and not df_vegas.empty:
             if "Status" in df_vegas.columns and df_vegas.iloc[0]["Status"] == "Market Closed":
@@ -541,8 +527,7 @@ elif selected_page == P_DEAL:
     with c1: t1 = st.selectbox("Select Team A", [t.team_name for t in league.teams], index=0)
     with c2: t2 = st.selectbox("Select Team B", [t.team_name for t in league.teams], index=1)
     if st.button("🤖 Generate Trade"):
-        if lottie_trade: st_lottie(lottie_trade, height=200)
-        with st.spinner("Analyzing..."):
+        with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
             # Full roster for trade machine
@@ -555,8 +540,7 @@ elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
     if "dark_pool" not in st.session_state:
         if st.button("🔭 Scan Free Agents"):
-            if lottie_wire: st_lottie(lottie_wire, height=200)
-            with st.spinner("Scouting..."):
+            with luxury_spinner("Scouting the wire..."):
                 df_pool = scan_dark_pool()
                 st.session_state["dark_pool"] = df_pool
                 if not df_pool.empty:
@@ -571,8 +555,7 @@ elif selected_page == P_DARK:
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Awards"):
-            if lottie_trophy: st_lottie(lottie_trophy, height=200)
-            with st.spinner("Engraving..."):
+            with luxury_spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
                 st.session_state["season_comm"] = ai_response(f"Write a 'State of the Union' for the league based on awards. MVP: {st.session_state['awards']['MVP']['Name']}.", 1000)
                 st.rerun()
@@ -604,3 +587,5 @@ elif selected_page == P_TROPHY:
         with c5:
             st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
+else:
+    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
