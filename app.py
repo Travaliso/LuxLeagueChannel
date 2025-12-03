@@ -13,6 +13,7 @@ from fpdf import FPDF
 from thefuzz import process
 import time
 from contextlib import contextmanager
+import nfl_data_py as nfl # <--- NEW IMPORT
 
 # ------------------------------------------------------------------
 # 1. CONFIGURATION & VISION UI THEME
@@ -20,7 +21,7 @@ from contextlib import contextmanager
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
 
 # SETTINGS
-START_YEAR = 2021 # <--- UPDATE THIS TO YOUR LEAGUE'S START YEAR
+START_YEAR = 2021 
 
 st.markdown("""
     <style>
@@ -189,6 +190,7 @@ lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-03
 lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
 lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
 lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
+lottie_lab = load_lottieurl("https://lottie.host/49907932-975d-453d-b8f1-2d6408468123/bF2y8T8k7s.json")
 
 # ------------------------------------------------------------------
 # 3. ANALYTICS ENGINES
@@ -310,7 +312,6 @@ def scan_dark_pool(limit=15):
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
 
-# --- E. DYNASTY VAULT ENGINE (Time Machine) ---
 @st.cache_data(ttl=3600)
 def get_dynasty_data(current_year, start_year):
     all_seasons_data = []
@@ -324,28 +325,88 @@ def get_dynasty_data(current_year, start_year):
                 else:
                     owner_id = f"Unknown_{team.team_id}"
                     owner_name = f"Team {team.team_id}"
-
                 made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
                 is_champ = 1 if team.final_standing == 1 else 0
-                
-                all_seasons_data.append({
-                    "Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name,
-                    "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for,
-                    "Champ": is_champ, "Playoffs": made_playoffs
-                })
+                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
         except Exception as e: continue
     return pd.DataFrame(all_seasons_data)
 
 def process_dynasty_leaderboard(df_history):
     if df_history.empty: return pd.DataFrame()
-    leaderboard = df_history.groupby("Owner ID").agg({
-        "Manager": "last", 
-        "Wins": "sum", "Losses": "sum", "Points For": "sum",
-        "Champ": "sum", "Playoffs": "sum", "Year": "count"
-    }).reset_index()
+    leaderboard = df_history.groupby("Owner ID").agg({"Manager": "last", "Wins": "sum", "Losses": "sum", "Points For": "sum", "Champ": "sum", "Playoffs": "sum", "Year": "count"}).reset_index()
     leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
+
+# --- F. NEXT GEN STATS ENGINE (The Lab) ---
+@st.cache_data(ttl=3600 * 12) 
+def load_nextgen_data(year):
+    try:
+        # Fetch raw data from NFL API wrapper
+        # Note: nfl_data_py imports a lot of data, filter columns to save memory if needed
+        df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year])
+        df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
+        df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
+        return df_rec, df_rush, df_pass
+    except: return None, None, None
+
+def analyze_nextgen_metrics(roster, year):
+    df_rec, df_rush, df_pass = load_nextgen_data(year)
+    if df_rec is None: return pd.DataFrame()
+
+    insights = []
+    for player in roster:
+        p_name = player.name
+        pos = player.position
+        
+        # WR/TE Analysis
+        if pos in ['WR', 'TE']:
+            match, score, idx = process.extractOne(p_name, df_rec['player_display_name'].unique())
+            if score > 90:
+                # Filter for player, sort by week to get latest or mean
+                # Group by player to get season averages
+                player_stats = df_rec[df_rec['player_display_name'] == match]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    sep = stats.get('avg_separation', 0)
+                    yac_exp = stats.get('avg_yac_above_expectation', 0)
+                    share = stats.get('percent_share_of_intended_air_yards', 0)
+                    
+                    verdict = "HOLD"
+                    if sep > 3.5: verdict = "💎 ELITE (Separation God)"
+                    elif share > 35 and sep < 2.5: verdict = "⚠️ VOLUME TRAP"
+                    elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
+                    
+                    insights.append({"Player": p_name, "Metric": "Avg Separation", "Value": f"{sep:.1f} yds", "Alpha Stat": f"{yac_exp:+.1f} YAC/Exp", "Verdict": verdict})
+
+        # RB Analysis
+        elif pos == 'RB':
+            match, score, idx = process.extractOne(p_name, df_rush['player_display_name'].unique())
+            if score > 90:
+                player_stats = df_rush[df_rush['player_display_name'] == match]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    ryoe = stats.get('rush_yards_over_expected_per_att', 0)
+                    eff = stats.get('efficiency', 0) 
+                    verdict = "HOLD"
+                    if ryoe > 1.0: verdict = "💎 ELITE (Creator)"
+                    elif ryoe < -0.5: verdict = "🚫 PLODDER"
+                    insights.append({"Player": p_name, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{eff:.2f} Efficiency", "Verdict": verdict})
+                
+        # QB Analysis
+        elif pos == 'QB':
+            match, score, idx = process.extractOne(p_name, df_pass['player_display_name'].unique())
+            if score > 90:
+                player_stats = df_pass[df_pass['player_display_name'] == match]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    cpoe = stats.get('completion_percentage_above_expectation', 0)
+                    verdict = "HOLD"
+                    if cpoe > 5.0: verdict = "🎯 SNIPER"
+                    elif cpoe < -2.0: verdict = "📉 SHAKY"
+                    insights.append({"Player": p_name, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": "Accuracy", "Verdict": verdict})
+
+    return pd.DataFrame(insights)
 
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
@@ -356,8 +417,8 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
-page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
+P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🧬 The Lab", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -490,8 +551,7 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-
-# HERO ROW - TOP PLAYERS (Full Width)
+# HERO ROW (Weekly Elite)
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
 def render_hero_card(col, player):
@@ -565,6 +625,52 @@ elif selected_page == P_HEDGE:
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         fig.update_traces(marker=dict(size=15, line=dict(width=2, color='White')), textposition='top center')
         st.plotly_chart(fig, use_container_width=True)
+
+elif selected_page == P_LAB:
+    st.header("🧬 The Lab (Next Gen Biometrics)")
+    st.caption("Process-Based Scouting: Separation, CPOE, and Efficiency.")
+    
+    # Team Selector
+    team_list = [t.team_name for t in league.teams]
+    target_team = st.selectbox("Select Test Subject:", team_list)
+    
+    if st.button("🧪 Analyze Roster Efficiency"):
+        if lottie_lab: st_lottie(lottie_lab, height=200)
+        with luxury_spinner("Calibrating Tracking Satellites..."):
+            # Get Roster
+            roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+            # Run NGS Analysis
+            df_ngs = analyze_nextgen_metrics(roster_obj, year)
+            st.session_state["ngs_data"] = df_ngs
+            st.rerun()
+            
+    if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
+        st.markdown("### 🔬 Biometric Results")
+        # Display as cards using columns
+        df_res = st.session_state["ngs_data"]
+        
+        # Iterate rows and create card layout
+        for i, row in df_res.iterrows():
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                st.markdown(f"""
+                <div class="luxury-card" style="border-left: 4px solid #00C9FF;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin:0; color: white;">{row['Player']}</h3>
+                            <div style="color: #00C9FF; font-weight: bold;">{row['Verdict']}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.8em; color: #a0aaba;">{row['Metric']}</div>
+                            <div style="font-size: 1.5em; font-weight: bold; color: white;">{row['Value']}</div>
+                            <div style="font-size: 0.8em; color: #92FE9D;">{row['Alpha Stat']}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    elif "ngs_data" in st.session_state:
+        st.info("No Next Gen Data found for this roster (or API connection failed).")
+
 
 elif selected_page == P_FORECAST:
     st.header("The Crystal Ball")
@@ -677,6 +783,7 @@ elif selected_page == P_DARK:
             with luxury_spinner("Scouting the wire..."):
                 df_pool = scan_dark_pool()
                 st.session_state["dark_pool_data"] = df_pool
+                # Only run AI if we actually found players
                 if not df_pool.empty:
                     p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
                     st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
@@ -729,7 +836,7 @@ elif selected_page == P_TROPHY:
         with c5:
             st.markdown("#### 💤 Asleep at Wheel"); slp = awards['Sleeper']
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players")
-            
+
 elif selected_page == P_VAULT:
     st.header("⏳ The Dynasty Vault (All-Time History)")
     st.caption(f"Tracking league history from {START_YEAR} to Present.")
