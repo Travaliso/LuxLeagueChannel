@@ -96,11 +96,16 @@ def create_download_link(val, filename):
 # ------------------------------------------------------------------
 # REPLACEMENT FUNCTION: GET VEGAS PROPS (DEBUG MODE)
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# ROBUST VEGAS ENGINE (With Tuesday Fallback)
+# ------------------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # 1. SETUP REQUEST
-    url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
-    params = {
+    # ATTEMPT 1: PLAYER PROPS (The "Alpha" Data)
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    
+    # Try fetching high-value player props first
+    params_props = {
         'api_key': api_key,
         'regions': 'us',
         'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td',
@@ -109,46 +114,30 @@ def get_vegas_props(api_key):
     }
 
     try:
-        # 2. ATTEMPT CONNECTION
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params_props)
         
-        # --- DEBUGGING PRINTS (These will show up on your app) ---
-        if response.status_code == 401:
-            st.error(f"❌ Vegas Error 401: Unauthorized. Check your API Key in secrets.toml.")
-            return None
-        elif response.status_code == 422:
-            st.error(f"❌ Vegas Error 422: Invalid Request. Market might be unavailable.")
-            return None
-        elif response.status_code != 200:
-            st.error(f"❌ Vegas Error {response.status_code}: {response.text}")
+        # If 422 (Markets Unavailable), we fall back to Game Lines
+        if response.status_code == 422:
+            st.warning("🔒 Player Props are currently locked by Vegas (Tuesday/Wednesday). Switching to Game Lines.")
+            return get_game_lines_fallback(api_key) # Call helper function
+            
+        if response.status_code != 200:
+            st.error(f"Vegas Error: {response.status_code}")
             return None
             
-        # 3. CHECK DATA
         data = response.json()
-        
-        # Check if we actually got odds back
-        has_props = False
-        for event in data:
-            for book in event['bookmakers']:
-                if 'player_' in str(book['markets']): # Check if player props exist
-                    has_props = True
-                    break
-        
-        if not has_props:
-            st.warning("⚠️ Connection Successful (200 OK), but Vegas has no Player Props listed yet. Try again Thursday/Friday.")
-            return None
+        if not data: return get_game_lines_fallback(api_key)
 
-        # 4. PROCESS DATA (If we made it this far)
+        # Process Player Props (Same logic as before)
         player_props = {}
         for event in data:
-            for bookmaker in event['bookmakers']:
-                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
-                    for market in bookmaker['markets']:
+            for book in event['bookmakers']:
+                if book['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
+                    for market in book['markets']:
                         key = market['key']
                         for outcome in market['outcomes']:
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
-                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -162,33 +151,30 @@ def get_vegas_props(api_key):
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
             
+        if not vegas_data: return get_game_lines_fallback(api_key)
         return pd.DataFrame(vegas_data)
 
     except Exception as e:
-        st.error(f"❌ Python Logic Error: {e}")
+        st.error(f"Vegas Logic Error: {e}")
         return None
-# Load Animations
-lottie_loading = load_lottieurl("https://lottie.host/5a882010-89b6-45bc-8a4d-06886982f8d8/WfK7bXoGqj.json")
-lottie_forecast = load_lottieurl("https://lottie.host/936c69f6-0b89-4b68-b80c-0390f777c5d7/C0Z2y3S0bM.json")
-lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b82d02c84/hL9w4jR9aF.json")
-lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
-lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
-# League Connection
-try:
-    league_id = st.secrets["league_id"]
-    swid = st.secrets["swid"]
-    espn_s2 = st.secrets["espn_s2"]
-    openai_key = st.secrets.get("openai_key")
-    odds_api_key = st.secrets.get("odds_api_key")
-    year = 2025
-    @st.cache_resource
-    def get_league(): return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-    league = get_league()
-except Exception as e:
-    st.error(f"🔒 Connection Error: {e}")
-    st.stop()
-
+# Helper: Fallback to Spreads if Props are closed
+def get_game_lines_fallback(api_key):
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params = {
+        'api_key': api_key,
+        'regions': 'us',
+        'markets': 'h2h,spreads', # These are ALWAYS available
+        'oddsFormat': 'american'
+    }
+    try:
+        r = requests.get(url, params=params)
+        if r.status_code == 200:
+            # We return an empty dataframe with a special flag column to let the UI know
+            # "We connected, but only found game lines"
+            return pd.DataFrame({"Status": ["Market Closed"]}) 
+    except: pass
+    return None
 # ------------------------------------------------------------------
 # 3. ANALYTICS ENGINES
 # ------------------------------------------------------------------
