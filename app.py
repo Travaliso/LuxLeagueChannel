@@ -338,7 +338,7 @@ def process_dynasty_leaderboard(df_history):
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
-# --- F. NEXT GEN STATS ENGINE (UPDATED WITH DATA PASSTHROUGH) ---
+# --- F. NEXT GEN STATS ENGINE (FIXED: Pass ID for Headshot) ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data(year):
     try:
@@ -357,11 +357,10 @@ def analyze_nextgen_metrics(roster, year):
         p_name = player.name
         pos = player.position
         
-        # Capture ID and Team from Roster Object
+        # Fix: Safely get ID and Team
         pid = getattr(player, 'playerId', None)
         p_team = getattr(player, 'proTeam', 'N/A')
 
-        # WR/TE Analysis
         if pos in ['WR', 'TE'] and not df_rec.empty:
             match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -372,19 +371,12 @@ def analyze_nextgen_metrics(roster, year):
                     sep = stats.get('avg_separation', 0)
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
                     share = stats.get('percent_share_of_intended_air_yards', 0)
-                    
                     verdict = "HOLD"
                     if sep > 3.5: verdict = "💎 ELITE"
                     elif share > 35 and sep < 2.5: verdict = "⚠️ TRAP"
                     elif yac_exp > 2.0: verdict = "🚀 MONSTER"
-                    
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "Separation", "Value": f"{sep:.1f} yds", 
-                        "Alpha Stat": f"{share:.0f}% Air Share", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "Separation", "Value": f"{sep:.1f} yds", "Alpha Stat": f"{share:.0f}% Air Share", "Verdict": verdict})
 
-        # RB Analysis
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -397,13 +389,8 @@ def analyze_nextgen_metrics(roster, year):
                     verdict = "HOLD"
                     if ryoe > 1.0: verdict = "💎 ELITE"
                     elif ryoe < -0.5: verdict = "🚫 PLODDER"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{eff:.2f} Eff", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{eff:.2f} Eff", "Verdict": verdict})
         
-        # QB Analysis
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 90:
@@ -415,11 +402,7 @@ def analyze_nextgen_metrics(roster, year):
                     verdict = "HOLD"
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": "Accuracy", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": "Accuracy", "Verdict": verdict})
 
     return pd.DataFrame(insights)
 
@@ -597,7 +580,7 @@ if selected_page == P_LEDGER:
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px;"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px;"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -642,7 +625,6 @@ elif selected_page == P_HEDGE:
 
 elif selected_page == P_LAB:
     st.header("🧬 The Lab (Next Gen Biometrics)")
-    # Legend Expander
     with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
         st.markdown("""
         - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
@@ -655,16 +637,13 @@ elif selected_page == P_LAB:
         - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
         """)
     
-    # Team Selector
     team_list = [t.team_name for t in league.teams]
     target_team = st.selectbox("Select Test Subject:", team_list)
     
     if st.button("🧪 Analyze Roster Efficiency"):
         if lottie_lab: st_lottie(lottie_lab, height=200)
         with luxury_spinner("Calibrating Tracking Satellites..."):
-            # Get Roster
             roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-            # Run NGS Analysis
             df_ngs = analyze_nextgen_metrics(roster_obj, year)
             st.session_state["ngs_data"] = df_ngs
             st.rerun()
@@ -672,8 +651,6 @@ elif selected_page == P_LAB:
     if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
         st.markdown("### 🔬 Biometric Results")
         df_res = st.session_state["ngs_data"]
-        
-        # 2-Column Layout
         cols = st.columns(2)
         for i, row in df_res.iterrows():
             col = cols[i % 2]
@@ -720,7 +697,7 @@ elif selected_page == P_NEXT:
             spread = abs(h_proj - a_proj)
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
-            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_list}. Pick 'Lock of the Week' and 'Upset Alert'.")
+            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
         st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
@@ -775,6 +752,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
