@@ -94,9 +94,6 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
 # ------------------------------------------------------------------
-# REPLACEMENT FUNCTION: GET VEGAS PROPS (DEBUG MODE)
-# ------------------------------------------------------------------
-# ------------------------------------------------------------------
 # ROBUST VEGAS ENGINE (With Tuesday Fallback)
 # ------------------------------------------------------------------
 @st.cache_data(ttl=3600)
@@ -477,21 +474,15 @@ elif selected_page == P_PROP:
             with st.spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
         df_vegas = st.session_state["vegas_data"]
         if df_vegas is not None and not df_vegas.empty:
-            next_week = league.current_week
-            box = league.box_scores(week=next_week)
-            trust_data = []
-            for game in box:
-                all_players = game.home_lineup + game.away_lineup
-                for player in all_players:
-                    if player.slot_position == 'BE': continue
-                    match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
-                    if score > 85:
-                        vegas_pts = df_vegas[df_vegas['Player'] == match].iloc[0]['Vegas Score']
-                        espn_pts = player.projected_points
-                        if espn_pts == 0: espn_pts = 0.1
-                        delta = vegas_pts - espn_pts
-                        status = "🚀 SMASH (Vegas Higher)" if delta > 3 else "⚠️ TRAP (ESPN High)" if delta < -3 else "⚖️ Fair Value"
-                        trust_data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
+            # CHECK FOR FALLBACK (MARKET CLOSED)
+            if "Status" in df_vegas.columns and df_vegas.iloc[0]["Status"] == "Market Closed":
+                st.info("📉 The Prop Desk is closed for the week. Player props typically release Thursday-Sunday.")
+                st.caption("Check back later in the week for the 'Trust Delta' analysis.")
+            else:
+                # RUN THE STANDARD PLAYER ANALYSIS (Existing Code)
+                next_week = league.current_week
+                box = league.box_scores(week=next_week)
+                trust_data = []data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
             if trust_data:
                 st.dataframe(pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), use_container_width=True, hide_index=True, column_config={"Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f")})
             else: st.info("No prop lines found yet.")
