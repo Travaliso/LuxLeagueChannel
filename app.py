@@ -25,12 +25,12 @@ START_YEAR = 2021
 
 st.markdown("""
     <style>
-    /* GLOBAL RESETS */
+    /* 1. HIDE DEFAULT STREAMLIT ELEMENTS */
     header[data-testid="stHeader"] { display: none; }
     footer { display: none; }
     .block-container { padding-top: 1rem !important; }
 
-    /* BACKGROUND - Midnight Vision */
+    /* 2. MAIN BACKGROUND */
     .stApp {
         background-color: #060b26; 
         background-image: 
@@ -41,28 +41,28 @@ st.markdown("""
         background-size: cover;
     }
 
-    /* TYPOGRAPHY */
+    /* 3. TYPOGRAPHY */
     h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 10px rgba(0, 201, 255, 0.6); }
-    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.8rem; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
+    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
 
-    /* LUXURY CARDS */
+    /* 4. CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
-        border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 24px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
     .award-card { border-left: 4px solid #00C9FF; transition: transform 0.3s; }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
     
-    /* SHAME CARD (Toilet Bowl) */
     .shame-card { 
         background: rgba(40, 10, 10, 0.8); 
         border: 1px solid #FF4B4B; 
         border-left: 4px solid #FF4B4B; 
     }
+    .studio-box { border-left: 4px solid #7209b7; }
 
-    /* PODIUM STYLING */
+    /* 5. PODIUM STYLING */
     .podium-container { display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin-bottom: 30px; }
     .podium-step { 
         border-radius: 10px 10px 0 0; text-align: center; padding: 10px; 
@@ -70,38 +70,46 @@ st.markdown("""
         backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
     .gold { 
-        height: 280px; width: 34%; 
+        height: 280px; width: 100%; 
         background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #FFD700; border-bottom: none;
-        z-index: 2;
     }
     .silver { 
-        height: 220px; width: 33%; 
+        height: 220px; width: 100%; 
         background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #C0C0C0; border-bottom: none;
     }
     .bronze { 
-        height: 180px; width: 33%; 
+        height: 180px; width: 100%; 
         background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #CD7F32; border-bottom: none;
     }
     .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
 
-    /* SIDEBAR */
+    /* 6. SIDEBAR & MENU FIX */
     section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
-    div[data-testid="stRadio"] > label { display: none; }
-    div[role="radiogroup"] label { padding: 12px; border-radius: 10px; margin-bottom: 5px; transition: all 0.3s; }
-    div[role="radiogroup"] label:hover { background: rgba(255, 255, 255, 0.05); }
-    div[role="radiogroup"] label[data-checked="true"] { background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent); border-left: 4px solid #00C9FF; font-weight: bold; color: white; }
-    div[role="radiogroup"] label > div:first-child { display: none; }
-    
-    /* LOADER */
+    div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
+    div[role="radiogroup"] label { 
+        padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; 
+        margin-bottom: 5px; border: 1px solid transparent; background-color: transparent;
+    }
+    div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
+    div[role="radiogroup"] label[data-checked="true"] {
+        background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important;
+        border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important;
+    }
+    div[role="radiogroup"] label > div:first-child { display: none !important; }
+    div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
+    div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
+
+    /* 7. LOADING OVERLAY */
     @keyframes shine { to { background-position: 200% center; } }
     .luxury-loader-text {
         font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px;
         background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%);
         background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: shine 3s linear infinite;
     }
+    .loader-sub { font-family: monospace; color: #00C9FF; font-size: 1.2rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 3px; animation: blink 1.5s infinite ease-in-out; }
     .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     </style>
     """, unsafe_allow_html=True)
@@ -138,7 +146,7 @@ def load_lottieurl(url: str):
 def luxury_spinner(text="Initializing Protocol..."):
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown(f'<div class="luxury-overlay"><div class="luxury-loader-text">LUXURY LEAGUE</div><div style="color: #00C9FF; margin-top: 20px;">⚡ {text}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="luxury-overlay"><div class="luxury-loader-text">LUXURY LEAGUE</div><div class="loader-sub">⚡ {text}</div></div>', unsafe_allow_html=True)
     try: yield
     finally: placeholder.empty()
 
@@ -236,27 +244,9 @@ def calculate_heavy_analytics(current_week):
     return pd.DataFrame(data_rows)
 
 @st.cache_data(ttl=3600)
-def get_dynasty_data(current_year, start_year):
-    all_seasons_data = []
-    for y in range(start_year, current_year + 1):
-        try:
-            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
-            for team in hist_league.teams:
-                if team.owners:
-                    owner_id = team.owners[0]['id']
-                    owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
-                else:
-                    owner_id = f"Unknown_{team.team_id}"
-                    owner_name = f"Team {team.team_id}"
-                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for})
-        except Exception as e: continue
-    return pd.DataFrame(all_seasons_data)
-
-@st.cache_data(ttl=3600)
-def calculate_season_awards_v2(current_week):
+def calculate_season_awards(current_week):
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0} for t in league.teams}
-    
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
@@ -264,39 +254,29 @@ def calculate_season_awards_v2(current_week):
     for w in range(1, current_week + 1):
         box = league.box_scores(week=w)
         for game in box:
-            # Margin Logic
             margin = abs(game.home_score - game.away_score)
-            winner = game.home_team.team_name if game.home_score > game.away_score else game.away_team.team_name
-            loser = game.away_team.team_name if game.home_score > game.away_score else game.home_team.team_name
+            if game.home_score > game.away_score: winner, loser = game.home_team.team_name, game.away_team.team_name
+            else: winner, loser = game.away_team.team_name, game.home_team.team_name
             
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
-            
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
             
-            # Roster Logic
             def process(lineup, team_name):
                 for p in lineup:
-                    # MVP
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
                     player_points[p.playerId]["Points"] += p.points
+                    if p.slot_position == 'BE': team_stats[team_name]["Bench"] += p.points
+                    else: team_stats[team_name]["Starters"] += p.points
                     
-                    # Team Stats
-                    if p.slot_position == 'BE':
-                        team_stats[team_name]["Bench"] += p.points
-                    else:
-                        team_stats[team_name]["Starters"] += p.points
-                    
-                    # Sniper (Waiver Points) - Approximate using acquisitionType if available
-                    acq = getattr(p, 'acquisitionType', 'DRAFT')
-                    if acq == 'ADD':
-                        team_stats[team_name]["WaiverPts"] += p.points
-                        
-                    # Injuries
+                    # Injury Count
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
-                    if str(status).upper() in ['OUT', 'IR', 'RESERVE']:
-                        team_stats[team_name]["Injuries"] += 1
+                    if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
+                    
+                    # Waiver Points (Approx based on Add type if available)
+                    acq = getattr(p, 'acquisitionType', 'DRAFT')
+                    if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
 
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
@@ -304,7 +284,6 @@ def calculate_season_awards_v2(current_week):
     # Aggregations
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     
-    # Oracle (Efficiency)
     oracle_list = []
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
@@ -312,34 +291,23 @@ def calculate_season_awards_v2(current_week):
         oracle_list.append({"Team": t, "Eff": eff})
     oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     
-    # Sniper
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
-    
-    # Purple Heart
     purple = sorted([{"Team": t, "Count": s["Injuries"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
+    hoarder = sorted([{"Team": t, "Pts": s["Bench"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     
-    # Toilet Bowl (Lowest Total Points)
     sorted_teams_pts = sorted(league.teams, key=lambda x: x.points_for)
     toilet = sorted_teams_pts[0]
     
-    # Hoarder
-    hoarder = sorted([{"Team": t, "Pts": s["Bench"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
-
-    # Podium (Top 3 by Standing)
     standings = sorted(league.teams, key=lambda x: x.final_standing)
     podium = standings[:3]
-
+    
     return {
         "MVP": sorted_players[0] if sorted_players else None,
         "Podium": podium,
-        "Oracle": oracle,
-        "Sniper": sniper,
-        "Purple": purple,
+        "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
         "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": toilet.logo_url},
-        "Hoarder": hoarder,
-        "Blowout": biggest_blowout,
-        "Heartbreaker": heartbreaker,
-        "Single": single_game_high
+        "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
+        "Best Manager": {"Team": standings[0].team_name, "Points": standings[0].points_for, "Logo": standings[0].logo_url}
     }
 
 @st.cache_data(ttl=3600)
@@ -386,6 +354,25 @@ def scan_dark_pool(limit=15):
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
+
+@st.cache_data(ttl=3600)
+def get_dynasty_data(current_year, start_year):
+    all_seasons_data = []
+    for y in range(start_year, current_year + 1):
+        try:
+            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
+            for team in hist_league.teams:
+                if team.owners:
+                    owner_id = team.owners[0]['id']
+                    owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
+                else:
+                    owner_id = f"Unknown_{team.team_id}"
+                    owner_name = f"Team {team.team_id}"
+                made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
+                is_champ = 1 if team.final_standing == 1 else 0
+                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
+        except Exception as e: continue
+    return pd.DataFrame(all_seasons_data)
 
 def process_dynasty_leaderboard(df_history):
     if df_history.empty: return pd.DataFrame()
@@ -441,7 +428,6 @@ def analyze_nextgen_metrics_v3(roster, year):
                     if wopr > 0.7: verdict = "💎 ELITE"
                     elif sep > 3.5: verdict = "⚡ SEPARATOR"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
-                    
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
 
         elif pos == 'RB' and not df_rush.empty:
@@ -493,7 +479,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     with luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
-        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards_v2(current_week)
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
         if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
         pdf = PDF()
@@ -504,7 +490,6 @@ if st.sidebar.button("📄 Generate PDF Report"):
         awards = st.session_state["awards"]
         pdf.chapter_title("THE TROPHY ROOM")
         if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
-        if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
         
         if "playoff_odds" in st.session_state:
             pdf.chapter_title("PLAYOFF PROJECTIONS")
@@ -618,7 +603,8 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-# HERO ROW (Weekly Elite)
+
+# HERO ROW
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
 def render_hero_card(col, player):
@@ -650,7 +636,7 @@ if selected_page == P_LEDGER:
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(146, 254, 157, 0.8);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -694,20 +680,9 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    with col_main:
+    col_head, col_btn = st.columns([3, 1])
+    with col_head:
         st.header("🧬 The Lab (Next Gen Biometrics)")
-        
-        # TOP CONTROLS
-        col_sel, col_btn = st.columns([3, 1])
-        with col_sel:
-            team_list = [t.team_name for t in league.teams]
-            target_team = st.selectbox("Select Test Subject:", team_list)
-        with col_btn:
-             if st.button("🧪 Analyze Roster"):
-                 with luxury_spinner("Calibrating Satellites..."):
-                     st.session_state["trigger_lab"] = True
-                     st.rerun()
-
         with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
             st.markdown("""
             - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
@@ -721,42 +696,45 @@ elif selected_page == P_LAB:
             - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
             """)
     
-        if st.session_state.get("trigger_lab"):
+    team_list = [t.team_name for t in league.teams]
+    target_team = st.selectbox("Select Test Subject:", team_list)
+    
+    if st.button("🧪 Analyze Roster Efficiency"):
+        if lottie_lab: st_lottie(lottie_lab, height=200)
+        with luxury_spinner("Calibrating Tracking Satellites..."):
             roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-            # FORCE V3 (FALLBACK LOGIC)
             df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
             st.session_state["ngs_data"] = df_ngs
-            st.session_state["trigger_lab"] = False
             st.rerun()
             
-        if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
-            st.markdown("### 🔬 Biometric Results")
-            df_res = st.session_state["ngs_data"]
-            cols = st.columns(2)
-            for i, row in df_res.iterrows():
-                col = cols[i % 2]
-                with col:
-                    st.markdown(f"""
-                    <div class="luxury-card" style="border-left: 4px solid #00C9FF; display: flex; align-items: center;">
-                        <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{row['ID']}.png&w=80&h=60" 
-                            style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.3);">
-                        <div style="flex: 1;">
-                            <h4 style="margin:0; color: white; font-size: 1.1em;">{row['Player']}</h4>
-                            <div style="font-size: 0.8em; color: #a0aaba;">{row['Team']} • {row['Position']}</div>
-                            <div style="color: #00C9FF; font-weight: bold; font-size: 0.9em; margin-top: 4px;">{row['Verdict']}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 0.75em; color: #a0aaba;">{row['Metric']}</div>
-                            <div style="font-size: 1.4em; font-weight: bold; color: white;">{row['Value']}</div>
-                            <div style="font-size: 0.75em; color: #92FE9D;">{row['Alpha Stat']}</div>
-                        </div>
+    if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
+        st.markdown("### 🔬 Biometric Results")
+        df_res = st.session_state["ngs_data"]
+        cols = st.columns(2)
+        for i, row in df_res.iterrows():
+            col = cols[i % 2]
+            with col:
+                st.markdown(f"""
+                <div class="luxury-card" style="border-left: 4px solid #00C9FF; display: flex; align-items: center;">
+                    <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{row['ID']}.png&w=80&h=60" 
+                         style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.3);">
+                    <div style="flex: 1;">
+                        <h4 style="margin:0; color: white; font-size: 1.1em;">{row['Player']}</h4>
+                        <div style="font-size: 0.8em; color: #a0aaba;">{row['Team']} • {row['Position']}</div>
+                        <div style="color: #00C9FF; font-weight: bold; font-size: 0.9em; margin-top: 4px;">{row['Verdict']}</div>
                     </div>
-                    """, unsafe_allow_html=True)
-        elif "ngs_data" in st.session_state:
-            st.info("No Next Gen Data found for this roster (or API connection failed).")
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.75em; color: #a0aaba;">{row['Metric']}</div>
+                        <div style="font-size: 1.4em; font-weight: bold; color: white;">{row['Value']}</div>
+                        <div style="font-size: 0.75em; color: #92FE9D;">{row['Alpha Stat']}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    elif "ngs_data" in st.session_state:
+        st.info("No Next Gen Data found for this roster (or API connection failed).")
 
 elif selected_page == P_FORECAST:
-    with col_main: st.header("The Crystal Ball")
+    st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -778,8 +756,8 @@ elif selected_page == P_NEXT:
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.header("Next Week's Market Preview")
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
             h_proj, a_proj = game.home_projected, game.away_projected
@@ -832,6 +810,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -886,7 +865,7 @@ elif selected_page == P_TROPHY:
             
             # Do heavy work
             with luxury_spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards_v2(current_week)
+                st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
                 
                 # Safely get names for AI prompt
