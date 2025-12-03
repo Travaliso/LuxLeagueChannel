@@ -42,11 +42,11 @@ st.markdown("""
     }
 
     /* 3. TYPOGRAPHY */
-    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
+    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
 
-    /* 4. CARDS */
+    /* 4. LUXURY CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
         border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
@@ -54,6 +54,7 @@ st.markdown("""
     }
     .award-card { border-left: 4px solid #00C9FF; transition: transform 0.3s; }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
+    .award-blurb { color: #8a9ab0; font-size: 0.8rem; margin-top: -15px; margin-bottom: 10px; font-style: italic; }
     
     .shame-card { 
         background: rgba(40, 10, 10, 0.8); 
@@ -100,6 +101,8 @@ st.markdown("""
     }
     div[role="radiogroup"] label > div:first-child { display: none !important; }
     div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
+
+    /* 6. TABLES */
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
 
     /* 7. LOADING OVERLAY */
@@ -267,21 +270,21 @@ def calculate_season_awards(current_week):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
                     player_points[p.playerId]["Points"] += p.points
-                    if p.slot_position == 'BE': team_stats[team_name]["Bench"] += p.points
-                    else: team_stats[team_name]["Starters"] += p.points
                     
-                    # Injury Count
+                    if p.slot_position == 'BE':
+                        team_stats[team_name]["Bench"] += p.points
+                    else:
+                        team_stats[team_name]["Starters"] += p.points
+                    
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
                     if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
                     
-                    # Waiver Points (Approx based on Add type if available)
                     acq = getattr(p, 'acquisitionType', 'DRAFT')
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
 
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
 
-    # Aggregations
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     
     oracle_list = []
@@ -298,8 +301,10 @@ def calculate_season_awards(current_week):
     sorted_teams_pts = sorted(league.teams, key=lambda x: x.points_for)
     toilet = sorted_teams_pts[0]
     
-    standings = sorted(league.teams, key=lambda x: x.final_standing)
-    podium = standings[:3]
+    # Correct Podium Logic: Sort by Wins, then Points For
+    # This fixes the issue of "Final Standing" being unreliable mid-season
+    podium_sort = sorted(league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+    podium = podium_sort[:3]
     
     return {
         "MVP": sorted_players[0] if sorted_players else None,
@@ -307,7 +312,7 @@ def calculate_season_awards(current_week):
         "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
         "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": toilet.logo_url},
         "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
-        "Best Manager": {"Team": standings[0].team_name, "Points": standings[0].points_for, "Logo": standings[0].logo_url}
+        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": podium_sort[0].logo_url}
     }
 
 @st.cache_data(ttl=3600)
@@ -490,6 +495,7 @@ if st.sidebar.button("📄 Generate PDF Report"):
         awards = st.session_state["awards"]
         pdf.chapter_title("THE TROPHY ROOM")
         if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']} ({awards['MVP']['Points']:.1f} pts)")
+        if awards['Best Manager']: pdf.chapter_body(f"The Whale: {awards['Best Manager']['Team']} ({awards['Best Manager']['Points']:.1f} pts)")
         
         if "playoff_odds" in st.session_state:
             pdf.chapter_title("PLAYOFF PROJECTIONS")
@@ -603,8 +609,7 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-
-# HERO ROW
+# HERO ROW (Weekly Elite)
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
 def render_hero_card(col, player):
@@ -680,8 +685,7 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    col_head, col_btn = st.columns([3, 1])
-    with col_head:
+    with col_main:
         st.header("🧬 The Lab (Next Gen Biometrics)")
         with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
             st.markdown("""
@@ -810,7 +814,6 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
-            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -854,7 +857,7 @@ elif selected_page == P_TROPHY:
                 st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
                 
-                # Safe name extraction for AI
+                # Safely get names for AI prompt
                 mvp_name = awards_data['MVP']['Name'] if awards_data['MVP'] else "N/A"
                 best_mgr = awards_data['Best Manager']['Team'] if awards_data['Best Manager'] else "N/A"
                 
@@ -863,14 +866,12 @@ elif selected_page == P_TROPHY:
     else:
         awards = st.session_state["awards"]
         
-        # 1. AI Commentary (Fixed: Removed col_main)
         if "season_comm" in st.session_state:
              st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         
         st.divider()
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
 
-        # 2. THE PODIUM
         podium_teams = awards.get("Podium", [])
         p1 = podium_teams[0] if len(podium_teams) > 0 else None
         p2 = podium_teams[1] if len(podium_teams) > 1 else None
@@ -910,7 +911,6 @@ elif selected_page == P_TROPHY:
 
         st.markdown("---")
         
-        # 3. DEEP DIVE CARDS
         st.subheader("🎖️ Deep Dive Honors")
         col_a, col_b, col_c, col_d = st.columns(4)
         
@@ -922,6 +922,7 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF;">The Oracle</h4>
                 <div style="font-size: 1.2rem; font-weight: bold; color: white;">{ora['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{ora['Eff']:.1f}% Efficiency</div>
+                <div class="award-blurb">Best Start/Sit Decisions</div>
             </div>""", unsafe_allow_html=True)
 
         sni = awards['Sniper']
@@ -932,6 +933,7 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF;">The Sniper</h4>
                 <div style="font-size: 1.2rem; font-weight: bold; color: white;">{sni['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{sni['Pts']:.1f} Waiver Pts</div>
+                <div class="award-blurb">Most Points from Free Agents</div>
             </div>""", unsafe_allow_html=True)
             
         pur = awards['Purple']
@@ -942,6 +944,7 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF;">Purple Heart</h4>
                 <div style="font-size: 1.2rem; font-weight: bold; color: white;">{pur['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{pur['Count']} Injuries</div>
+                <div class="award-blurb">Most IR/Out Players Rostered</div>
             </div>""", unsafe_allow_html=True)
 
         hoa = awards['Hoarder']
@@ -952,9 +955,9 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF;">The Hoarder</h4>
                 <div style="font-size: 1.2rem; font-weight: bold; color: white;">{hoa['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{hoa['Pts']:.1f} Bench Pts</div>
+                <div class="award-blurb">Most Points Left on Bench</div>
             </div>""", unsafe_allow_html=True)
 
-        # 4. TOILET BOWL
         st.markdown("---")
         st.markdown("<h3 style='color: #FF4B4B; text-align: center;'>🚽 THE TOILET BOWL (Shame Section)</h3>", unsafe_allow_html=True)
         
@@ -969,6 +972,7 @@ elif selected_page == P_TROPHY:
                     <div style="color: #FF4B4B; font-weight: bold; letter-spacing: 1px;">LOWEST SCORING FRANCHISE</div>
                     <div style="font-size: 1.8rem; font-weight: 900; color: white;">{toilet['Team']}</div>
                     <div style="color: #aaa;">Only {toilet['Pts']:.1f} Total Points</div>
+                    <div class="award-blurb" style="color: #FF8888;">Fewest points scored all season</div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -979,4 +983,27 @@ elif selected_page == P_TROPHY:
                 <div style="color: #FF4B4B; font-weight: bold;">💥 BIGGEST BLOWOUT VICTIM</div>
                 <div style="font-size: 1.5rem; font-weight: 900; color: white; margin: 10px 0;">{blowout['Loser']}</div>
                 <div style="color: #aaa;">Destroyed by {blowout['Winner']} (+{blowout['Margin']:.1f} pts)</div>
+                <div class="award-blurb" style="color: #FF8888;">Worst single-game defeat</div>
             </div>""", unsafe_allow_html=True)
+            
+elif selected_page == P_VAULT:
+    st.header("⏳ The Dynasty Vault (All-Time History)")
+    st.caption(f"Tracking league history from {START_YEAR} to Present.")
+    if "dynasty_leaderboard" not in st.session_state:
+        if st.button("🔓 Unlock The Vault"):
+            with luxury_spinner(f"Traveling back to {START_YEAR}..."):
+                df_raw = get_dynasty_data(year, START_YEAR)
+                st.session_state["dynasty_raw"] = df_raw
+                st.session_state["dynasty_leaderboard"] = process_dynasty_leaderboard(df_raw)
+                st.rerun()
+    else:
+        st.subheader("🏛️ All-Time Leaderboard")
+        df_lead = st.session_state["dynasty_leaderboard"]
+        st.dataframe(df_lead, use_container_width=True, hide_index=True, column_config={"Manager": st.column_config.TextColumn("Manager", width="medium"), "Win %": st.column_config.ProgressColumn("Win %", format="%.1f%%", min_value=0, max_value=100), "Champ": st.column_config.NumberColumn("🏆 Rings"), "Playoffs": st.column_config.NumberColumn("🎟️ Playoff Apps"), "Points For": st.column_config.NumberColumn("Total Pts", format="%.0f")})
+        st.subheader("📉 Empire History")
+        df_chart = st.session_state["dynasty_raw"]
+        fig = px.line(df_chart, x="Year", y="Wins", color="Manager", markers=True, title="The Rise and Fall of Empires")
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", xaxis=dict(tickmode='linear', tick0=START_YEAR, dtick=1))
+        st.plotly_chart(fig, use_container_width=True)
+else:
+    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
