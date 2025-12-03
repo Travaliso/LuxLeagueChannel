@@ -25,7 +25,7 @@ START_YEAR = 2021
 
 st.markdown("""
     <style>
-    /* 1. HIDE DEFAULT STREAMLIT ELEMENTS */
+    /* 1. GLOBAL RESETS */
     header[data-testid="stHeader"] { display: none; }
     footer { display: none; }
     .block-container { padding-top: 1rem !important; }
@@ -45,29 +45,37 @@ st.markdown("""
     h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
     div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 10px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.8rem; }
-    
-    /* AWARD BLURBS */
-    .award-blurb { color: #a0aaba; font-size: 0.8rem; margin-top: 15px; margin-bottom: 10px; font-style: italic; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
 
-    /* 4. CARDS */
+    /* 4. LUXURY CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
         border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);
         padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
     
-    /* AWARD CARD - TALLER & CENTERED */
+    /* AWARD CARD - EXPANDED HEIGHT FOR BLURBS */
     .award-card { 
         border-left: 4px solid #00C9FF; 
         transition: transform 0.3s; 
-        min-height: 320px; 
+        min-height: 380px; /* Taller for text */
         display: flex;
         flex-direction: column;
-        justify-content: center;
+        justify-content: flex-start; /* Align top */
         align-items: center;
         text-align: center;
     }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
+    
+    .award-blurb { 
+        color: #a0aaba; 
+        font-size: 0.85rem; 
+        margin-top: 15px; 
+        font-style: normal; 
+        line-height: 1.5;
+        border-top: 1px solid rgba(255,255,255,0.1); 
+        padding-top: 10px; 
+        width: 100%;
+    }
     
     .shame-card { 
         background: rgba(40, 10, 10, 0.8); 
@@ -90,34 +98,28 @@ st.markdown("""
         backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
     .gold { 
-        height: 280px; width: 100%; 
+        height: 300px; width: 100%; 
         background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #FFD700; border-bottom: none;
     }
     .silver { 
-        height: 220px; width: 100%; 
+        height: 240px; width: 100%; 
         background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #C0C0C0; border-bottom: none;
     }
     .bronze { 
-        height: 180px; width: 100%; 
+        height: 200px; width: 100%; 
         background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); 
         border: 1px solid #CD7F32; border-bottom: none;
     }
     .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
 
-    /* 6. SIDEBAR & MENU FIX */
+    /* 6. SIDEBAR & MENU */
     section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
     div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
-    div[role="radiogroup"] label { 
-        padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; 
-        margin-bottom: 5px; border: 1px solid transparent; background-color: transparent;
-    }
+    div[role="radiogroup"] label { padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; margin-bottom: 5px; border: 1px solid transparent; background-color: transparent; }
     div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
-    div[role="radiogroup"] label[data-checked="true"] {
-        background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important;
-        border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important;
-    }
+    div[role="radiogroup"] label[data-checked="true"] { background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important; border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important; }
     div[role="radiogroup"] label > div:first-child { display: none !important; }
     div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
@@ -162,11 +164,32 @@ def load_lottieurl(url: str):
         return r.json()
     except: return None
 
-# LOGO HELPER
+# ROBUST LOGO HELPER
 def get_logo(team):
+    # Generic NFL Logo if user has no avatar or if the attribute is missing
     fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
-    try: return team.logo_url if team.logo_url else fallback
-    except: return fallback
+    try:
+        if hasattr(team, 'logo_url') and team.logo_url:
+            return team.logo_url
+        return fallback
+    except:
+        return fallback
+
+# NARRATIVE GENERATOR (Replaces simple stats with analysis)
+def generate_narrative(award_type, team_name, value, extra=""):
+    if award_type == "Oracle":
+        return f"The ultimate strategist. {team_name} squeezed every drop of potential from their roster, achieving a staggering **{value:.1f}% efficiency rating**. While others left points on the bench, this manager played the optimal lineup week in and week out."
+    elif award_type == "Sniper":
+        return f"Leagues are won on the waiver wire. {team_name} proved this by extracting **{value:.1f} points** from free agent acquisitions. This indicates high activity, sharp scouting, and a refusal to settle for a stagnant draft roster."
+    elif award_type == "Purple":
+        return f"A season defined by grit. {team_name} navigated a minefield of medical tents, managing **{value} separate injury designations**. Despite the constant roster shuffle and IR slots, they kept the team competitive."
+    elif award_type == "Hoarder":
+        return f"An embarrassment of riches—or a hesitation to trade? {team_name} left **{value:.1f} points** on the bench this season. This suggests incredible depth, but perhaps a missed opportunity to consolidate talent."
+    elif award_type == "Toilet":
+        return f"The offense simply couldn't launch. Scoring only **{value:.1f} total points**, {team_name} struggled to find the endzone. A complete rebuild of the offensive strategy is needed for next year."
+    elif award_type == "Blowout":
+        return f"A historic beatdown. In Week {extra}, {team_name} suffered a margin of defeat of **{value:.1f} points**. It was a week where everything went wrong against an opponent where everything went right."
+    return ""
 
 @contextmanager
 def luxury_spinner(text="Initializing Protocol..."):
@@ -270,7 +293,7 @@ def calculate_heavy_analytics(current_week):
     return pd.DataFrame(data_rows)
 
 @st.cache_data(ttl=3600)
-def calculate_season_awards_v2(current_week):
+def calculate_season_awards(current_week):
     player_points = {}
     # INIT WITH LOGO TO PREVENT KEY ERROR
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in league.teams}
@@ -511,7 +534,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     with luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
-        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards_v2(current_week)
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
         if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
         pdf = PDF()
@@ -712,33 +735,36 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    col_head, col_btn = st.columns([3, 1])
-    with col_head:
+    with col_main:
         st.header("🧬 The Lab (Next Gen Biometrics)")
-    with col_btn:
-         if st.button("🧪 Analyze Roster"):
-             with luxury_spinner("Calibrating Satellites..."):
-                 st.session_state["trigger_lab"] = True
-                 st.rerun()
+        
+        # TOP CONTROLS
+        col_sel, col_btn = st.columns([3, 1])
+        with col_sel:
+            team_list = [t.team_name for t in league.teams]
+            target_team = st.selectbox("Select Test Subject:", team_list)
+        with col_btn:
+             if st.button("🧪 Analyze Roster"):
+                 with luxury_spinner("Calibrating Satellites..."):
+                     st.session_state["trigger_lab"] = True
+                     st.rerun()
 
-    with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
-        st.markdown("""
-        - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
-        - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
-        - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
-        - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
-        - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
-        - **Separation:** Yards of distance from nearest defender at catch.
-        - **CPOE:** Completion Percentage Over Expectation.
-        - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
-        - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
-        """)
-    
-    team_list = [t.team_name for t in league.teams]
-    target_team = st.selectbox("Select Test Subject:", team_list)
+        with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
+            st.markdown("""
+            - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
+            - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
+            - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
+            - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
+            - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
+            - **Separation:** Yards of distance from nearest defender at catch.
+            - **CPOE:** Completion Percentage Over Expectation.
+            - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
+            - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
+            """)
     
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+        # FORCE V3 (FALLBACK LOGIC)
         df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
         st.session_state["ngs_data"] = df_ngs
         st.session_state["trigger_lab"] = False
@@ -771,7 +797,7 @@ elif selected_page == P_LAB:
         st.info("No Next Gen Data found for this roster (or API connection failed).")
 
 elif selected_page == P_FORECAST:
-    st.header("The Crystal Ball")
+    with col_main: st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -793,7 +819,7 @@ elif selected_page == P_NEXT:
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
@@ -847,6 +873,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -901,7 +928,7 @@ elif selected_page == P_TROPHY:
             
             # Do heavy work
             with luxury_spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards_v2(current_week)
+                st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
                 
                 # Safely get names for AI prompt
@@ -920,7 +947,7 @@ elif selected_page == P_TROPHY:
         
         # 1. AI Commentary
         if "season_comm" in st.session_state:
-             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         
         st.divider()
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
@@ -973,7 +1000,22 @@ elif selected_page == P_TROPHY:
         st.subheader("🎖️ Deep Dive Honors")
         col_a, col_b, col_c, col_d = st.columns(4)
         
-        # Oracle
+        # Oracle (Generate Narrative Helper)
+        def generate_narrative(award_type, team_name, value, extra=""):
+            if award_type == "Oracle":
+                return f"The ultimate strategist. {team_name} squeezed every drop of potential from their roster, achieving a staggering **{value:.1f}% efficiency rating**. While others left points on the bench, this manager played the optimal lineup week in and week out."
+            elif award_type == "Sniper":
+                return f"Leagues are won on the waiver wire. {team_name} proved this by extracting **{value:.1f} points** from free agent acquisitions. This indicates high activity, sharp scouting, and a refusal to settle for a stagnant draft roster."
+            elif award_type == "Purple":
+                return f"A season defined by grit. {team_name} navigated a minefield of medical tents, managing **{value} separate injury designations**. Despite the constant roster shuffle and IR slots, they kept the team competitive."
+            elif award_type == "Hoarder":
+                return f"An embarrassment of riches—or a hesitation to trade? {team_name} left **{value:.1f} points** on the bench this season. This suggests incredible depth, but perhaps a missed opportunity to consolidate talent."
+            elif award_type == "Toilet":
+                return f"The offense simply couldn't launch. Scoring only **{value:.1f} total points**, {team_name} struggled to find the endzone. A complete rebuild of the offensive strategy is needed for next year."
+            elif award_type == "Blowout":
+                return f"A historic beatdown. In Week {extra}, {team_name} suffered a margin of defeat of **{value:.1f} points**. It was a week where everything went wrong against an opponent where everything went right."
+            return ""
+
         ora = awards['Oracle']
         with col_a:
             st.markdown(f"""
@@ -982,10 +1024,9 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF; margin: 0;">The Oracle</h4>
                 <div style="font-size: 1.1rem; font-weight: bold; color: white;">{ora['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{ora['Eff']:.1f}% Efficiency</div>
-                <div class="award-blurb">Most optimal lineups set all season.</div>
+                <div class="award-blurb">{generate_narrative("Oracle", ora['Team'], ora['Eff'])}</div>
             </div>""", unsafe_allow_html=True)
 
-        # Sniper
         sni = awards['Sniper']
         with col_b:
             st.markdown(f"""
@@ -994,10 +1035,9 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF; margin: 0;">The Sniper</h4>
                 <div style="font-size: 1.1rem; font-weight: bold; color: white;">{sni['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{sni['Pts']:.1f} Waiver Pts</div>
-                <div class="award-blurb">Highest production from free agent pickups.</div>
+                <div class="award-blurb">{generate_narrative("Sniper", sni['Team'], sni['Pts'])}</div>
             </div>""", unsafe_allow_html=True)
             
-        # Purple Heart
         pur = awards['Purple']
         with col_c:
             st.markdown(f"""
@@ -1006,10 +1046,9 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF; margin: 0;">Purple Heart</h4>
                 <div style="font-size: 1.1rem; font-weight: bold; color: white;">{pur['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{pur['Count']} Injuries</div>
-                <div class="award-blurb">Survived the most IR/Out designations.</div>
+                <div class="award-blurb">{generate_narrative("Purple", pur['Team'], pur['Count'])}</div>
             </div>""", unsafe_allow_html=True)
 
-        # Hoarder
         hoa = awards['Hoarder']
         with col_d:
             st.markdown(f"""
@@ -1018,7 +1057,7 @@ elif selected_page == P_TROPHY:
                 <h4 style="color: #00C9FF; margin: 0;">The Hoarder</h4>
                 <div style="font-size: 1.1rem; font-weight: bold; color: white;">{hoa['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{hoa['Pts']:.1f} Bench Pts</div>
-                <div class="award-blurb">Most points left on the bench.</div>
+                <div class="award-blurb">{generate_narrative("Hoarder", hoa['Team'], hoa['Pts'])}</div>
             </div>""", unsafe_allow_html=True)
 
         # 4. TOILET BOWL
@@ -1027,7 +1066,6 @@ elif selected_page == P_TROPHY:
         
         t_col1, t_col2 = st.columns(2)
         
-        # Last Place / Lowest Points
         toilet = awards['Toilet']
         with t_col1:
             st.markdown(f"""
@@ -1037,11 +1075,10 @@ elif selected_page == P_TROPHY:
                     <div style="color: #FF4B4B; font-weight: bold; letter-spacing: 1px;">LOWEST SCORING FRANCHISE</div>
                     <div style="font-size: 1.8rem; font-weight: 900; color: white;">{toilet['Team']}</div>
                     <div style="color: #aaa;">Only {toilet['Pts']:.1f} Total Points</div>
-                    <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">Anemic offense all year.</div>
+                    <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">{generate_narrative("Toilet", toilet['Team'], toilet['Pts'])}</div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
-        # Biggest Blowout Victim
         blowout = awards['Blowout']
         with t_col2:
             st.markdown(f"""
@@ -1049,7 +1086,7 @@ elif selected_page == P_TROPHY:
                 <div style="color: #FF4B4B; font-weight: bold;">💥 BIGGEST BLOWOUT VICTIM</div>
                 <div style="font-size: 1.5rem; font-weight: 900; color: white; margin: 10px 0;">{blowout['Loser']}</div>
                 <div style="color: #aaa;">Destroyed by {blowout['Winner']} (+{blowout['Margin']:.1f} pts)</div>
-                <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">A historic beatdown.</div>
+                <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">{generate_narrative("Blowout", blowout['Loser'], blowout['Margin'], blowout['Week'])}</div>
             </div>""", unsafe_allow_html=True)
             
 elif selected_page == P_VAULT:
