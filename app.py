@@ -42,24 +42,52 @@ st.markdown("""
     }
 
     /* 3. TYPOGRAPHY */
-    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 15px rgba(0, 201, 255, 0.6); }
-    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
+    h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 10px rgba(0, 201, 255, 0.6); }
+    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.8rem; }
 
     /* 4. LUXURY CARDS */
     .luxury-card {
         background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%);
-        border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 24px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     }
-    .award-card { border-left: 4px solid #00C9FF; transition: transform 0.3s; }
+    
+    /* AWARD CARD - TALLER & CENTERED */
+    .award-card { 
+        border-left: 4px solid #00C9FF; 
+        transition: transform 0.3s; 
+        min-height: 320px; /* FORCE HEIGHT TO PREVENT OVERLAP */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
-    .award-blurb { color: #8a9ab0; font-size: 0.8rem; margin-top: -15px; margin-bottom: 10px; font-style: italic; }
+    
+    /* NARRATIVE BLURB STYLE */
+    .award-blurb { 
+        color: #a0aaba; 
+        font-size: 0.85rem; 
+        margin-top: 15px; 
+        font-style: italic; 
+        line-height: 1.4;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        padding-top: 10px;
+        width: 100%;
+    }
     
     .shame-card { 
         background: rgba(40, 10, 10, 0.8); 
         border: 1px solid #FF4B4B; 
         border-left: 4px solid #FF4B4B; 
+        min-height: 250px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
     }
     .studio-box { border-left: 4px solid #7209b7; }
 
@@ -101,8 +129,6 @@ st.markdown("""
     }
     div[role="radiogroup"] label > div:first-child { display: none !important; }
     div[data-testid="stMarkdownContainer"] p { font-size: 1rem; }
-
-    /* 6. TABLES */
     div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
 
     /* 7. LOADING OVERLAY */
@@ -137,6 +163,15 @@ try:
 except Exception as e:
     st.error(f"🔒 Connection Error: {e}")
     st.stop()
+
+# LOGO HELPER (Fixes missing images)
+def get_logo(team):
+    # Generic NFL Logo if user has no avatar
+    fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
+    try:
+        return team.logo_url if team.logo_url else fallback
+    except:
+        return fallback
 
 def load_lottieurl(url: str):
     try:
@@ -247,9 +282,10 @@ def calculate_heavy_analytics(current_week):
     return pd.DataFrame(data_rows)
 
 @st.cache_data(ttl=3600)
-def calculate_season_awards(current_week):
+def calculate_season_awards_v2(current_week):
     player_points = {}
-    team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0} for t in league.teams}
+    team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in league.teams}
+    
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
@@ -270,15 +306,10 @@ def calculate_season_awards(current_week):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
                     player_points[p.playerId]["Points"] += p.points
-                    
-                    if p.slot_position == 'BE':
-                        team_stats[team_name]["Bench"] += p.points
-                    else:
-                        team_stats[team_name]["Starters"] += p.points
-                    
+                    if p.slot_position == 'BE': team_stats[team_name]["Bench"] += p.points
+                    else: team_stats[team_name]["Starters"] += p.points
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
                     if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
-                    
                     acq = getattr(p, 'acquisitionType', 'DRAFT')
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
 
@@ -291,18 +322,16 @@ def calculate_season_awards(current_week):
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
         eff = (s["Starters"] / total * 100) if total > 0 else 0
-        oracle_list.append({"Team": t, "Eff": eff})
+        oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
     oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     
-    sniper = sorted([{"Team": t, "Pts": s["WaiverPts"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
-    purple = sorted([{"Team": t, "Count": s["Injuries"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
-    hoarder = sorted([{"Team": t, "Pts": s["Bench"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
+    sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
+    purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
+    hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     
     sorted_teams_pts = sorted(league.teams, key=lambda x: x.points_for)
     toilet = sorted_teams_pts[0]
     
-    # Correct Podium Logic: Sort by Wins, then Points For
-    # This fixes the issue of "Final Standing" being unreliable mid-season
     podium_sort = sorted(league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
     podium = podium_sort[:3]
     
@@ -310,9 +339,9 @@ def calculate_season_awards(current_week):
         "MVP": sorted_players[0] if sorted_players else None,
         "Podium": podium,
         "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
-        "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": toilet.logo_url},
+        "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": get_logo(toilet)},
         "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
-        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": podium_sort[0].logo_url}
+        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": get_logo(podium_sort[0])}
     }
 
 @st.cache_data(ttl=3600)
@@ -433,6 +462,7 @@ def analyze_nextgen_metrics_v3(roster, year):
                     if wopr > 0.7: verdict = "💎 ELITE"
                     elif sep > 3.5: verdict = "⚡ SEPARATOR"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
+                    
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
 
         elif pos == 'RB' and not df_rush.empty:
@@ -484,7 +514,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     with luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated for PDF."
-        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards(current_week)
+        if "awards" not in st.session_state: st.session_state["awards"] = calculate_season_awards_v2(current_week)
         if "playoff_odds" not in st.session_state: st.session_state["playoff_odds"] = run_monte_carlo_simulation()
 
         pdf = PDF()
@@ -641,7 +671,7 @@ if selected_page == P_LEDGER:
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(146, 254, 157, 0.8);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -685,20 +715,19 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    with col_main:
-        st.header("🧬 The Lab (Next Gen Biometrics)")
-        with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
-            st.markdown("""
-            - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
-            - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
-            - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
-            - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
-            - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
-            - **Separation:** Yards of distance from nearest defender at catch.
-            - **CPOE:** Completion Percentage Over Expectation.
-            - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
-            - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
-            """)
+    st.header("🧬 The Lab (Next Gen Biometrics)")
+    with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
+        st.markdown("""
+        - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
+        - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
+        - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
+        - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
+        - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
+        - **Separation:** Yards of distance from nearest defender at catch.
+        - **CPOE:** Completion Percentage Over Expectation.
+        - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
+        - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
+        """)
     
     team_list = [t.team_name for t in league.teams]
     target_team = st.selectbox("Select Test Subject:", team_list)
@@ -852,9 +881,23 @@ elif selected_page == P_DARK:
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
-        if st.button("🏅 Unveil Awards"):
+        # 1. Setup Container for Button + Animation
+        btn_container = st.empty()
+        lottie_container = st.empty()
+        
+        # 2. Button triggers logic
+        if btn_container.button("🏅 Unveil Awards"):
+            # Hide button
+            btn_container.empty()
+            
+            # Show animation
+            if lottie_trophy: 
+                with lottie_container:
+                    st_lottie(lottie_trophy, height=200, key="trophy_anim")
+            
+            # Do heavy work
             with luxury_spinner("Engraving trophies..."):
-                st.session_state["awards"] = calculate_season_awards(current_week)
+                st.session_state["awards"] = calculate_season_awards_v2(current_week)
                 awards_data = st.session_state["awards"]
                 
                 # Safely get names for AI prompt
@@ -862,28 +905,39 @@ elif selected_page == P_TROPHY:
                 best_mgr = awards_data['Best Manager']['Team'] if awards_data['Best Manager'] else "N/A"
                 
                 st.session_state["season_comm"] = get_season_retrospective(mvp_name, best_mgr)
-                st.rerun()
+            
+            # Clear animation and reload
+            lottie_container.empty()
+            st.rerun()
+
     else:
+        # --- RENDER THE AWARDS UI ---
         awards = st.session_state["awards"]
         
+        # 1. AI Commentary
         if "season_comm" in st.session_state:
              st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         
         st.divider()
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
 
-        podium_teams = awards.get("Podium", [])
+        # 2. THE PODIUM (CSS GRID)
+        # Get Top 3 from Awards Data
+        podium_teams = awards.get("Podium", []) # List of team objects
+        
+        # Safety Check if less than 3 teams
         p1 = podium_teams[0] if len(podium_teams) > 0 else None
         p2 = podium_teams[1] if len(podium_teams) > 1 else None
         p3 = podium_teams[2] if len(podium_teams) > 2 else None
 
+        # Render Columns
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         
         with c_silv:
             if p2:
                 st.markdown(f"""
                 <div class="podium-step silver">
-                    <img src="{p2.logo_url}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #C0C0C0; margin: 0 auto; display: block;">
+                    <img src="{get_logo(p2)}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #C0C0C0; margin: 0 auto; display: block;">
                     <div style="color: #fff; font-weight: bold; font-size: 1.1rem; margin-top: 10px;">{p2.team_name}</div>
                     <div style="color: #C0C0C0; font-size: 0.9rem;">{p2.wins}-{p2.losses}</div>
                     <div class="rank-num">2</div>
@@ -893,7 +947,7 @@ elif selected_page == P_TROPHY:
             if p1:
                 st.markdown(f"""
                 <div class="podium-step gold">
-                    <img src="{p1.logo_url}" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid #FFD700; margin: 0 auto; display: block; box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);">
+                    <img src="{get_logo(p1)}" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid #FFD700; margin: 0 auto; display: block; box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);">
                     <div style="color: #fff; font-weight: 900; font-size: 1.4rem; margin-top: 15px;">{p1.team_name}</div>
                     <div style="color: #FFD700; font-size: 1rem;">{p1.wins}-{p1.losses}</div>
                     <div class="rank-num">1</div>
@@ -903,7 +957,7 @@ elif selected_page == P_TROPHY:
             if p3:
                 st.markdown(f"""
                 <div class="podium-step bronze">
-                    <img src="{p3.logo_url}" style="width: 70px; height: 70px; border-radius: 50%; border: 3px solid #CD7F32; margin: 0 auto; display: block;">
+                    <img src="{get_logo(p3)}" style="width: 70px; height: 70px; border-radius: 50%; border: 3px solid #CD7F32; margin: 0 auto; display: block;">
                     <div style="color: #fff; font-weight: bold; font-size: 1.1rem; margin-top: 10px;">{p3.team_name}</div>
                     <div style="color: #CD7F32; font-size: 0.9rem;">{p3.wins}-{p3.losses}</div>
                     <div class="rank-num">3</div>
@@ -911,58 +965,65 @@ elif selected_page == P_TROPHY:
 
         st.markdown("---")
         
+        # 3. DEEP DIVE CARDS
         st.subheader("🎖️ Deep Dive Honors")
         col_a, col_b, col_c, col_d = st.columns(4)
         
+        # Oracle
         ora = awards['Oracle']
         with col_a:
             st.markdown(f"""
             <div class="luxury-card award-card" style="text-align: center;">
-                <div style="font-size: 2rem;">🧠</div>
-                <h4 style="color: #00C9FF;">The Oracle</h4>
-                <div style="font-size: 1.2rem; font-weight: bold; color: white;">{ora['Team']}</div>
+                <img src="{ora['Logo']}" style="width: 60px; border-radius: 50%; margin-bottom: 10px;">
+                <h4 style="color: #00C9FF; margin: 0;">The Oracle</h4>
+                <div style="font-size: 1.1rem; font-weight: bold; color: white;">{ora['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{ora['Eff']:.1f}% Efficiency</div>
-                <div class="award-blurb">Best Start/Sit Decisions</div>
+                <div class="award-blurb">Most optimal lineups set all season.</div>
             </div>""", unsafe_allow_html=True)
 
+        # Sniper
         sni = awards['Sniper']
         with col_b:
             st.markdown(f"""
             <div class="luxury-card award-card" style="text-align: center;">
-                <div style="font-size: 2rem;">🎣</div>
-                <h4 style="color: #00C9FF;">The Sniper</h4>
-                <div style="font-size: 1.2rem; font-weight: bold; color: white;">{sni['Team']}</div>
+                <img src="{sni['Logo']}" style="width: 60px; border-radius: 50%; margin-bottom: 10px;">
+                <h4 style="color: #00C9FF; margin: 0;">The Sniper</h4>
+                <div style="font-size: 1.1rem; font-weight: bold; color: white;">{sni['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{sni['Pts']:.1f} Waiver Pts</div>
-                <div class="award-blurb">Most Points from Free Agents</div>
+                <div class="award-blurb">Highest production from free agent pickups.</div>
             </div>""", unsafe_allow_html=True)
             
+        # Purple Heart
         pur = awards['Purple']
         with col_c:
             st.markdown(f"""
             <div class="luxury-card award-card" style="text-align: center;">
-                <div style="font-size: 2rem;">🚑</div>
-                <h4 style="color: #00C9FF;">Purple Heart</h4>
-                <div style="font-size: 1.2rem; font-weight: bold; color: white;">{pur['Team']}</div>
+                <img src="{pur['Logo']}" style="width: 60px; border-radius: 50%; margin-bottom: 10px;">
+                <h4 style="color: #00C9FF; margin: 0;">Purple Heart</h4>
+                <div style="font-size: 1.1rem; font-weight: bold; color: white;">{pur['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{pur['Count']} Injuries</div>
-                <div class="award-blurb">Most IR/Out Players Rostered</div>
+                <div class="award-blurb">Survived the most IR/Out designations.</div>
             </div>""", unsafe_allow_html=True)
 
+        # Hoarder
         hoa = awards['Hoarder']
         with col_d:
             st.markdown(f"""
             <div class="luxury-card award-card" style="text-align: center;">
-                <div style="font-size: 2rem;">📦</div>
-                <h4 style="color: #00C9FF;">The Hoarder</h4>
-                <div style="font-size: 1.2rem; font-weight: bold; color: white;">{hoa['Team']}</div>
+                <img src="{hoa['Logo']}" style="width: 60px; border-radius: 50%; margin-bottom: 10px;">
+                <h4 style="color: #00C9FF; margin: 0;">The Hoarder</h4>
+                <div style="font-size: 1.1rem; font-weight: bold; color: white;">{hoa['Team']}</div>
                 <div style="color: #a0aaba; font-size: 0.8rem;">{hoa['Pts']:.1f} Bench Pts</div>
-                <div class="award-blurb">Most Points Left on Bench</div>
+                <div class="award-blurb">Most points left rotting on the bench.</div>
             </div>""", unsafe_allow_html=True)
 
+        # 4. TOILET BOWL
         st.markdown("---")
         st.markdown("<h3 style='color: #FF4B4B; text-align: center;'>🚽 THE TOILET BOWL (Shame Section)</h3>", unsafe_allow_html=True)
         
         t_col1, t_col2 = st.columns(2)
         
+        # Last Place / Lowest Points
         toilet = awards['Toilet']
         with t_col1:
             st.markdown(f"""
@@ -972,10 +1033,11 @@ elif selected_page == P_TROPHY:
                     <div style="color: #FF4B4B; font-weight: bold; letter-spacing: 1px;">LOWEST SCORING FRANCHISE</div>
                     <div style="font-size: 1.8rem; font-weight: 900; color: white;">{toilet['Team']}</div>
                     <div style="color: #aaa;">Only {toilet['Pts']:.1f} Total Points</div>
-                    <div class="award-blurb" style="color: #FF8888;">Fewest points scored all season</div>
+                    <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">Anemic offense all year.</div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
+        # Biggest Blowout Victim
         blowout = awards['Blowout']
         with t_col2:
             st.markdown(f"""
@@ -983,7 +1045,7 @@ elif selected_page == P_TROPHY:
                 <div style="color: #FF4B4B; font-weight: bold;">💥 BIGGEST BLOWOUT VICTIM</div>
                 <div style="font-size: 1.5rem; font-weight: 900; color: white; margin: 10px 0;">{blowout['Loser']}</div>
                 <div style="color: #aaa;">Destroyed by {blowout['Winner']} (+{blowout['Margin']:.1f} pts)</div>
-                <div class="award-blurb" style="color: #FF8888;">Worst single-game defeat</div>
+                <div class="award-blurb" style="color: #FF8888; border-top: 1px solid #FF4B4B;">A historic beatdown.</div>
             </div>""", unsafe_allow_html=True)
             
 elif selected_page == P_VAULT:
