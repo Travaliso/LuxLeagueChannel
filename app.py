@@ -303,7 +303,7 @@ def scan_dark_pool(limit=15):
             status_str = str(status).upper()
             
             # Skip if status is any form of unavailable
-            if status_str in ['OUT', 'IR', 'INJURED RESERVE', 'INJURED_RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']:
+            if status_str in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']:
                 continue
                 
             total = player.total_points if player.total_points > 0 else player.projected_total_points
