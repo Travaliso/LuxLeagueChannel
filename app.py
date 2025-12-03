@@ -296,39 +296,19 @@ def run_monte_carlo_simulation(simulations=1000):
 
 @st.cache_data(ttl=3600)
 def scan_dark_pool(limit=20):
-    # Fetch 150 to find healthy players
     free_agents = league.free_agents(size=150)
     pool_data = []
-    
     for player in free_agents:
         try:
-            # 1. Safe Status Check
-            raw_status = getattr(player, 'injuryStatus', 'NORMAL')
-            if raw_status is None: raw_status = 'NORMAL'
-            status = str(raw_status).upper()
-            
-            # 2. Filter Dead Weight (Keep Questionable)
-            if any(k in status for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): 
-                continue
-                
-            # 3. Points Calculation
+            status = getattr(player, 'injuryStatus', 'ACTIVE')
+            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
+            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
             total = player.total_points if player.total_points > 0 else player.projected_total_points
             weeks = league.current_week if league.current_week > 0 else 1
             avg_pts = total / weeks
-            
-            # 4. Lower Threshold for results
             if avg_pts > 0.5:
-                pool_data.append({
-                    "Name": player.name, 
-                    "Position": player.position, 
-                    "Team": player.proTeam, 
-                    "Avg Pts": avg_pts, 
-                    "Total Pts": total, 
-                    "ID": player.playerId, 
-                    "Status": status
-                })
+                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
         except: continue
-            
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
@@ -476,64 +456,65 @@ if st.sidebar.button("📄 Generate PDF Report"):
         st.sidebar.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# 6. AI HELPERS (MULTI-MODAL LONG FORM)
+# 5. DATA PROCESSING & AI
 # ------------------------------------------------------------------
-def get_openai_client():
-    if not openai_key: return None
-    return OpenAI(api_key=openai_key)
+if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
+    with luxury_spinner(f"Accessing Week {selected_week} Data..."):
+        st.session_state['box_scores'] = league.box_scores(week=selected_week)
+        st.session_state['week'] = selected_week
+    st.rerun()
 
-def get_weekly_recap():
-    client = get_openai_client()
-    if not client: return "⚠️ Add 'openai_key' to secrets."
-    top_scorer = df_eff.iloc[0]['Team']
-    prompt = f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Go into detail about the matchups. Style: Wall Street Report. Do not be brief."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
-    except: return "Analyst Offline."
+box_scores = st.session_state['box_scores']
+matchup_data, efficiency_data, all_active_players, bench_highlights = [], [], [], []
 
-def get_rankings_commentary():
+# IMPORTANT: Calculate df_players HERE so it exists before Section 7
+for game in box_scores:
+    home, away = game.home_team, game.away_team
+    def get_roster_data(lineup, team_name):
+        starters, bench, p_start, p_bench = [], [], 0, 0
+        for p in lineup:
+            info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
+            status = getattr(p, 'injuryStatus', 'ACTIVE')
+            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
+            is_injured = any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
+            if p.slot_position == 'BE':
+                bench.append(info); p_bench += p.points
+                if p.points > 15: bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
+            else:
+                starters.append(info); p_start += p.points
+                if not is_injured: all_active_players.append({"Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId})
+        return starters, bench, p_start, p_bench
+
+    h_r, h_br, h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
+    a_r, a_br, a_s, a_b = get_roster_data(game.away_lineup, away.team_name)
+    matchup_data.append({"Home": home.team_name, "Home Score": game.home_score, "Home Logo": home.logo_url, "Home Roster": h_r, "Away": away.team_name, "Away Score": game.away_score, "Away Logo": away.logo_url, "Away Roster": a_r})
+    efficiency_data.append({"Team": home.team_name, "Starters": h_s, "Bench": h_b, "Total Potential": h_s + h_b})
+    efficiency_data.append({"Team": away.team_name, "Starters": a_s, "Bench": a_b, "Total Potential": a_s + a_b})
+
+df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
+df_players = pd.DataFrame(all_active_players)
+if not df_players.empty:
+    df_players = df_players.sort_values(by="Points", ascending=False).head(5)
+else:
+    df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"]) # Fallback empty df
+
+df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
+
+# ------------------------------------------------------------------
+# 6. AI HELPERS
+# ------------------------------------------------------------------
+def get_openai_client(): return OpenAI(api_key=openai_key) if openai_key else None
+def ai_response(prompt, tokens=600):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
-    top = df_eff.iloc[0]['Team']
-    bottom = df_eff.iloc[-1]['Team']
-    prompt = f"Write a 5-8 sentence commentary on the Power Rankings. Praise the #1 team {top} and ruthlessly mock the last place team {bottom}. Analyze why the bottom team is failing. Style: Stephen A. Smith / Hot Take."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_next_week_preview(games_list):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
-    prompt = f"Act as a Vegas Sports Bookie. Provide a DETAILED breakdown (5-10 sentences) of next week's matchups: {matchups_str}. Pick one 'Lock of the Week' and one 'Upset Alert' and explain WHY with data."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_season_retrospective(mvp, best_mgr):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    prompt = f"Write a comprehensive 'State of the Union' address (8-12 sentences) for the Fantasy League. MVP is {mvp}. Best Manager is {best_mgr}. Reflect on the season's glory, the tragedies, and the future. Style: Presidential / Epic."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
-    client = get_openai_client()
-    if not client: return "⚠️ Analyst Offline."
-    prompt = f"""
-    Act as a high-stakes Trade Broker. Analyze these two rosters and propose a fair, win-win trade.
-    
-    Team A ({team_a}): {', '.join(roster_a)}
-    Team B ({team_b}): {', '.join(roster_b)}
-    
-    Identify surplus/needs for both. Suggest a specific player-for-player swap. Explain the 'Why' for both sides.
-    Style: Jerry Maguire / Wolf of Wall Street.
-    """
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except: return "Analyst Offline."
 
 def get_ai_scouting_report(free_agents_str):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
     prompt = f"""
-    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool):
+    You are an elite NFL Talent Scout. Here is a list of available, healthy free agents (The Dark Pool):
     {free_agents_str}
     
     Identify 3 "Must Add" players.
@@ -543,15 +524,53 @@ def get_ai_scouting_report(free_agents_str):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=500).choices[0].message.content
     except: return "Analyst Offline."
 
+def get_weekly_recap():
+    client = get_openai_client()
+    if not client: return "⚠️ Add 'openai_key' to secrets."
+    top_scorer = df_eff.iloc[0]['Team']
+    prompt = f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_scorer}. Style: Wall Street Report."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_rankings_commentary():
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    top = df_eff.iloc[0]['Team']
+    bottom = df_eff.iloc[-1]['Team']
+    prompt = f"Write a 5-8 sentence commentary on Power Rankings. Praise {top} and mock {bottom}. Style: Stephen A. Smith."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_next_week_preview(games_list):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
+    prompt = f"Act as a Vegas Sports Bookie. Provide a detailed preview of next week's matchups: {matchups_str}. Pick 'Lock of the Week' and 'Upset Alert'."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=800).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_season_retrospective(mvp, best_mgr):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    prompt = f"Write a 'State of the Union' address for the league. MVP: {mvp}. Best Manager: {best_mgr}. Style: Presidential."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=1000).choices[0].message.content
+    except: return "Analyst Offline."
+
+def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
+    client = get_openai_client()
+    if not client: return "⚠️ Analyst Offline."
+    prompt = f"Act as Trade Broker. Propose a fair trade between Team A ({team_a}): {roster_a} and Team B ({team_b}): {roster_b}. Explain why."
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=600).choices[0].message.content
+    except: return "Analyst Offline."
+
 # ------------------------------------------------------------------
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# --- HORIZONTAL HERO ROW (Weekly Elite) ---
+# HERO ROW (Weekly Elite) - NOW df_players IS GUARANTEED TO EXIST
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
-
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""
@@ -566,43 +585,25 @@ def render_hero_card(col, player):
         </div>
         """, unsafe_allow_html=True)
 
-top_3 = df_players.head(3).reset_index(drop=True)
-if len(top_3) >= 1: render_hero_card(hero_c1, top_3.iloc[0])
-if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
-if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
-
+# Only render if we have data
+if not df_players.empty:
+    top_3 = df_players.head(3).reset_index(drop=True)
+    if len(top_3) >= 1: render_hero_card(hero_c1, top_3.iloc[0])
+    if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
+    if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
 st.markdown("---")
 
-# PAGE ROUTING
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
             st.session_state["recap"] = get_weekly_recap()
-    
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.header("Weekly Transactions")
-    
     m_col1, m_col2 = st.columns(2)
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""
-            <div class="luxury-card" style="padding: 15px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="text-align: center; width: 40%;">
-                        <img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);">
-                        <div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div>
-                        <div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div>
-                    </div>
-                    <div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div>
-                    <div style="text-align: center; width: 40%;">
-                        <img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);">
-                        <div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div>
-                        <div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div>
-                    </div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-            
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(0,201,255,0.8);">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(146, 254, 157, 0.8);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -617,7 +618,6 @@ if selected_page == P_LEDGER:
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
         with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
-    
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.header("Power Rankings")
     st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
@@ -629,7 +629,6 @@ elif selected_page == P_AUDIT:
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255, 255, 255, 0.1)'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential", height=500)
     st.plotly_chart(fig, use_container_width=True)
-    
     if not df_bench_stars.empty: 
         st.markdown("#### 🚨 'Should Have Started'")
         st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
@@ -720,12 +719,9 @@ elif selected_page == P_NEXT:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
-        
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        
         st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        
         st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
@@ -734,7 +730,6 @@ elif selected_page == P_NEXT:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            
             curr_col = nc1 if i % 2 == 0 else nc2
             with curr_col:
                 st.markdown(f"""
@@ -804,11 +799,10 @@ elif selected_page == P_DEAL:
 
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
-    st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
     
     has_data = "dark_pool_data" in st.session_state
     
-    # BUTTONS AT TOP
+    # TOP BUTTONS
     c1, c2 = st.columns([1, 4])
     with c1:
         if not has_data:
