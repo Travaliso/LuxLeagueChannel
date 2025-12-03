@@ -294,9 +294,8 @@ def run_monte_carlo_simulation(simulations=1000):
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- UPDATED DARK POOL (RELAXED FILTER + CACHE BUSTER) ---
 @st.cache_data(ttl=3600)
-def scan_dark_pool_v2(limit=20):
+def scan_dark_pool(limit=15):
     free_agents = league.free_agents(size=150)
     pool_data = []
     for player in free_agents:
@@ -305,8 +304,7 @@ def scan_dark_pool_v2(limit=20):
             status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
             if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
             total = player.total_points if player.total_points > 0 else player.projected_total_points
-            weeks = league.current_week if league.current_week > 0 else 1
-            avg_pts = total / weeks
+            avg_pts = total / league.current_week if league.current_week > 0 else 0
             if avg_pts > 0.5:
                 pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
         except: continue
@@ -340,19 +338,34 @@ def process_dynasty_leaderboard(df_history):
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
-# --- F. NEXT GEN STATS ENGINE (UPDATED V2) ---
+# --- F. NEXT GEN STATS ENGINE (Updated V2 - With Fallback) ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v2(year):
     try:
+        # Try current year first
         df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year])
-        df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
-        df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
-        df_seas = nfl.import_seasonal_data([year])
+        
+        # Fallback Mechanism: If current year has no data (common in early/mid season updates), try previous year
+        if df_rec.empty:
+            df_rec = nfl.import_ngs_data(stat_type='receiving', years=[year-1])
+            df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year-1])
+            df_pass = nfl.import_ngs_data(stat_type='passing', years=[year-1])
+            df_seas = nfl.import_seasonal_data([year-1])
+        else:
+            df_rush = nfl.import_ngs_data(stat_type='rushing', years=[year])
+            df_pass = nfl.import_ngs_data(stat_type='passing', years=[year])
+            try:
+                df_seas = nfl.import_seasonal_data([year])
+            except:
+                df_seas = pd.DataFrame()
+
         return df_rec, df_rush, df_pass, df_seas
     except: return None, None, None, None
 
 def analyze_nextgen_metrics_v2(roster, year):
     df_rec, df_rush, df_pass, df_seas = load_nextgen_data_v2(year)
+    
+    # Return empty if totally failed
     if df_rec is None or df_rec.empty: return pd.DataFrame()
 
     insights = []
@@ -362,10 +375,10 @@ def analyze_nextgen_metrics_v2(roster, year):
         pid = getattr(player, 'playerId', None)
         p_team = getattr(player, 'proTeam', 'N/A')
 
-        # WR/TE Analysis (Separation + WOPR)
+        # WR/TE Analysis
         if pos in ['WR', 'TE'] and not df_rec.empty:
             match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
-            if match_result and match_result[1] > 90:
+            if match_result and match_result[1] > 85: # Relaxed match
                 match_name = match_result[0]
                 player_stats = df_rec[df_rec['player_display_name'] == match_name]
                 if not player_stats.empty:
@@ -374,11 +387,12 @@ def analyze_nextgen_metrics_v2(roster, year):
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
                     
                     # Seasonal Match
-                    seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                     wopr = 0
-                    if seas_match and seas_match[1] > 90:
-                        seas_stats = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0]
-                        wopr = seas_stats.get('wopr', 0)
+                    if not df_seas.empty:
+                        seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
+                        if seas_match and seas_match[1] > 90:
+                            seas_stats = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0]
+                            wopr = seas_stats.get('wopr', 0)
 
                     verdict = "HOLD"
                     if wopr > 0.7: verdict = "💎 ELITE"
@@ -391,15 +405,16 @@ def analyze_nextgen_metrics_v2(roster, year):
                         "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict
                     })
 
-        # RB Analysis (RYOE + 8-Man Box)
+        # RB Analysis
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
-            if match_result and match_result[1] > 90:
+            if match_result and match_result[1] > 85:
                 match_name = match_result[0]
                 player_stats = df_rush[df_rush['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     ryoe = stats.get('rush_yards_over_expected_per_att', 0)
+                    eff = stats.get('efficiency', 0) 
                     box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
                     
                     verdict = "HOLD"
@@ -412,25 +427,24 @@ def analyze_nextgen_metrics_v2(roster, year):
                         "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict
                     })
         
-        # QB Analysis (CPOE + Aggressiveness)
+        # QB Analysis
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
-            if match_result and match_result[1] > 90:
+            if match_result and match_result[1] > 85:
                 match_name = match_result[0]
                 player_stats = df_pass[df_pass['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe = stats.get('completion_percentage_above_expectation', 0)
-                    aggr = stats.get('aggressiveness', 0)
-                    
+                    time_throw = stats.get('avg_time_to_throw', 0)
                     verdict = "HOLD"
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
-                    elif aggr > 20: verdict = "🔫 GUNSLINGER"
+                    elif time_throw > 3.0: verdict = "⏳ HOLDER"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
                         "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{aggr:.1f}% Tight Win", "Verdict": verdict
+                        "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict
                     })
 
     return pd.DataFrame(insights)
@@ -587,13 +601,13 @@ if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
             st.session_state["recap"] = get_weekly_recap()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Weekly Transactions")
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    st.header("Weekly Transactions")
     m_col1, m_col2 = st.columns(2)
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -608,20 +622,23 @@ if selected_page == P_LEDGER:
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
         with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
-    with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
-    st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
+    st.header("Power Rankings")
+    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
 elif selected_page == P_AUDIT:
-    with col_main: st.header("Efficiency Audit")
+    st.header("Efficiency Audit")
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255, 255, 255, 0.1)'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential", height=500)
     st.plotly_chart(fig, use_container_width=True)
-    if not df_bench_stars.empty: st.markdown("#### 🚨 'Should Have Started'"); st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
+    if not df_bench_stars.empty: 
+        st.markdown("#### 🚨 'Should Have Started'")
+        st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
 elif selected_page == P_HEDGE:
-    with col_main: st.header("Market Analytics")
+    st.header("Market Analytics")
     if "df_advanced" not in st.session_state:
         st.info("⚠️ Accessing historical market data requires intensive calculation.")
         if st.button("🚀 Analyze Market Data"):
@@ -634,60 +651,68 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    with col_main:
-        st.header("🧬 The Lab (Next Gen Biometrics)")
-        with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
-            st.markdown("""
-            - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
-            - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
-            - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
-            - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
-            - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
-            - **Separation:** Yards of distance from nearest defender at catch.
-            - **CPOE:** Completion Percentage Over Expectation.
-            - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
-            - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
-            """)
-        
-        team_list = [t.team_name for t in league.teams]
-        target_team = st.selectbox("Select Test Subject:", team_list)
-        
-        if st.button("🧪 Analyze Roster Efficiency"):
-            if lottie_lab: st_lottie(lottie_lab, height=200)
-            with luxury_spinner("Calibrating Tracking Satellites..."):
-                roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-                df_ngs = analyze_nextgen_metrics_v2(roster_obj, year)
-                st.session_state["ngs_data"] = df_ngs
-                st.rerun()
+    with st.container():
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.header("🧬 The Lab (Next Gen Biometrics)")
+        with c2:
+             if st.button("🧪 Analyze Roster"):
+                 with luxury_spinner("Calibrating Satellites..."):
+                     # We force a reload by NOT checking session state here
+                     # Get Roster from Selector below (requires clever ordering or session state)
+                     st.session_state["trigger_lab"] = True
+                     st.rerun()
+
+    with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
+        st.markdown("""
+        - 💎 **ELITE:** Top 10% performance in underlying metric.
+        - 🚀 **MONSTER:** Incredible efficiency.
+        - 🎯 **SNIPER:** Completion % > Expected.
+        - ⚠️ **TRAP:** High Volume but Low Efficiency.
+        - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards).
+        """)
+    
+    team_list = [t.team_name for t in league.teams]
+    target_team = st.selectbox("Select Test Subject:", team_list)
+    
+    if st.session_state.get("trigger_lab"):
+        # Get Roster
+        roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+        # Run NGS Analysis V2 (Force new calculation)
+        df_ngs = analyze_nextgen_metrics_v2(roster_obj, year)
+        st.session_state["ngs_data"] = df_ngs
+        st.session_state["trigger_lab"] = False # Reset trigger
+        st.rerun()
             
-        if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
-            st.markdown("### 🔬 Biometric Results")
-            df_res = st.session_state["ngs_data"]
-            cols = st.columns(2)
-            for i, row in df_res.iterrows():
-                col = cols[i % 2]
-                with col:
-                    st.markdown(f"""
-                    <div class="luxury-card" style="border-left: 4px solid #00C9FF; display: flex; align-items: center;">
-                        <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{row['ID']}.png&w=80&h=60" 
-                            style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.3);">
-                        <div style="flex: 1;">
-                            <h4 style="margin:0; color: white; font-size: 1.1em;">{row['Player']}</h4>
-                            <div style="font-size: 0.8em; color: #a0aaba;">{row['Team']} • {row['Position']}</div>
-                            <div style="color: #00C9FF; font-weight: bold; font-size: 0.9em; margin-top: 4px;">{row['Verdict']}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 0.75em; color: #a0aaba;">{row['Metric']}</div>
-                            <div style="font-size: 1.4em; font-weight: bold; color: white;">{row['Value']}</div>
-                            <div style="font-size: 0.75em; color: #92FE9D;">{row['Alpha Stat']}</div>
-                        </div>
+    if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
+        st.markdown("### 🔬 Biometric Results")
+        df_res = st.session_state["ngs_data"]
+        cols = st.columns(2)
+        for i, row in df_res.iterrows():
+            col = cols[i % 2]
+            with col:
+                st.markdown(f"""
+                <div class="luxury-card" style="border-left: 4px solid #00C9FF; display: flex; align-items: center;">
+                    <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{row['ID']}.png&w=80&h=60" 
+                         style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.3);">
+                    <div style="flex: 1;">
+                        <h4 style="margin:0; color: white; font-size: 1.1em;">{row['Player']}</h4>
+                        <div style="font-size: 0.8em; color: #a0aaba;">{row['Team']} • {row['Position']}</div>
+                        <div style="color: #00C9FF; font-weight: bold; font-size: 0.9em; margin-top: 4px;">{row['Verdict']}</div>
                     </div>
-                    """, unsafe_allow_html=True)
-        elif "ngs_data" in st.session_state:
-            st.info("No Next Gen Data found for this roster (or API connection failed).")
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.75em; color: #a0aaba;">{row['Metric']}</div>
+                        <div style="font-size: 1.4em; font-weight: bold; color: white;">{row['Value']}</div>
+                        <div style="font-size: 0.75em; color: #92FE9D;">{row['Alpha Stat']}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    elif "ngs_data" in st.session_state:
+        st.info("No Next Gen Data found for this roster (or API connection failed).")
+        st.caption("Try selecting a different team or check back later.")
 
 elif selected_page == P_FORECAST:
-    with col_main: st.header("The Crystal Ball")
+    st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -709,15 +734,18 @@ elif selected_page == P_NEXT:
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.header("Next Week's Market Preview")
-        for game in next_box_scores:
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        st.header("Next Week's Market Preview")
+        nc1, nc2 = st.columns(2)
+        for i, game in enumerate(next_box_scores):
             h_proj, a_proj = game.home_projected, game.away_projected
             if h_proj == 0: h_proj = 100
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div><div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div><div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
+            curr_col = nc1 if i % 2 == 0 else nc2
+            with curr_col:
+                st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div><div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.8em;"><div>VS</div><div style="color: #00C9FF; margin-top: 5px;">Fav: {fav}</div><div style="color: #fff;">+{spread:.1f}</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div><div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
 elif selected_page == P_PROP:
@@ -760,6 +788,7 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -774,7 +803,7 @@ elif selected_page == P_DARK:
         if not has_data:
             if st.button("🔭 Scan Wire", type="primary"):
                 with luxury_spinner("Scouting the wire..."):
-                    df_pool = scan_dark_pool_v2()
+                    df_pool = scan_dark_pool()
                     st.session_state["dark_pool_data"] = df_pool
                     if not df_pool.empty:
                         p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
@@ -806,7 +835,7 @@ elif selected_page == P_TROPHY:
     else:
         awards = st.session_state["awards"]
         if "season_comm" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Season Awards")
         c1, c2 = st.columns(2)
         with c1:
