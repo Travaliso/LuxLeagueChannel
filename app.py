@@ -133,7 +133,7 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine (With Tuesday Fallback)
+# Vegas Prop Desk Engine
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
@@ -278,36 +278,41 @@ def run_monte_carlo_simulation(simulations=1000):
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- D. Dark Pool (Relaxed Scanner with Injury Filter) ---
 @st.cache_data(ttl=3600)
-def scan_dark_pool(limit=20):
+def scan_dark_pool(limit=25):
+    # Fetch deeper list to account for filters
     free_agents = league.free_agents(size=100)
     pool_data = []
+    
     for player in free_agents:
         try:
-            # 1. Safely Get Status (Default to NORMAL if None)
-            raw_status = getattr(player, 'injuryStatus', 'NORMAL')
-            if raw_status is None: raw_status = 'NORMAL'
-            status = str(raw_status).upper()
+            # 1. ROBUST STATUS CHECK
+            # Handle cases where status might be None, or formatted differently like 'INJURY_RESERVE'
+            raw_status = getattr(player, 'injuryStatus', 'ACTIVE')
+            status = str(raw_status).upper().replace("_", " ") # Normalize 'INJURY_RESERVE' to 'INJURY RESERVE'
             
-            # 2. Aggressive Filter
-            if status in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP']:
+            # 2. AGGRESSIVE FILTER
+            # Filter out any status that contains these keywords
+            bad_keywords = ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']
+            if any(keyword in status for keyword in bad_keywords):
                 continue
                 
-            # 3. Points Fallback
-            total = player.total_points
-            if total == 0: total = player.projected_total_points
-            
-            weeks = league.current_week if league.current_week > 0 else 1
-            avg_pts = total / weeks
+            # 3. SCORING FALLBACK
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            avg_pts = total / league.current_week if league.current_week > 0 else 0
             
             if avg_pts > 1.0:
                 pool_data.append({
-                    "Name": player.name, "Position": player.position, "Team": player.proTeam,
-                    "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status
+                    "Name": player.name, 
+                    "Position": player.position, 
+                    "Team": player.proTeam, 
+                    "Avg Pts": avg_pts, 
+                    "Total Pts": total, 
+                    "ID": player.playerId, 
+                    "Status": status
                 })
         except: continue
-    
+            
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
@@ -369,8 +374,13 @@ for game in box_scores:
         starters, bench, p_start, p_bench = [], [], 0, 0
         for p in lineup:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
+            
+            # SIDEBAR ELITE FILTER (RE-USING THE ROBUST LOGIC)
             status = getattr(p, 'injuryStatus', 'ACTIVE')
-            is_injured = status in ['OUT', 'IR']
+            status_str = str(status).upper().replace("_", " ")
+            bad_keywords = ['OUT', 'IR', 'RESERVE', 'SUSPENDED']
+            is_injured = any(k in status_str for k in bad_keywords)
+            
             if p.slot_position == 'BE':
                 bench.append(info); p_bench += p.points
                 if p.points > 15: bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
@@ -389,9 +399,6 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# ------------------------------------------------------------------
-# 6. AI HELPERS
-# ------------------------------------------------------------------
 def get_openai_client(): return OpenAI(api_key=openai_key) if openai_key else None
 def ai_response(prompt, tokens=600):
     client = get_openai_client()
@@ -399,12 +406,12 @@ def ai_response(prompt, tokens=600):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except: return "Analyst Offline."
 
-# Missing Function Re-Added Here
+# AI SCOUT HELPER
 def get_ai_scouting_report(free_agents_str):
     client = get_openai_client()
     if not client: return "⚠️ Analyst Offline."
     prompt = f"""
-    You are an elite NFL Talent Scout. Here is a list of available free agents (The Dark Pool):
+    You are an elite NFL Talent Scout. Here is a list of available, healthy free agents (The Dark Pool):
     {free_agents_str}
     
     Identify 3 "Must Add" players.
@@ -466,7 +473,7 @@ with col_players:
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
-            st.session_state["recap"] = get_weekly_recap()
+            st.session_state["recap"] = ai_response(f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {df_eff.iloc[0]['Team']}. Style: Wall Street Report.", 800)
     with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Weekly Transactions")
     for m in matchup_data:
@@ -484,7 +491,7 @@ if selected_page == P_LEDGER:
 
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
-        with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
+        with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = ai_response(f"Write a 5-8 sentence commentary on Power Rankings. Praise {df_eff.iloc[0]['Team']} and mock {df_eff.iloc[-1]['Team']}. Style: Stephen A. Smith.")
     with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Power Rankings"); st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
 
@@ -531,7 +538,7 @@ elif selected_page == P_NEXT:
             spread = abs(h_proj - a_proj)
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
-            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
+            with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = ai_response(f"Act as a Vegas Sports Bookie. Preview next week's matchups: {games_list}. Pick 'Lock of the Week' and 'Upset Alert'.")
         with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         st.divider(); st.header("Next Week's Market Preview")
         for game in next_box_scores:
@@ -586,32 +593,39 @@ elif selected_page == P_DEAL:
             # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
-            proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
+            proposal = ai_response(f"Act as Trade Broker. Propose a fair trade between Team A ({t1}): {r_a} and Team B ({t2}): {r_b}. Explain why.")
             st.markdown(f'<div class="luxury-card studio-box"><h3>Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
 
+# ------------------------------------------------------------------
+# DARK POOL (WAIVER WIRE) - FIXED
+# ------------------------------------------------------------------
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
     st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
+    
     if "dark_pool_data" not in st.session_state:
         if st.button("🔭 Scan Free Agents"):
             with luxury_spinner("Scouting the wire..."):
                 df_pool = scan_dark_pool()
                 st.session_state["dark_pool_data"] = df_pool
+                
+                # Force AI Run if data exists
                 if not df_pool.empty:
                     p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
                     st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
                 else:
-                    st.session_state["scout_rpt"] = "No viable assets found on the wire."
+                    st.session_state["scout_rpt"] = "No viable assets found."
                 st.rerun()
     else:
-        df_pool = st.session_state["dark_pool_data"]
-        if "scout_rpt" in st.session_state and not df_pool.empty:
+        # Display AI
+        if "scout_rpt" in st.session_state:
             st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
-        if not df_pool.empty:
-            st.dataframe(df_pool, use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
+        # Display Table
+        if not st.session_state["dark_pool_data"].empty:
+            st.dataframe(st.session_state["dark_pool_data"], use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
         else:
-            st.warning("⚠️ No players found.")
-            st.caption("The scanner looked at the top 100 free agents but filtered them all out based on Injury Status (OUT/IR) or Low Points (< 1.0 avg).")
+            st.warning("⚠️ No players found after filtering for injuries.")
+            
         if st.button("🔄 Rescan"): 
             del st.session_state["dark_pool_data"]
             if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
@@ -622,7 +636,7 @@ elif selected_page == P_TROPHY:
         if st.button("🏅 Unveil Awards"):
             with luxury_spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
-                st.session_state["season_comm"] = get_season_retrospective(st.session_state['awards']['MVP']['Name'], st.session_state['awards']['Best Manager']['Team'])
+                st.session_state["season_comm"] = ai_response(f"Write a 'State of the Union' for the league based on awards. MVP: {st.session_state['awards']['MVP']['Name']}.", 1000)
                 st.rerun()
     else:
         awards = st.session_state["awards"]
