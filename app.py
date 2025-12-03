@@ -312,7 +312,6 @@ def scan_dark_pool(limit=15):
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
 
-# --- E. DYNASTY VAULT ENGINE (Time Machine) ---
 @st.cache_data(ttl=3600)
 def get_dynasty_data(current_year, start_year):
     all_seasons_data = []
@@ -326,30 +325,20 @@ def get_dynasty_data(current_year, start_year):
                 else:
                     owner_id = f"Unknown_{team.team_id}"
                     owner_name = f"Team {team.team_id}"
-
                 made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
                 is_champ = 1 if team.final_standing == 1 else 0
-                
-                all_seasons_data.append({
-                    "Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name,
-                    "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for,
-                    "Champ": is_champ, "Playoffs": made_playoffs
-                })
+                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
         except Exception as e: continue
     return pd.DataFrame(all_seasons_data)
 
 def process_dynasty_leaderboard(df_history):
     if df_history.empty: return pd.DataFrame()
-    leaderboard = df_history.groupby("Owner ID").agg({
-        "Manager": "last", 
-        "Wins": "sum", "Losses": "sum", "Points For": "sum",
-        "Champ": "sum", "Playoffs": "sum", "Year": "count"
-    }).reset_index()
+    leaderboard = df_history.groupby("Owner ID").agg({"Manager": "last", "Wins": "sum", "Losses": "sum", "Points For": "sum", "Champ": "sum", "Playoffs": "sum", "Year": "count"}).reset_index()
     leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
-# --- F. NEXT GEN STATS ENGINE (The Lab) ---
+# --- F. NEXT GEN STATS ENGINE (FIXED) ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data(year):
     try:
@@ -361,30 +350,40 @@ def load_nextgen_data(year):
 
 def analyze_nextgen_metrics(roster, year):
     df_rec, df_rush, df_pass = load_nextgen_data(year)
-    if df_rec is None: return pd.DataFrame()
+    if df_rec is None or df_rec.empty: 
+        return pd.DataFrame() # Return empty if data fetch fails
 
     insights = []
     for player in roster:
         p_name = player.name
         pos = player.position
-        if pos in ['WR', 'TE']:
-            match, score, idx = process.extractOne(p_name, df_rec['player_display_name'].unique())
-            if score > 90:
-                player_stats = df_rec[df_rec['player_display_name'] == match]
+        
+        # WR/TE Analysis
+        if pos in ['WR', 'TE'] and not df_rec.empty:
+            # FIX: Extract just match and score (unpack 2 values)
+            match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_rec[df_rec['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep = stats.get('avg_separation', 0)
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
                     share = stats.get('percent_share_of_intended_air_yards', 0)
+                    
                     verdict = "HOLD"
                     if sep > 3.5: verdict = "💎 ELITE (Separation God)"
                     elif share > 35 and sep < 2.5: verdict = "⚠️ VOLUME TRAP"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
+                    
                     insights.append({"Player": p_name, "Metric": "Avg Separation", "Value": f"{sep:.1f} yds", "Alpha Stat": f"{yac_exp:+.1f} YAC/Exp", "Verdict": verdict})
-        elif pos == 'RB':
-            match, score, idx = process.extractOne(p_name, df_rush['player_display_name'].unique())
-            if score > 90:
-                player_stats = df_rush[df_rush['player_display_name'] == match]
+
+        # RB Analysis
+        elif pos == 'RB' and not df_rush.empty:
+            match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_rush[df_rush['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     ryoe = stats.get('rush_yards_over_expected_per_att', 0)
@@ -393,10 +392,13 @@ def analyze_nextgen_metrics(roster, year):
                     if ryoe > 1.0: verdict = "💎 ELITE (Creator)"
                     elif ryoe < -0.5: verdict = "🚫 PLODDER"
                     insights.append({"Player": p_name, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{eff:.2f} Efficiency", "Verdict": verdict})
-        elif pos == 'QB':
-            match, score, idx = process.extractOne(p_name, df_pass['player_display_name'].unique())
-            if score > 90:
-                player_stats = df_pass[df_pass['player_display_name'] == match]
+                
+        # QB Analysis
+        elif pos == 'QB' and not df_pass.empty:
+            match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
+            if match_result and match_result[1] > 90:
+                match_name = match_result[0]
+                player_stats = df_pass[df_pass['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe = stats.get('completion_percentage_above_expectation', 0)
@@ -404,6 +406,7 @@ def analyze_nextgen_metrics(roster, year):
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
                     insights.append({"Player": p_name, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": "Accuracy", "Verdict": verdict})
+
     return pd.DataFrame(insights)
 
 # ------------------------------------------------------------------
