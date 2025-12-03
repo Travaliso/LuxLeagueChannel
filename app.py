@@ -12,6 +12,7 @@ from fpdf import FPDF
 import base64
 from fpdf import FPDF
 import base64
+from thefuzz import process
 
 # Helper function to strip emojis for PDF
 def clean_for_pdf(text):
@@ -657,3 +658,80 @@ elif selected_page == P_TROPHY:
             st.metric(label=slp['Team'], value=f"{slp['Count']} Players", delta="Wasted Starts")
 else:
     st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
+
+# ------------------------------------------------------------------
+# 8. THE PROP DESK ENGINE (Vegas Integration)
+# ------------------------------------------------------------------
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    # 1. Fetch Odds from The-Odds-API
+    # We fetch specific markets: Passing Yds, Rushing Yds, Receiving Yds, Anytime TD
+    SPORT = 'americanfootball_nfl'
+    REGIONS = 'us'
+    MARKETS = 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td'
+    ODDS_FORMAT = 'american'
+    DATE_FORMAT = 'iso'
+    
+    url = f'https://api.the-odds-api.com/v4/sports/{SPORT}/events/upcoming/odds'
+    params = {
+        'api_key': api_key,
+        'regions': REGIONS,
+        'markets': MARKETS,
+        'oddsFormat': ODDS_FORMAT,
+        'dateFormat': DATE_FORMAT,
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+    except:
+        return None
+
+    # 2. Process & Normalize Data
+    player_props = {} 
+    
+    for event in data:
+        for bookmaker in event['bookmakers']:
+            # We only need one reliable bookmaker (e.g., DraftKings or FanDuel)
+            if bookmaker['key'] in ['draftkings', 'fanduel']:
+                for market in bookmaker['markets']:
+                    key = market['key']
+                    
+                    for outcome in market['outcomes']:
+                        player_name = outcome['description']
+                        if player_name not in player_props:
+                            player_props[player_name] = {'pass_yds': 0, 'rush_yds': 0, 'rec_yds': 0, 'td_prob': 0}
+                        
+                        # Extract the Line (Point) or Odds
+                        if key == 'player_pass_yds':
+                            player_props[player_name]['pass_yds'] = outcome.get('point', 0)
+                        elif key == 'player_rush_yds':
+                            player_props[player_name]['rush_yds'] = outcome.get('point', 0)
+                        elif key == 'player_reception_yds':
+                            player_props[player_name]['rec_yds'] = outcome.get('point', 0)
+                        elif key == 'player_anytime_td':
+                            # Convert American Odds to Implied Probability
+                            odds = outcome.get('price', 0)
+                            if odds > 0: prob = 100 / (odds + 100)
+                            else: prob = abs(odds) / (abs(odds) + 100)
+                            player_props[player_name]['td_prob'] = prob
+
+    # 3. Calculate "Vegas Implied Fantasy Points"
+    vegas_data = []
+    for name, stats in player_props.items():
+        # Standard Scoring Calculation
+        # Passing: 0.04 pts/yd
+        # Rushing/Rec: 0.1 pts/yd
+        # TD: 6 pts * Implied Probability (Expected Value)
+        
+        implied_score = (stats['pass_yds'] * 0.04) + \
+                        (stats['rush_yds'] * 0.1) + \
+                        (stats['rec_yds'] * 0.1) + \
+                        (stats['td_prob'] * 6)
+                        
+        if implied_score > 1: # Filter out noise
+            vegas_data.append({"Player": name, "Vegas Score": implied_score})
+            
+    return pd.DataFrame(vegas_data)
