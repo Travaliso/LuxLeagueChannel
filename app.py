@@ -849,56 +849,33 @@ elif selected_page == P_DARK:
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
-        # 1. Setup Container for Button + Animation
-        btn_container = st.empty()
-        lottie_container = st.empty()
-        
-        # 2. Button triggers logic
-        if btn_container.button("🏅 Unveil Awards"):
-            # Hide button
-            btn_container.empty()
-            
-            # Show animation
-            if lottie_trophy: 
-                with lottie_container:
-                    st_lottie(lottie_trophy, height=200, key="trophy_anim")
-            
-            # Do heavy work
+        if st.button("🏅 Unveil Awards"):
             with luxury_spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
                 
-                # Safely get names for AI prompt
+                # Safe name extraction for AI
                 mvp_name = awards_data['MVP']['Name'] if awards_data['MVP'] else "N/A"
                 best_mgr = awards_data['Best Manager']['Team'] if awards_data['Best Manager'] else "N/A"
                 
                 st.session_state["season_comm"] = get_season_retrospective(mvp_name, best_mgr)
-            
-            # Clear animation and reload
-            lottie_container.empty()
-            st.rerun()
-
+                st.rerun()
     else:
-        # --- RENDER THE AWARDS UI ---
         awards = st.session_state["awards"]
         
-        # 1. AI Commentary
+        # 1. AI Commentary (Fixed: Removed col_main)
         if "season_comm" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         
         st.divider()
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
 
-        # 2. THE PODIUM (CSS GRID)
-        # Get Top 3 from Awards Data
-        podium_teams = awards.get("Podium", []) # List of team objects
-        
-        # Safety Check if less than 3 teams
+        # 2. THE PODIUM
+        podium_teams = awards.get("Podium", [])
         p1 = podium_teams[0] if len(podium_teams) > 0 else None
         p2 = podium_teams[1] if len(podium_teams) > 1 else None
         p3 = podium_teams[2] if len(podium_teams) > 2 else None
 
-        # Render Columns
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         
         with c_silv:
@@ -937,7 +914,6 @@ elif selected_page == P_TROPHY:
         st.subheader("🎖️ Deep Dive Honors")
         col_a, col_b, col_c, col_d = st.columns(4)
         
-        # Oracle
         ora = awards['Oracle']
         with col_a:
             st.markdown(f"""
@@ -948,7 +924,6 @@ elif selected_page == P_TROPHY:
                 <div style="color: #a0aaba; font-size: 0.8rem;">{ora['Eff']:.1f}% Efficiency</div>
             </div>""", unsafe_allow_html=True)
 
-        # Sniper
         sni = awards['Sniper']
         with col_b:
             st.markdown(f"""
@@ -959,7 +934,6 @@ elif selected_page == P_TROPHY:
                 <div style="color: #a0aaba; font-size: 0.8rem;">{sni['Pts']:.1f} Waiver Pts</div>
             </div>""", unsafe_allow_html=True)
             
-        # Purple Heart
         pur = awards['Purple']
         with col_c:
             st.markdown(f"""
@@ -970,7 +944,6 @@ elif selected_page == P_TROPHY:
                 <div style="color: #a0aaba; font-size: 0.8rem;">{pur['Count']} Injuries</div>
             </div>""", unsafe_allow_html=True)
 
-        # Hoarder
         hoa = awards['Hoarder']
         with col_d:
             st.markdown(f"""
@@ -987,7 +960,6 @@ elif selected_page == P_TROPHY:
         
         t_col1, t_col2 = st.columns(2)
         
-        # Last Place / Lowest Points
         toilet = awards['Toilet']
         with t_col1:
             st.markdown(f"""
@@ -1000,7 +972,6 @@ elif selected_page == P_TROPHY:
                 </div>
             </div>""", unsafe_allow_html=True)
 
-        # Biggest Blowout Victim
         blowout = awards['Blowout']
         with t_col2:
             st.markdown(f"""
@@ -1009,25 +980,3 @@ elif selected_page == P_TROPHY:
                 <div style="font-size: 1.5rem; font-weight: 900; color: white; margin: 10px 0;">{blowout['Loser']}</div>
                 <div style="color: #aaa;">Destroyed by {blowout['Winner']} (+{blowout['Margin']:.1f} pts)</div>
             </div>""", unsafe_allow_html=True)
-            
-elif selected_page == P_VAULT:
-    st.header("⏳ The Dynasty Vault (All-Time History)")
-    st.caption(f"Tracking league history from {START_YEAR} to Present.")
-    if "dynasty_leaderboard" not in st.session_state:
-        if st.button("🔓 Unlock The Vault"):
-            with luxury_spinner(f"Traveling back to {START_YEAR}..."):
-                df_raw = get_dynasty_data(year, START_YEAR)
-                st.session_state["dynasty_raw"] = df_raw
-                st.session_state["dynasty_leaderboard"] = process_dynasty_leaderboard(df_raw)
-                st.rerun()
-    else:
-        st.subheader("🏛️ All-Time Leaderboard")
-        df_lead = st.session_state["dynasty_leaderboard"]
-        st.dataframe(df_lead, use_container_width=True, hide_index=True, column_config={"Manager": st.column_config.TextColumn("Manager", width="medium"), "Win %": st.column_config.ProgressColumn("Win %", format="%.1f%%", min_value=0, max_value=100), "Champ": st.column_config.NumberColumn("🏆 Rings"), "Playoffs": st.column_config.NumberColumn("🎟️ Playoff Apps"), "Points For": st.column_config.NumberColumn("Total Pts", format="%.0f")})
-        st.subheader("📉 Empire History")
-        df_chart = st.session_state["dynasty_raw"]
-        fig = px.line(df_chart, x="Year", y="Wins", color="Manager", markers=True, title="The Rise and Fall of Empires")
-        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", xaxis=dict(tickmode='linear', tick0=START_YEAR, dtick=1))
-        st.plotly_chart(fig, use_container_width=True)
-else:
-    st.error(f"Page Not Found: {selected_page}. Please check page definitions.")
