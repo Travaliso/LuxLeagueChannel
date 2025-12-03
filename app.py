@@ -294,10 +294,9 @@ def run_monte_carlo_simulation(simulations=1000):
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
-# --- UPDATED DARK POOL SCANNER ---
 @st.cache_data(ttl=3600)
 def scan_dark_pool(limit=20):
-    # Expanded search size to 150 to find healthy players
+    # Fetch 150 to find healthy players
     free_agents = league.free_agents(size=150)
     pool_data = []
     
@@ -309,16 +308,15 @@ def scan_dark_pool(limit=20):
             status = str(raw_status).upper()
             
             # 2. Filter Dead Weight (Keep Questionable)
-            if status in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']:
+            if any(k in status for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): 
                 continue
                 
             # 3. Points Calculation
             total = player.total_points if player.total_points > 0 else player.projected_total_points
-            # Avoid divide by zero for Week 1
             weeks = league.current_week if league.current_week > 0 else 1
             avg_pts = total / weeks
             
-            # 4. Lower Threshold (0.5) to ensure we capture depth pieces
+            # 4. Lower Threshold for results
             if avg_pts > 0.5:
                 pool_data.append({
                     "Name": player.name, 
@@ -392,8 +390,6 @@ def analyze_nextgen_metrics(roster, year):
                     stats = player_stats.mean(numeric_only=True)
                     sep = stats.get('avg_separation', 0)
                     yac_exp = stats.get('avg_yac_above_expectation', 0)
-                    
-                    # Seasonal
                     seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                     wopr = 0
                     if seas_match and seas_match[1] > 90:
@@ -405,11 +401,7 @@ def analyze_nextgen_metrics(roster, year):
                     elif sep > 3.5: verdict = "⚡ SEPARATOR"
                     elif yac_exp > 2.0: verdict = "🚀 YAC MONSTER"
                     
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
 
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
@@ -425,11 +417,7 @@ def analyze_nextgen_metrics(roster, year):
                     if ryoe > 1.0: verdict = "💎 ELITE"
                     elif box_8 > 30: verdict = "💪 WORKHORSE"
                     elif ryoe < -0.5: verdict = "🚫 PLODDER"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
         
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
@@ -444,13 +432,10 @@ def analyze_nextgen_metrics(roster, year):
                     if cpoe > 5.0: verdict = "🎯 SNIPER"
                     elif time_throw > 3.0: verdict = "⏳ HOLDER"
                     elif cpoe < -2.0: verdict = "📉 SHAKY"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
 
     return pd.DataFrame(insights)
+
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
@@ -616,7 +601,6 @@ if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
 if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
 st.markdown("---")
 
-# PAGE ROUTING
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
@@ -627,7 +611,7 @@ if selected_page == P_LEDGER:
     for i, m in enumerate(matchup_data):
         current_col = m_col1 if i % 2 == 0 else m_col2
         with current_col:
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; font-size: 0.9em; margin-top: 5px;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF; font-weight: 800;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
                 max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                 df_matchup = pd.DataFrame({
@@ -804,40 +788,45 @@ elif selected_page == P_DEAL:
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
             st.markdown(f'<div class="luxury-card studio-box"><h3>Proposed Deal</h3>{proposal}</div>', unsafe_allow_html=True)
 
-# --- UPDATED DARK POOL SECTION (RESET LOGIC) ---
+# --- UPDATED DARK POOL SECTION (RESET LOGIC & TOP BUTTONS) ---
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
     st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
     
-    # Check if data exists in state
+    # Check State
     has_data = "dark_pool_data" in st.session_state
     
-    if not has_data:
-        if st.button("🔭 Scan Free Agents"):
-            with luxury_spinner("Scouting the wire..."):
-                df_pool = scan_dark_pool()
-                st.session_state["dark_pool_data"] = df_pool
-                if not df_pool.empty:
-                    p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
-                    st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
-                else:
-                    st.session_state["scout_rpt"] = "No viable assets found."
+    # Top Control Panel
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        if not has_data:
+            if st.button("🔭 Scan Wire", type="primary"):
+                with luxury_spinner("Scouting free agents..."):
+                    df_pool = scan_dark_pool()
+                    st.session_state["dark_pool_data"] = df_pool
+                    if not df_pool.empty:
+                        p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
+                        st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
+                    else:
+                        st.session_state["scout_rpt"] = "No viable assets found."
+                    st.rerun()
+        else:
+            if st.button("🔄 Rescan Wire"):
+                del st.session_state["dark_pool_data"]
+                if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
                 st.rerun()
-    else:
-        # Render the data
-        if "scout_rpt" in st.session_state: 
+
+    # Display Results
+    if has_data:
+        if "scout_rpt" in st.session_state:
             st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
         
-        if not st.session_state["dark_pool_data"].empty:
-            st.dataframe(st.session_state["dark_pool_data"], use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
+        df_pool = st.session_state["dark_pool_data"]
+        if not df_pool.empty:
+            st.dataframe(df_pool, use_container_width=True, hide_index=True, column_config={"Avg Pts": st.column_config.NumberColumn(format="%.1f"), "Total Pts": st.column_config.NumberColumn(format="%.1f")})
         else:
-            st.warning("⚠️ No players found.")
-            st.caption("Try clicking 'Rescan' below to refresh.")
-        
-        if st.button("🔄 Rescan Wire"): 
-            del st.session_state["dark_pool_data"]
-            if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
-            st.rerun()
+            st.warning("⚠️ No players found matching criteria.")
+            st.caption("Scanner filtered out players based on Injury Status (OUT/IR) or Low Points.")
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
