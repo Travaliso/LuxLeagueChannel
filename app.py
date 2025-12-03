@@ -13,75 +13,104 @@ from fpdf import FPDF
 from thefuzz import process
 
 # ------------------------------------------------------------------
-# 1. CONFIGURATION & CSS
+# 1. CONFIGURATION & VISION UI THEME (The "Reference Image" Look)
 # ------------------------------------------------------------------
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="🏈", layout="wide")
 
 st.markdown("""
     <style>
-    /* MAIN BACKGROUND - "Midnight Horizon" Gradient */
+    /* MAIN BACKGROUND - Recreating the "Vision UI" Deep Blue/Purple Gradient */
     .stApp {
-        /* Deep, rich dark gradient that stays fixed while you scroll */
-        background: radial-gradient(circle at 10% 20%, #1a1c29 0%, #080a10 90%);
+        background-color: #060b26; /* Deepest Midnight Blue base */
+        background-image: 
+            /* 1. The Horizontal Scanlines (Texture) */
+            repeating-linear-gradient(
+                to bottom,
+                transparent,
+                transparent 4px,
+                rgba(0, 0, 0, 0.2) 4px,
+                rgba(0, 0, 0, 0.2) 8px
+            ),
+            /* 2. The Ambient Glows (Purple Top-Left, Blue Bottom-Right) */
+            radial-gradient(circle at 0% 0%, rgba(58, 12, 163, 0.4) 0%, transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%);
         background-attachment: fixed;
         background-size: cover;
     }
+
+    /* TYPOGRAPHY - Clean, White, Modern */
     h1, h2, h3, h4 {
-        background: linear-gradient(90deg, #00C9FF, #0072ff);
+        color: #ffffff !important;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    
+    /* GRADIENT TEXT ACCENTS (For "Weekly Elite", etc) */
+    .gradient-text {
+        background: linear-gradient(90deg, #00C9FF, #92FE9D);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-family: 'Helvetica Neue', sans-serif;
-        font-weight: 800 !important;
-        letter-spacing: 1px;
     }
+
+    /* METRIC NUMBERS - Glowing White/Blue */
     div[data-testid="stMetricValue"] {
-        font-size: 2rem !important;
-        color: #00C9FF !important;
-        text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);
+        font-size: 1.8rem !important;
+        color: #ffffff !important;
+        font-weight: 700;
+        text-shadow: 0 0 15px rgba(0, 201, 255, 0.6);
     }
-    div[data-testid="stMetricLabel"] { color: #a0aaba !important; }
+    div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.9rem; }
+
+    /* GLASSMORPHISM CARDS (The "Floating" Look) */
     .luxury-card {
-        background: linear-gradient(145deg, #151922, #1a1c24);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 15px;
-        border: 1px solid rgba(0, 201, 255, 0.1);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        background: rgba(17, 25, 40, 0.75); /* Semi-transparent dark blue */
+        backdrop-filter: blur(16px) saturate(180%); /* The Blur Effect */
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border-radius: 20px; /* Softer rounded corners */
+        border: 1px solid rgba(255, 255, 255, 0.08); /* Thin white border */
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); /* Deep shadow */
     }
-    .award-card { border-left: 4px solid #00C9FF; }
-    .studio-box { border-left: 4px solid #0072ff; }
-    section[data-testid="stSidebar"] { background-color: #0e1117; border-right: 1px solid #333; }
-    div[data-testid="stRadio"] > label { color: #a0aaba !important; font-weight: bold; }
-    div[role="radiogroup"] label { padding: 10px; border-radius: 8px; transition: background-color 0.3s; }
-    div[role="radiogroup"] label:hover { background-color: rgba(0, 201, 255, 0.1); color: #00C9FF !important; }
-    div[data-testid="stDataFrame"] { background-color: #151922; border-radius: 12px; padding: 10px; }
+    
+    /* Specific Card Accents */
+    .award-card { border-left: 4px solid #00C9FF; } /* Electric Blue border */
+    .studio-box { border-left: 4px solid #7209b7; } /* Purple border */
+
+    /* SIDEBAR - Dark Glass */
+    section[data-testid="stSidebar"] { 
+        background-color: rgba(10, 14, 35, 0.95);
+        border-right: 1px solid rgba(255,255,255,0.05); 
+    }
+    
+    /* NAVIGATION BUTTONS */
+    div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; }
+    div[role="radiogroup"] label { 
+        padding: 12px; 
+        border-radius: 12px; 
+        transition: all 0.3s ease;
+        margin-bottom: 5px;
+    }
+    div[role="radiogroup"] label:hover { 
+        background-color: rgba(0, 201, 255, 0.1); 
+        color: #ffffff !important;
+        transform: translateX(5px); /* Slight movement on hover */
+    }
+
+    /* DATAFRAMES - Transparent Tables */
+    div[data-testid="stDataFrame"] { 
+        background-color: rgba(17, 25, 40, 0.5); 
+        border-radius: 15px; 
+        padding: 15px; 
+        border: 1px solid rgba(255,255,255,0.05);
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# 2. LEAGUE CONNECTION (CRITICAL: MUST BE AT TOP)
-# ------------------------------------------------------------------
-try:
-    # Load Secrets
-    league_id = st.secrets["league_id"]
-    swid = st.secrets["swid"]
-    espn_s2 = st.secrets["espn_s2"]
-    openai_key = st.secrets.get("openai_key")
-    odds_api_key = st.secrets.get("odds_api_key")
-    year = 2025 # Ensure this matches your league year
-
-    @st.cache_resource
-    def get_league():
-        return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
-
-    league = get_league()
-
-except Exception as e:
-    st.error(f"🔒 Connection Error: {e}")
-    st.stop()
-
-# ------------------------------------------------------------------
-# 3. HELPER FUNCTIONS
+# 2. HELPER CLASSES & FUNCTIONS
 # ------------------------------------------------------------------
 def load_lottieurl(url: str):
     try:
@@ -121,17 +150,17 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
-# Vegas Prop Desk Engine
+# Vegas Prop Desk Engine (With 422 Fallback)
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
     url = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 422: return pd.DataFrame({"Status": ["Market Closed"]}) # Tuesday Fallback
+        if response.status_code == 422: return pd.DataFrame({"Status": ["Market Closed"]}) 
         if response.status_code != 200: return None
         data = response.json()
-        if not data: return pd.DataFrame({"Status": ["Market Closed"]}) # Tuesday Fallback
+        if not data: return pd.DataFrame({"Status": ["Market Closed"]}) 
         
         player_props = {}
         for event in data:
@@ -164,8 +193,23 @@ lottie_trophy = load_lottieurl("https://lottie.host/362e7839-2425-4c75-871d-534b
 lottie_trade = load_lottieurl("https://lottie.host/e65893a7-e54e-4f0b-9366-0749024f2b1d/z2Xg6c4h5r.json")
 lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555627798/7Q9j7Z9g9z.json")
 
+# League Connection
+try:
+    league_id = st.secrets["league_id"]
+    swid = st.secrets["swid"]
+    espn_s2 = st.secrets["espn_s2"]
+    openai_key = st.secrets.get("openai_key")
+    odds_api_key = st.secrets.get("odds_api_key")
+    year = 2025
+    @st.cache_resource
+    def get_league(): return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+    league = get_league()
+except Exception as e:
+    st.error(f"🔒 Connection Error: {e}")
+    st.stop()
+
 # ------------------------------------------------------------------
-# 4. ANALYTICS ENGINES
+# 3. ANALYTICS ENGINES
 # ------------------------------------------------------------------
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(current_week):
@@ -284,7 +328,7 @@ def scan_dark_pool(limit=15):
     return df
 
 # ------------------------------------------------------------------
-# 5. SIDEBAR NAVIGATION
+# 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
@@ -299,7 +343,7 @@ selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="c
 st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF Report"):
     if "recap" not in st.session_state:
-        with st.spinner("🎙️ Analyst is writing the script..."): st.session_state["recap"] = "Analysis Generated."
+        with st.spinner("🎙️ Analyst is writing the script..."): st.session_state["recap"] = "Analysis Generated for PDF."
     if "awards" not in st.session_state:
         with st.spinner("🏆 Engraving trophies..."): st.session_state["awards"] = calculate_season_awards(current_week)
     if "playoff_odds" not in st.session_state:
@@ -325,7 +369,7 @@ if st.sidebar.button("📄 Generate PDF Report"):
     st.sidebar.markdown(html, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# 6. DATA PROCESSING & AI
+# 5. DATA PROCESSING & AI
 # ------------------------------------------------------------------
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     if lottie_loading: st_lottie(lottie_loading, height=200, key="loading")
@@ -370,14 +414,14 @@ def ai_response(prompt, tokens=600):
     except: return "Analyst Offline."
 
 # ------------------------------------------------------------------
-# 7. DASHBOARD UI
+# 6. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 col_main, col_players = st.columns([2, 1])
 with col_players:
     st.markdown("### 🌟 Weekly Elite")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
-         st.markdown(f"""<div style="display: flex; align-items: center; background: #151922; border-radius: 8px; padding: 5px; margin-bottom: 5px; border: 1px solid #333;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 5px; margin-right: 10px;"><div><div style="color: #00C9FF; font-weight: bold; font-size: 14px;">{p['Name']}</div><div style="color: #fff; font-size: 12px;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
+         st.markdown(f"""<div style="display: flex; align-items: center; background: rgba(17, 25, 40, 0.75); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 8px; margin-right: 12px; border: 1px solid rgba(0, 201, 255, 0.3);"><div><div style="color: #ffffff; font-weight: 700; font-size: 14px; text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);">{p['Name']}</div><div style="color: #a0aaba; font-size: 12px; font-weight: 500;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
 
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
@@ -386,7 +430,7 @@ if selected_page == P_LEDGER:
     with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.divider(); st.header("Weekly Transactions")
     for m in matchup_data:
-        st.markdown(f"""<div class="luxury-card"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="60" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Home']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 14px; font-weight: bold;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="60" style="border-radius: 50%; border: 2px solid #0072ff; padding: 2px;"><div style="font-weight: bold; color: white; margin-top: 5px;">{m['Away']}</div><div style="font-size: 24px; color: #00C9FF; text-shadow: 0 0 10px rgba(0,201,255,0.5);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="luxury-card"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="60" style="border-radius: 50%; border: 2px solid #00C9FF; padding: 2px; box-shadow: 0 0 15px rgba(0, 201, 255, 0.4);"><div style="font-weight: 700; color: white; margin-top: 8px; letter-spacing: 0.5px;">{m['Home']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(0,201,255,0.8);">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 12px; font-weight: bold; letter-spacing: 2px;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="60" style="border-radius: 50%; border: 2px solid #92FE9D; padding: 2px; box-shadow: 0 0 15px rgba(146, 254, 157, 0.4);"><div style="font-weight: 700; color: white; margin-top: 8px; letter-spacing: 0.5px;">{m['Away']}</div><div style="font-size: 28px; color: #ffffff; font-weight: 800; text-shadow: 0 0 20px rgba(146, 254, 157, 0.8);">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
         with st.expander(f"📉 View Lineups"):
             max_len = max(len(m['Home Roster']), len(m['Away Roster']))
             df_matchup = pd.DataFrame({
@@ -408,7 +452,7 @@ elif selected_page == P_AUDIT:
     with col_main: st.header("Efficiency Audit")
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='#2c313a'))
+    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255, 255, 255, 0.1)'))
     fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", title="Total Potential")
     st.plotly_chart(fig, use_container_width=True)
     if not df_bench_stars.empty: st.markdown("#### 🚨 'Should Have Started'"); st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
@@ -421,7 +465,7 @@ elif selected_page == P_HEDGE:
             with st.spinner("Compiling Assets..."): st.session_state["df_advanced"] = calculate_heavy_analytics(current_week); st.rerun()
     else:
         df_advanced = st.session_state["df_advanced"]
-        fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#0072ff", "#1a1c24", "#00C9FF"], title="Luck Matrix")
+        fig = px.scatter(df_advanced, x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#7209b7", "#4361ee", "#4cc9f0"], title="Luck Matrix")
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -457,100 +501,39 @@ elif selected_page == P_NEXT:
             if a_proj == 0: a_proj = 100
             spread = abs(h_proj - a_proj)
             fav = game.home_team.team_name if h_proj > a_proj else game.away_team.team_name
-            st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.home_team.team_name}</div><div style="color: #00C9FF;">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em;">{game.away_team.team_name}</div><div style="color: #00C9FF;">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center; text-align: center;"><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.home_team.team_name}</div><div style="color: #00C9FF; text-shadow: 0 0 8px rgba(0, 201, 255, 0.4);">Proj: {h_proj:.1f}</div></div><div style="flex: 1; color: #a0aaba; font-size: 0.9em;"><div>VS</div><div style="color: #00C9FF;">Fav: {fav} (+{spread:.1f})</div></div><div style="flex: 2;"><div style="font-weight: bold; font-size: 1.1em; color: #ffffff;">{game.away_team.team_name}</div><div style="color: #92FE9D; text-shadow: 0 0 8px rgba(146, 254, 157, 0.4);">Proj: {a_proj:.1f}</div></div></div></div>""", unsafe_allow_html=True)
     except: st.info("Projections unavailable.")
 
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk (Vegas vs. ESPN)")
-    
-    if not odds_api_key:
-        st.warning("Please add 'odds_api_key' to your secrets.")
+    if not odds_api_key: st.warning("Please add 'odds_api_key' to your secrets.")
     else:
-        # 1. Fetch Data
         if "vegas_data" not in st.session_state:
-            with st.spinner("Calling the bookies in Las Vegas..."):
-                st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
-        
+            with st.spinner("Calling the bookies in Las Vegas..."): st.session_state["vegas_data"] = get_vegas_props(odds_api_key)
         df_vegas = st.session_state["vegas_data"]
-        
-        # 2. Check Data Validity
         if df_vegas is not None and not df_vegas.empty:
-            
-            # --- SCENARIO A: MARKET CLOSED (Tuesdays) ---
             if "Status" in df_vegas.columns and df_vegas.iloc[0]["Status"] == "Market Closed":
-                # Display the Educational "Insider" Card
-                st.markdown("""
-                <div class="luxury-card" style="border-left: 4px solid #FFD700;">
-                    <h3 style="color: #FFD700; margin-top: 0;">🏦 Market Status: ADJUSTMENT PERIOD</h3>
-                    <p style="color: #e0e0e0;">
-                        <strong>Why is this empty?</strong> It is early in the week. Major books (DraftKings, FanDuel) 
-                        pull player props on Tuesdays to adjust algorithms for injury reports and waiver wire movement.
-                    </p>
-                    <hr style="border-color: #333;">
-                    <h4 style="margin-bottom: 5px;">🧠 The Strategy (Arbitrage)</h4>
-                    <p style="color: #a0aaba; font-size: 0.9em;">
-                        When markets reopen (Thursday-Sunday), use this tool to find <strong>Alpha</strong>:
-                    </p>
-                    <ul style="color: #e0e0e0;">
-                        <li><strong>⚠️ The Trap:</strong> ESPN projects 15 pts, but Vegas sets the line at 8.5 pts. <em style="color: #FF4B4B">Bench him.</em></li>
-                        <li><strong>🚀 The Smash:</strong> ESPN projects 10 pts, but Vegas sets the line at 16.5 pts. <em style="color: #00C9FF">Start him.</em></li>
-                    </ul>
-                    <br>
-                    <div style="text-align: center; color: #FFD700; font-weight: bold;">
-                        Check back Thursday Morning for Smart Money lines.
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # --- SCENARIO B: MARKET OPEN (Thursday - Sunday) ---
+                st.markdown("""<div class="luxury-card" style="border-left: 4px solid #FFD700;"><h3 style="color: #FFD700; margin-top: 0;">🏦 Market Status: ADJUSTMENT PERIOD</h3><p style="color: #e0e0e0;"><strong>Why is this empty?</strong> It is early in the week. Major books pull player props on Tuesdays.</p></div>""", unsafe_allow_html=True)
             else:
-                st.caption("Comparing ESPN projections against real money Vegas lines to find market inefficiencies.")
-                
                 next_week = league.current_week
                 box = league.box_scores(week=next_week)
                 trust_data = []
-                
                 for game in box:
                     all_players = game.home_lineup + game.away_lineup
                     for player in all_players:
                         if player.slot_position == 'BE': continue
-                        
                         match, score, index = process.extractOne(player.name, df_vegas['Player'].tolist())
-                        
                         if score > 85:
                             vegas_pts = df_vegas[df_vegas['Player'] == match].iloc[0]['Vegas Score']
                             espn_pts = player.projected_points
                             if espn_pts == 0: espn_pts = 0.1
-                            
                             delta = vegas_pts - espn_pts
-                            
-                            # Verdict Logic
-                            if delta > 3: status = "🚀 SMASH (Vegas Higher)"
-                            elif delta < -3: status = "⚠️ TRAP (ESPN High)"
-                            else: status = "⚖️ Fair Value"
-                            
-                            trust_data.append({
-                                "Player": player.name, 
-                                "Team": player.proTeam, 
-                                "ESPN Proj": espn_pts, 
-                                "Vegas Implied": round(vegas_pts, 2), 
-                                "Delta": round(delta, 2), 
-                                "Verdict": status
-                            })
-                
+                            status = "🚀 SMASH (Vegas Higher)" if delta > 3 else "⚠️ TRAP (ESPN High)" if delta < -3 else "⚖️ Fair Value"
+                            trust_data.append({"Player": player.name, "Team": player.proTeam, "ESPN Proj": espn_pts, "Vegas Implied": round(vegas_pts, 2), "Delta": round(delta, 2), "Verdict": status})
                 if trust_data:
-                    st.dataframe(
-                        pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), 
-                        use_container_width=True, 
-                        hide_index=True, 
-                        column_config={
-                            "Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f", help="Positive = Vegas likes them more.")
-                        }
-                    )
-                else:
-                    st.info("Markets are open, but no props found for your specific starters yet.")
-        else:
-            st.error("Could not fetch odds (API Key issue or Service Down).")
+                    st.dataframe(pd.DataFrame(trust_data).sort_values(by="Delta", ascending=False), use_container_width=True, hide_index=True, column_config={"Delta": st.column_config.NumberColumn("Trust Delta", format="%+.1f")})
+                else: st.info("No prop lines found yet.")
+        else: st.error("Could not fetch odds.")
 
 elif selected_page == P_DEAL:
     st.header("🤝 The AI Dealmaker")
@@ -562,7 +545,7 @@ elif selected_page == P_DEAL:
         with st.spinner("Analyzing..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
-            # Use full roster for trade machine, ignoring injury/bench status
+            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = ai_response(f"Act as Trade Broker. Propose a fair trade between Team A ({t1}): {r_a} and Team B ({t2}): {r_b}. Explain why.")
@@ -589,7 +572,7 @@ elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Awards"):
             if lottie_trophy: st_lottie(lottie_trophy, height=200)
-            with st.spinner("Engraving trophies..."):
+            with st.spinner("Engraving..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
                 st.session_state["season_comm"] = ai_response(f"Write a 'State of the Union' for the league based on awards. MVP: {st.session_state['awards']['MVP']['Name']}.", 1000)
                 st.rerun()
