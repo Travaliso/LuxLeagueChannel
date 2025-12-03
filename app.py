@@ -191,125 +191,36 @@ lottie_wire = load_lottieurl("https://lottie.host/4e532997-5b65-4f4c-8b2b-077555
 # ------------------------------------------------------------------
 # 3. ANALYTICS ENGINES
 # ------------------------------------------------------------------
+# --- D. Dark Pool (Relaxed Scanner) ---
 @st.cache_data(ttl=3600)
-def calculate_heavy_analytics(current_week):
-    data_rows = []
-    for team in league.teams:
-        power_score = round(team.points_for / current_week, 1)
-        true_wins, total_matchups = 0, 0
-        for w in range(1, current_week + 1):
-            box = league.box_scores(week=w)
-            my_score = next((g.home_score if g.home_team == team else g.away_score for g in box if g.home_team == team or g.away_team == team), 0)
-            all_scores = [g.home_score for g in box] + [g.away_score for g in box]
-            wins_this_week = sum(1 for s in all_scores if my_score > s)
-            true_wins += wins_this_week
-            total_matchups += (len(league.teams) - 1)
-        true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
-        actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
-        luck_rating = (actual_win_pct - true_win_pct) * 10
-        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
-    return pd.DataFrame(data_rows)
-
-@st.cache_data(ttl=3600)
-def calculate_season_awards(current_week):
-    player_points = {}
-    team_bench_points = {t.team_name: 0 for t in league.teams}
-    single_game_high = {"Team": "", "Score": 0, "Week": 0}
-    biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
-    heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
-    current_streaks = {t.team_name: 0 for t in league.teams}
-    max_streaks = {t.team_name: 0 for t in league.teams}
-    asleep_count = {t.team_name: 0 for t in league.teams}
-    
-    for w in range(1, current_week + 1):
-        box = league.box_scores(week=w)
-        for game in box:
-            h_name, a_name = game.home_team.team_name, game.away_team.team_name
-            margin = abs(game.home_score - game.away_score)
-            if game.home_score > game.away_score: winner, loser = h_name, a_name
-            else: winner, loser = a_name, h_name
-            
-            current_streaks[winner] += 1
-            current_streaks[loser] = 0
-            if current_streaks[winner] > max_streaks[winner]: max_streaks[winner] = current_streaks[winner]
-            
-            if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
-            if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
-            if game.home_score > single_game_high["Score"]: single_game_high = {"Team": h_name, "Score": game.home_score, "Week": w}
-            if game.away_score > single_game_high["Score"]: single_game_high = {"Team": a_name, "Score": game.away_score, "Week": w}
-            
-            def process_roster(lineup, team_name):
-                for p in lineup:
-                    if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
-                    player_points[p.playerId]["Points"] += p.points
-                    if p.slot_position == 'BE': team_bench_points[team_name] += p.points
-                    else: 
-                        if p.points == 0: asleep_count[team_name] += 1
-            process_roster(game.home_lineup, h_name)
-            process_roster(game.away_lineup, a_name)
-            
-    sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
-    sorted_bench = sorted(team_bench_points.items(), key=lambda x: x[1], reverse=True)
-    sorted_teams = sorted(league.teams, key=lambda x: x.points_for, reverse=True)
-    longest_streak_team = max(max_streaks, key=max_streaks.get)
-    sleepiest_team = max(asleep_count, key=asleep_count.get)
-    
-    return {
-        "MVP": sorted_players[0] if sorted_players else None,
-        "Bench King": sorted_bench[0] if sorted_bench else None,
-        "Single Game": single_game_high, "Blowout": biggest_blowout, "Heartbreaker": heartbreaker,
-        "Streak": {"Team": longest_streak_team, "Length": max_streaks[longest_streak_team]},
-        "Sleeper": {"Team": sleepiest_team, "Count": asleep_count[sleepiest_team]},
-        "Best Manager": {"Team": sorted_teams[0].team_name, "Points": sorted_teams[0].points_for, "Logo": sorted_teams[0].logo_url}
-    }
-
-@st.cache_data(ttl=3600)
-def run_monte_carlo_simulation(simulations=1000):
-    team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in league.teams}
-    reg_season_end = league.settings.reg_season_count
-    current_w = league.current_week
-    try: num_playoff_teams = league.settings.playoff_team_count
-    except: num_playoff_teams = 4
-    team_power = {t.team_id: t.points_for / (current_w - 1) for t in league.teams}
-    
-    results = {t.team_name: 0 for t in league.teams}
-    for i in range(simulations):
-        sim_standings = {k: v.copy() for k, v in team_data.items()}
-        if current_w <= reg_season_end:
-             for w in range(current_w, reg_season_end + 1):
-                 for tid, stats in sim_standings.items():
-                     performance = np.random.normal(team_power[tid], 15)
-                     if performance > 115: sim_standings[tid]["wins"] += 1
-        sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
-        for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
-
-    final_output = []
-    for team in league.teams:
-        odds = (results[team.team_name] / simulations) * 100
-        reason = "🔒 Locked." if odds > 99 else "🚀 High Prob." if odds > 80 else "⚖️ Bubble." if odds > 40 else "🙏 Miracle." if odds > 5 else "💀 Dead."
-        final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
-    return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
-
-@st.cache_data(ttl=3600)
-def scan_dark_pool(limit=15):
+def scan_dark_pool(limit=20):
+    # Fetch MORE players (100) to ensure we find healthy ones
     free_agents = league.free_agents(size=100)
     pool_data = []
+    
     for player in free_agents:
         try:
-            # AGGRESSIVE INJURY FILTER
-            # Use getattr for safety, default to 'ACTIVE'
-            status = getattr(player, 'injuryStatus', 'ACTIVE')
-            # Normalize to uppercase strings
-            status_str = str(status).upper()
+            # 1. Safely Get Status
+            # If status is missing/None, assume they are Healthy (Normal)
+            raw_status = getattr(player, 'injuryStatus', 'NORMAL')
+            if raw_status is None: raw_status = 'NORMAL'
+            status = str(raw_status).upper()
             
-            # Skip if status is any form of unavailable
-            if status_str in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']:
+            # 2. Filter Out Only Definitive "OUT" Players
+            # We keep 'QUESTIONABLE' and 'DOUBTFUL' to see options
+            if status in ['OUT', 'IR', 'INJURED RESERVE', 'SUSPENDED', 'PUP']:
                 continue
-                
-            total = player.total_points if player.total_points > 0 else player.projected_total_points
-            avg_pts = total / league.current_week if league.current_week > 0 else 0
             
-            if avg_pts > 3:
+            # 3. Calculate Points (Fallback to Projections)
+            total = player.total_points
+            if total == 0: total = player.projected_total_points
+            
+            # Avoid divide by zero
+            weeks = league.current_week if league.current_week > 0 else 1
+            avg_pts = total / weeks
+            
+            # 4. Low Threshold (Show anyone with a pulse)
+            if avg_pts > 1.0:
                 pool_data.append({
                     "Name": player.name, 
                     "Position": player.position, 
@@ -317,13 +228,15 @@ def scan_dark_pool(limit=15):
                     "Avg Pts": avg_pts, 
                     "Total Pts": total, 
                     "ID": player.playerId, 
-                    "Status": status_str
+                    "Status": status
                 })
         except: continue
+            
     df = pd.DataFrame(pool_data)
-    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    if not df.empty: 
+        # Sort by points and return top results
+        df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
     return df
-
 # ------------------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
 # ------------------------------------------------------------------
@@ -422,7 +335,51 @@ with col_players:
     st.markdown("### 🌟 Weekly Elite")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
          st.markdown(f"""<div style="display: flex; align-items: center; background: rgba(17, 25, 40, 0.75); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 8px; margin-right: 12px; border: 1px solid rgba(0, 201, 255, 0.3);"><div><div style="color: #ffffff; font-weight: 700; font-size: 14px; text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);">{p['Name']}</div><div style="color: #a0aaba; font-size: 12px; font-weight: 500;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
-
+elif selected_page == P_DARK:
+    st.header("🕵️ The Dark Pool (Waiver Wire)")
+    st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
+    
+    if "dark_pool_data" not in st.session_state:
+        if st.button("🔭 Scan Free Agents"):
+            with luxury_spinner("Scouting the wire..."):
+                df_pool = scan_dark_pool()
+                st.session_state["dark_pool_data"] = df_pool
+                
+                # Only run AI if we actually found players
+                if not df_pool.empty:
+                    # Create a summary string for the AI
+                    p_str = ", ".join([f"{r['Name']} ({r['Position']}, {r['Avg Pts']:.1f})" for i, r in df_pool.iterrows()])
+                    st.session_state["scout_rpt"] = get_ai_scouting_report(p_str)
+                else:
+                    st.session_state["scout_rpt"] = "No viable assets found on the wire."
+                st.rerun()
+    else:
+        df_pool = st.session_state["dark_pool_data"]
+        
+        # Display AI Report
+        if "scout_rpt" in st.session_state and not df_pool.empty:
+            st.markdown(f'<div class="luxury-card studio-box"><h3>📝 Scout\'s Notebook</h3>{st.session_state["scout_rpt"]}</div>', unsafe_allow_html=True)
+        
+        # Display Data Table
+        if not df_pool.empty:
+            st.dataframe(
+                df_pool, 
+                use_container_width=True, 
+                hide_index=True, 
+                column_config={
+                    "Avg Pts": st.column_config.NumberColumn(format="%.1f"), 
+                    "Total Pts": st.column_config.NumberColumn(format="%.1f")
+                }
+            )
+        else:
+            st.warning("⚠️ No players found.")
+            st.caption("The scanner looked at the top 100 free agents but filtered them all out based on Injury Status (OUT/IR) or Low Points (< 1.0 avg).")
+            
+        if st.button("🔄 Rescan"): 
+            del st.session_state["dark_pool_data"]
+            if "scout_rpt" in st.session_state: del st.session_state["scout_rpt"]
+            st.rerun()
+            
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
