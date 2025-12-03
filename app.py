@@ -659,9 +659,11 @@ def get_ai_trade_proposal(team_a, team_b, roster_a, roster_b):
 # 7. DASHBOARD UI
 # ------------------------------------------------------------------
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-# HERO ROW (Weekly Elite)
+
+# HERO ROW (Weekly Elite) - Full Width Container
 st.markdown("### 🌟 Weekly Elite")
 hero_c1, hero_c2, hero_c3 = st.columns(3)
+
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""
@@ -675,17 +677,24 @@ def render_hero_card(col, player):
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+# Render Hero Cards
 top_3 = df_players.head(3).reset_index(drop=True)
 if len(top_3) >= 1: render_hero_card(hero_c1, top_3.iloc[0])
 if len(top_3) >= 2: render_hero_card(hero_c2, top_3.iloc[1])
 if len(top_3) >= 3: render_hero_card(hero_c3, top_3.iloc[2])
+
 st.markdown("---")
 
+# PAGE ROUTING
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
         with luxury_spinner("Analyst is reviewing portfolios..."): 
             st.session_state["recap"] = get_weekly_recap()
+    
+    # FIXED: Removed 'with col_main:' wrapper
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    
     st.header("Weekly Transactions")
     m_col1, m_col2 = st.columns(2)
     for i, m in enumerate(matchup_data):
@@ -706,6 +715,8 @@ if selected_page == P_LEDGER:
 elif selected_page == P_HIERARCHY:
     if "rank_comm" not in st.session_state:
         with luxury_spinner("Analyzing hierarchy..."): st.session_state["rank_comm"] = get_rankings_commentary()
+    
+    # FIXED: Removed 'with col_main:' wrapper
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.header("Power Rankings")
     st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
@@ -735,40 +746,27 @@ elif selected_page == P_HEDGE:
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_LAB:
-    with col_main:
-        st.header("🧬 The Lab (Next Gen Biometrics)")
-        
-        # TOP CONTROLS
-        col_sel, col_btn = st.columns([3, 1])
-        with col_sel:
-            team_list = [t.team_name for t in league.teams]
-            target_team = st.selectbox("Select Test Subject:", team_list)
-        with col_btn:
-             if st.button("🧪 Analyze Roster"):
-                 with luxury_spinner("Calibrating Satellites..."):
-                     st.session_state["trigger_lab"] = True
-                     st.rerun()
-
-        with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
-            st.markdown("""
-            - 💎 **ELITE:** Top 10% performance in underlying metric (Separation/Efficiency).
-            - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
-            - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
-            - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
-            - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
-            - **Separation:** Yards of distance from nearest defender at catch.
-            - **CPOE:** Completion Percentage Over Expectation.
-            - **RYOE:** Rushing Yards Over Expectation (Line adjusted).
-            - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
-            """)
+    st.header("🧬 The Lab (Next Gen Biometrics)")
+    with st.expander("🔎 Biometric Legend (The Code)", expanded=False):
+        st.markdown("""
+        - 💎 **ELITE:** Top 10% performance in underlying metric.
+        - 🚀 **MONSTER:** Incredible efficiency (YAC > Expected).
+        - 🎯 **SNIPER:** Completion % > Expected (Highly Accurate).
+        - ⚠️ **TRAP:** High Volume but Low Efficiency (Sell High Candidate).
+        - 🚫 **PLODDER:** Inefficient rushing (Rushing Yards < Expected).
+        - **WOPR:** Weighted Opportunity Rating (Target Share + Air Yards Share).
+        """)
     
-    if st.session_state.get("trigger_lab"):
-        roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-        # FORCE V3 (FALLBACK LOGIC)
-        df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
-        st.session_state["ngs_data"] = df_ngs
-        st.session_state["trigger_lab"] = False
-        st.rerun()
+    team_list = [t.team_name for t in league.teams]
+    target_team = st.selectbox("Select Test Subject:", team_list)
+    
+    if st.button("🧪 Analyze Roster Efficiency"):
+        with luxury_spinner("Calibrating Tracking Satellites..."):
+            roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+            # Uses the V3 engine with Fallback years
+            df_ngs = analyze_nextgen_metrics_v3(roster_obj, year)
+            st.session_state["ngs_data"] = df_ngs
+            st.rerun()
             
     if "ngs_data" in st.session_state and not st.session_state["ngs_data"].empty:
         st.markdown("### 🔬 Biometric Results")
@@ -794,10 +792,10 @@ elif selected_page == P_LAB:
                 </div>
                 """, unsafe_allow_html=True)
     elif "ngs_data" in st.session_state:
-        st.info("No Next Gen Data found for this roster (or API connection failed).")
+        st.info("No Next Gen Data found (or API connection failed).")
 
 elif selected_page == P_FORECAST:
-    with col_main: st.header("The Crystal Ball")
+    st.header("The Crystal Ball")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with luxury_spinner("Running Monte Carlo simulations..."): st.session_state["playoff_odds"] = run_monte_carlo_simulation(); st.rerun()
@@ -819,7 +817,10 @@ elif selected_page == P_NEXT:
             games_list.append({"home": game.home_team.team_name, "away": game.away_team.team_name, "spread": f"{spread:.1f}"})
         if "next_week_commentary" not in st.session_state:
             with luxury_spinner("Checking Vegas lines..."): st.session_state["next_week_commentary"] = get_next_week_preview(games_list)
-        with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        
+        # FIXED: Removed 'with col_main:'
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
+        
         st.header("Next Week's Market Preview")
         nc1, nc2 = st.columns(2)
         for i, game in enumerate(next_box_scores):
@@ -873,7 +874,6 @@ elif selected_page == P_DEAL:
         with luxury_spinner("Analyzing roster deficiencies..."):
             team_a = next(t for t in league.teams if t.team_name == t1)
             team_b = next(t for t in league.teams if t.team_name == t2)
-            # Full roster for trade machine
             r_a = [f"{p.name} ({p.position})" for p in team_a.roster]
             r_b = [f"{p.name} ({p.position})" for p in team_b.roster]
             proposal = get_ai_trade_proposal(t1, t2, r_a, r_b)
@@ -881,7 +881,6 @@ elif selected_page == P_DEAL:
 
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
-    
     has_data = "dark_pool_data" in st.session_state
     c1, c2 = st.columns([1, 4])
     with c1:
@@ -912,56 +911,29 @@ elif selected_page == P_DARK:
 
 elif selected_page == P_TROPHY:
     if "awards" not in st.session_state:
-        # 1. Setup Container for Button + Animation
-        btn_container = st.empty()
-        lottie_container = st.empty()
-        
-        # 2. Button triggers logic
-        if btn_container.button("🏅 Unveil Awards"):
-            # Hide button
-            btn_container.empty()
-            
-            # Show animation
-            if lottie_trophy: 
-                with lottie_container:
-                    st_lottie(lottie_trophy, height=200, key="trophy_anim")
-            
-            # Do heavy work
+        if st.button("🏅 Unveil Awards"):
             with luxury_spinner("Engraving trophies..."):
                 st.session_state["awards"] = calculate_season_awards(current_week)
                 awards_data = st.session_state["awards"]
-                
-                # Safely get names for AI prompt
                 mvp_name = awards_data['MVP']['Name'] if awards_data['MVP'] else "N/A"
                 best_mgr = awards_data['Best Manager']['Team'] if awards_data['Best Manager'] else "N/A"
-                
                 st.session_state["season_comm"] = get_season_retrospective(mvp_name, best_mgr)
-            
-            # Clear animation and reload
-            lottie_container.empty()
-            st.rerun()
-
+                st.rerun()
     else:
-        # --- RENDER THE AWARDS UI ---
         awards = st.session_state["awards"]
         
-        # 1. AI Commentary
+        # FIXED: Removed 'with col_main:'
         if "season_comm" in st.session_state:
-             with col_main: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+             st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         
         st.divider()
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
 
-        # 2. THE PODIUM (CSS GRID)
-        # Get Top 3 from Awards Data
-        podium_teams = awards.get("Podium", []) # List of team objects
-        
-        # Safety Check if less than 3 teams
+        podium_teams = awards.get("Podium", [])
         p1 = podium_teams[0] if len(podium_teams) > 0 else None
         p2 = podium_teams[1] if len(podium_teams) > 1 else None
         p3 = podium_teams[2] if len(podium_teams) > 2 else None
 
-        # Render Columns
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         
         with c_silv:
@@ -995,25 +967,16 @@ elif selected_page == P_TROPHY:
                 </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
-        
-        # 3. DEEP DIVE CARDS
         st.subheader("🎖️ Deep Dive Honors")
         col_a, col_b, col_c, col_d = st.columns(4)
         
-        # Oracle (Generate Narrative Helper)
         def generate_narrative(award_type, team_name, value, extra=""):
-            if award_type == "Oracle":
-                return f"The ultimate strategist. {team_name} squeezed every drop of potential from their roster, achieving a staggering **{value:.1f}% efficiency rating**. While others left points on the bench, this manager played the optimal lineup week in and week out."
-            elif award_type == "Sniper":
-                return f"Leagues are won on the waiver wire. {team_name} proved this by extracting **{value:.1f} points** from free agent acquisitions. This indicates high activity, sharp scouting, and a refusal to settle for a stagnant draft roster."
-            elif award_type == "Purple":
-                return f"A season defined by grit. {team_name} navigated a minefield of medical tents, managing **{value} separate injury designations**. Despite the constant roster shuffle and IR slots, they kept the team competitive."
-            elif award_type == "Hoarder":
-                return f"An embarrassment of riches—or a hesitation to trade? {team_name} left **{value:.1f} points** on the bench this season. This suggests incredible depth, but perhaps a missed opportunity to consolidate talent."
-            elif award_type == "Toilet":
-                return f"The offense simply couldn't launch. Scoring only **{value:.1f} total points**, {team_name} struggled to find the endzone. A complete rebuild of the offensive strategy is needed for next year."
-            elif award_type == "Blowout":
-                return f"A historic beatdown. In Week {extra}, {team_name} suffered a margin of defeat of **{value:.1f} points**. It was a week where everything went wrong against an opponent where everything went right."
+            if award_type == "Oracle": return f"The ultimate strategist. {team_name} achieved a staggering **{value:.1f}% efficiency rating**, proving they leave nothing on the bench."
+            elif award_type == "Sniper": return f"Leagues are won on the wire. {team_name} extracted **{value:.1f} points** from free agents."
+            elif award_type == "Purple": return f"A season defined by grit. {team_name} managed **{value} injury designations** and stayed alive."
+            elif award_type == "Hoarder": return f"An embarrassment of riches. {team_name} left **{value:.1f} points** on the bench."
+            elif award_type == "Toilet": return f"The offense couldn't launch. Scoring only **{value:.1f} total points**, a rebuild is needed."
+            elif award_type == "Blowout": return f"A historic beatdown. {team_name} lost by **{value:.1f} points** in Week {extra}."
             return ""
 
         ora = awards['Oracle']
@@ -1060,12 +1023,10 @@ elif selected_page == P_TROPHY:
                 <div class="award-blurb">{generate_narrative("Hoarder", hoa['Team'], hoa['Pts'])}</div>
             </div>""", unsafe_allow_html=True)
 
-        # 4. TOILET BOWL
         st.markdown("---")
         st.markdown("<h3 style='color: #FF4B4B; text-align: center;'>🚽 THE TOILET BOWL (Shame Section)</h3>", unsafe_allow_html=True)
         
         t_col1, t_col2 = st.columns(2)
-        
         toilet = awards['Toilet']
         with t_col1:
             st.markdown(f"""
