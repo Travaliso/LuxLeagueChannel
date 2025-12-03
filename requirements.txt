@@ -7,3 +7,6 @@ plotly
 streamlit-lottie
 nfl_data_py
 fpdf
+thefuzz
+python-Levenshtein
+requests
