@@ -335,6 +335,7 @@ with col_players:
     st.markdown("### 🌟 Weekly Elite")
     for i, (idx, p) in enumerate(df_players.head(3).iterrows()):
          st.markdown(f"""<div style="display: flex; align-items: center; background: rgba(17, 25, 40, 0.75); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=60&h=44" style="border-radius: 8px; margin-right: 12px; border: 1px solid rgba(0, 201, 255, 0.3);"><div><div style="color: #ffffff; font-weight: 700; font-size: 14px; text-shadow: 0 0 10px rgba(0, 201, 255, 0.3);">{p['Name']}</div><div style="color: #a0aaba; font-size: 12px; font-weight: 500;">{p['Points']} pts</div></div></div>""", unsafe_allow_html=True)
+
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool (Waiver Wire)")
     st.caption("Scouting available free agents (excluding IR/OUT) for breakout potential.")
