@@ -300,9 +300,9 @@ elif selected_page == P_PROP:
             with utils.luxury_spinner("Calling Vegas..."): st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY)
         df = st.session_state["vegas"]
         if df is not None and not df.empty:
-            if "Status" in df.columns: st.warning("📉 Market Closed.")
-            else: st.dataframe(df)
-        else: st.error("Error.")
+            if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
+            else: st.dataframe(df, use_container_width=True)
+        else: st.info("No data available.")
 
 elif selected_page == P_DEAL:
     c1, c2 = st.columns(2)
