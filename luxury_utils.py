@@ -58,6 +58,10 @@ def inject_luxury_css():
 # ==============================================================================
 # 2. HELPERS
 # ==============================================================================
+@st.cache_resource
+def get_league(league_id, year, espn_s2, swid):
+    return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+
 def get_logo(team):
     fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
     try: return team.logo_url if team.logo_url else fallback
@@ -89,7 +93,7 @@ def luxury_spinner(text="Initializing Protocol..."):
     try: yield
     finally: placeholder.empty()
 
-# PDF Class
+# PDF Helpers
 def clean_for_pdf(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -121,11 +125,43 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
 # ==============================================================================
-# 3. LOGIC ENGINES
+# 3. ANALYTICS ENGINES
 # ==============================================================================
-@st.cache_resource
-def get_league(league_id, year, espn_s2, swid):
-    return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+
+# --- THE MISSING FUNCTION: VEGAS PROPS ---
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 422 or not response.json(): return pd.DataFrame({"Status": ["Market Closed"]})
+        if response.status_code != 200: return None
+        data = response.json()
+        if not data: return pd.DataFrame({"Status": ["Market Closed"]})
+        
+        player_props = {}
+        for event in data:
+            for bookmaker in event['bookmakers']:
+                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
+                    for market in bookmaker['markets']:
+                        key = market['key']
+                        for outcome in market['outcomes']:
+                            name = outcome['description']
+                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                            elif key == 'player_anytime_td':
+                                odds = outcome.get('price', 0)
+                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
+                                player_props[name]['td'] = prob
+        vegas_data = []
+        for name, s in player_props.items():
+            score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
+            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+        return pd.DataFrame(vegas_data)
+    except: return None
 
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
@@ -178,7 +214,12 @@ def calculate_season_awards(_league, current_week):
             process(game.away_lineup, game.away_team.team_name)
 
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
-    oracle = sorted([{"Team": t, "Eff": (s["Starters"]/(s["Starters"]+s["Bench"])*100) if (s["Starters"]+s["Bench"])>0 else 0, "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Eff'], reverse=True)[0]
+    oracle_list = []
+    for t, s in team_stats.items():
+        total = s["Starters"] + s["Bench"]
+        eff = (s["Starters"] / total * 100) if total > 0 else 0
+        oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
+    oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
@@ -194,56 +235,20 @@ def calculate_season_awards(_league, current_week):
     }
 
 @st.cache_data(ttl=3600)
-def calculate_draft_analysis(_league):
-    live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
-    total_teams = len(_league.teams)
-    cutoff_index = int(total_teams * 0.75) 
-    safe_team_names = {t.team_name for t in live_standings[:cutoff_index]}
-    waiver_points = {}
-    roi_data = []
-    for team in _league.teams:
-        waiver_sum = 0
-        logo = get_logo(team)
-        for player in team.roster:
-            if player.acquisitionType != 'DRAFT': waiver_sum += player.total_points
-            else:
-                pick_no = 999
-                round_no = 99
-                if hasattr(_league, 'draft'):
-                    for pick in _league.draft:
-                        if pick.playerId == player.playerId:
-                            pick_no = (pick.round_num - 1) * len(_league.teams) + pick.round_pick
-                            round_no = pick.round_num
-                            break
-                if pick_no < 999:
-                     roi_data.append({"Player": player.name, "Team": team.team_name, "Round": round_no, "Pick Overall": pick_no, "Points": player.total_points, "Position": player.position, "ID": player.playerId})
-        waiver_points[team.team_name] = {"Pts": waiver_sum, "Logo": logo, "Wins": team.wins}
-    sorted_candidates = sorted(waiver_points.items(), key=lambda x: x[1]["Pts"], reverse=True)
-    prescient_data = None
-    for team_name, stats in sorted_candidates:
-        if team_name in safe_team_names:
-            prescient_data = {"Team": team_name, "Points": stats["Pts"], "Logo": stats["Logo"], "Wins": stats["Wins"]}
-            break
-    if not prescient_data and sorted_candidates:
-        top = sorted_candidates[0]
-        prescient_data = {"Team": top[0], "Points": top[1]["Pts"], "Logo": top[1]["Logo"], "Wins": top[1]["Wins"]}
-    return pd.DataFrame(roi_data), prescient_data
-
-@st.cache_data(ttl=3600)
 def run_monte_carlo_simulation(_league, simulations=1000):
     team_data = {t.team_id: {"wins": t.wins, "points": t.points_for, "name": t.team_name} for t in _league.teams}
     reg_season_end = _league.settings.reg_season_count
     current_w = _league.current_week
     try: num_playoff_teams = _league.settings.playoff_team_count
     except: num_playoff_teams = 4
-    team_power = {t.team_name: t.points_for / (current_w - 1) for t in _league.teams}
+    team_power = {t.team_id: t.points_for / (current_w - 1) for t in _league.teams}
     results = {t.team_name: 0 for t in _league.teams}
     for i in range(simulations):
         sim_standings = {k: v.copy() for k, v in team_data.items()}
         if current_w <= reg_season_end:
              for w in range(current_w, reg_season_end + 1):
                  for tid, stats in sim_standings.items():
-                     performance = np.random.normal(team_power.get(stats["name"], 100), 15)
+                     performance = np.random.normal(team_power[tid], 15)
                      if performance > 115: sim_standings[tid]["wins"] += 1
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
         for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
@@ -328,6 +333,42 @@ def process_dynasty_leaderboard(df_history):
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
 
+@st.cache_data(ttl=3600)
+def calculate_draft_analysis(_league):
+    live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+    total_teams = len(_league.teams)
+    cutoff_index = int(total_teams * 0.75) 
+    safe_team_names = {t.team_name for t in live_standings[:cutoff_index]}
+    waiver_points = {}
+    roi_data = []
+    for team in _league.teams:
+        waiver_sum = 0
+        logo = get_logo(team)
+        for player in team.roster:
+            if player.acquisitionType != 'DRAFT': waiver_sum += player.total_points
+            else:
+                pick_no = 999
+                round_no = 99
+                if hasattr(_league, 'draft'):
+                    for pick in _league.draft:
+                        if pick.playerId == player.playerId:
+                            pick_no = (pick.round_num - 1) * len(_league.teams) + pick.round_pick
+                            round_no = pick.round_num
+                            break
+                if pick_no < 999:
+                     roi_data.append({"Player": player.name, "Team": team.team_name, "Round": round_no, "Pick Overall": pick_no, "Points": player.total_points, "Position": player.position, "ID": player.playerId})
+        waiver_points[team.team_name] = {"Pts": waiver_sum, "Logo": logo, "Wins": team.wins}
+    sorted_candidates = sorted(waiver_points.items(), key=lambda x: x[1]["Pts"], reverse=True)
+    prescient_data = None
+    for team_name, stats in sorted_candidates:
+        if team_name in safe_team_names:
+            prescient_data = {"Team": team_name, "Points": stats["Pts"], "Logo": stats["Logo"], "Wins": stats["Wins"]}
+            break
+    if not prescient_data and sorted_candidates:
+        top = sorted_candidates[0]
+        prescient_data = {"Team": top[0], "Points": top[1]["Pts"], "Logo": top[1]["Logo"], "Wins": top[1]["Wins"]}
+    return pd.DataFrame(roi_data), prescient_data
+
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
     years_to_try = [year, year - 1]
@@ -386,7 +427,7 @@ def analyze_nextgen_metrics_v3(roster, year):
     return pd.DataFrame(insights)
 
 # ==============================================================================
-# 4. AI AGENTS
+# 4. INTELLIGENCE (AI AGENTS)
 # ==============================================================================
 def get_openai_client(key): return OpenAI(api_key=key) if key else None
 def ai_response(key, prompt, tokens=600):
