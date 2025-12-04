@@ -686,8 +686,8 @@ elif selected_page == P_IPO:
     if "draft_roi" not in st.session_state:
         if st.button("📠 Run Audit"):
              with luxury_spinner("Auditing draft capital..."):
-                 # Pass current_week to the function
-                 df_roi, prescient_data = calculate_draft_analysis(current_week)
+                 # FIX: Pass 'league' object, NOT 'current_week'
+                 df_roi, prescient_data = calculate_draft_analysis(league)
                  st.session_state["draft_roi"] = df_roi
                  st.session_state["prescient"] = prescient_data
                  st.rerun()
@@ -742,6 +742,7 @@ elif selected_page == P_IPO:
                 st.dataframe(bad_debt[["Player", "Team", "Round", "Points"]], use_container_width=True, hide_index=True, column_config={"Points": st.column_config.NumberColumn(format="%.0f")})
         else:
             st.info("Draft data unavailable or no drafted players remaining on rosters.")
+            
 elif selected_page == P_LAB:
     c1, c2 = st.columns([3, 1])
     with c1: st.header("🧬 The Lab (Next Gen Biometrics)")
