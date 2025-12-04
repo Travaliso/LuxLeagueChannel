@@ -4,12 +4,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 import luxury_utils as utils
 
-# 1. SETUP
+# ==============================================================================
+# 1. SETUP & CONFIGURATION
+# ==============================================================================
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
 utils.inject_luxury_css()
+
+# CONSTANTS
 START_YEAR = 2021 
 
-# 2. CONNECTION
+# ==============================================================================
+# 2. LEAGUE CONNECTION
+# ==============================================================================
 try:
     LEAGUE_ID = st.secrets["league_id"]
     SWID = st.secrets["swid"]
@@ -17,37 +23,61 @@ try:
     OPENAI_KEY = st.secrets.get("openai_key")
     ODDS_API_KEY = st.secrets.get("odds_api_key")
     YEAR = 2025
+    
+    # Connect using the Utility file
     league = utils.get_league(LEAGUE_ID, YEAR, ESPN_S2, SWID)
 except Exception as e:
-    st.error(f"Connection Error: {e}")
+    st.error(f"🔒 Connection Error: {e}")
     st.stop()
 
-# 3. NAVIGATION
+# ==============================================================================
+# 3. SIDEBAR NAVIGATION
+# ==============================================================================
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_IPO, P_LAB, P_FORECAST, P_MULTI, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "📊 The IPO Audit", "🧬 The Lab", "🔮 The Forecast", "🌌 The Multiverse", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
+# Page Constants
+P_LEDGER = "📜 The Ledger"
+P_HIERARCHY = "📈 The Hierarchy"
+P_AUDIT = "🔎 The Audit"
+P_HEDGE = "💎 The Hedge Fund"
+P_IPO = "📊 The IPO Audit"
+P_LAB = "🧬 The Lab"
+P_FORECAST = "🔮 The Forecast"
+P_MULTI = "🌌 The Multiverse"
+P_NEXT = "🚀 Next Week"
+P_PROP = "📊 The Prop Desk"
+P_DEAL = "🤝 The Dealmaker"
+P_DARK = "🕵️ The Dark Pool"
+P_TROPHY = "🏆 Trophy Room"
+P_VAULT = "⏳ The Vault"
+
 page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_IPO, P_LAB, P_FORECAST, P_MULTI, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
+# PDF Generation Button
 st.sidebar.markdown("---")
 if st.sidebar.button("📄 Generate PDF"):
     with utils.luxury_spinner("Compiling Intelligence Report..."):
         if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated."
         awards = utils.calculate_season_awards(league, current_week)
+        
         pdf = utils.PDF()
         pdf.add_page()
         pdf.chapter_title(f"WEEK {selected_week} BRIEFING")
         pdf.chapter_body(st.session_state.get("recap", "No Data").replace("*", ""))
         pdf.chapter_title("AWARDS")
         if awards['MVP']: pdf.chapter_body(f"MVP: {awards['MVP']['Name']}")
+        
         html = utils.create_download_link(pdf.output(dest="S").encode("latin-1"), "Report.pdf")
         st.sidebar.markdown(html, unsafe_allow_html=True)
 
-# 4. DATA PIPELINE
+# ==============================================================================
+# 4. DATA PIPELINE (DEPENDS ON SELECTED_WEEK)
+# ==============================================================================
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     with utils.luxury_spinner(f"Accessing Week {selected_week} Data..."):
         st.session_state['box_scores'] = league.box_scores(week=selected_week)
@@ -59,6 +89,7 @@ matchup_data, efficiency_data, all_active_players, bench_highlights = [], [], []
 
 for game in box_scores:
     home, away = game.home_team, game.away_team
+    
     def get_roster_data(lineup, team_name):
         starters, bench, p_start, p_bench = [], [], 0, 0
         for p in lineup:
@@ -66,6 +97,7 @@ for game in box_scores:
             status = getattr(p, 'injuryStatus', 'ACTIVE')
             status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
             is_injured = any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
+            
             if p.slot_position == 'BE':
                 bench.append(info); p_bench += p.points
                 if p.points > 15: bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
@@ -76,6 +108,7 @@ for game in box_scores:
 
     h_r, h_br, h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
     a_r, a_br, a_s, a_b = get_roster_data(game.away_lineup, away.team_name)
+    
     matchup_data.append({"Home": home.team_name, "Home Score": game.home_score, "Home Logo": utils.get_logo(home), "Home Roster": h_r, "Away": away.team_name, "Away Score": game.away_score, "Away Logo": utils.get_logo(away), "Away Roster": a_r})
     efficiency_data.append({"Team": home.team_name, "Starters": h_s, "Bench": h_b, "Total Potential": h_s + h_b})
     efficiency_data.append({"Team": away.team_name, "Starters": a_s, "Bench": a_b, "Total Potential": a_s + a_b})
@@ -84,8 +117,12 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# 5. UI ROUTER
+# ==============================================================================
+# 5. DASHBOARD UI ROUTER
+# ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
+
+# HERO ROW (Weekly Elite)
 st.markdown("### 🌟 Weekly Elite")
 h1, h2, h3 = st.columns(3)
 top_3 = df_players.head(3).reset_index(drop=True)
@@ -93,6 +130,8 @@ if len(top_3) >= 1: utils.render_hero_card(h1, top_3.iloc[0])
 if len(top_3) >= 2: utils.render_hero_card(h2, top_3.iloc[1])
 if len(top_3) >= 3: utils.render_hero_card(h3, top_3.iloc[2])
 st.markdown("---")
+
+# --- PAGE LOGIC ---
 
 if selected_page == P_LEDGER:
     if "recap" not in st.session_state:
@@ -173,10 +212,12 @@ elif selected_page == P_LAB:
          if st.button("🧪 Analyze"):
              with utils.luxury_spinner("Calibrating..."): st.session_state["trigger_lab"] = True; st.rerun()
     target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
+    
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
         st.session_state["ngs_data"] = utils.analyze_nextgen_metrics_v3(roster_obj, YEAR)
         st.session_state["trigger_lab"] = False; st.rerun()
+    
     if "ngs_data" in st.session_state:
         if not st.session_state["ngs_data"].empty:
             cols = st.columns(2)
@@ -203,9 +244,14 @@ elif selected_page == P_MULTI:
         c1, c2 = st.columns(2)
         for i, g in enumerate(box):
             with c1 if i % 2 == 0 else c2:
-                c = st.radio(f"{g.home_team.team_name} vs {g.away_team.team_name}", ["Sim", f"{g.home_team.team_name} Win", f"{g.away_team.team_name} Win"], key=f"g{i}", horizontal=True)
-                if "Home" in str(c): forced.append(g.home_team.team_name)
-                elif "Away" in str(c): forced.append(g.away_team.team_name)
+                # Fixed: Check against team names properly
+                home_win = f"{g.home_team.team_name} Win"
+                away_win = f"{g.away_team.team_name} Win"
+                c = st.radio(f"{g.home_team.team_name} vs {g.away_team.team_name}", ["Sim", home_win, away_win], key=f"g{i}", horizontal=True)
+                
+                if c == home_win: forced.append(g.home_team.team_name)
+                elif c == away_win: forced.append(g.away_team.team_name)
+                
         if st.form_submit_button("🔮 Run"):
             with utils.luxury_spinner("Simulating..."):
                 res = utils.run_multiverse_simulation(league, forced)
@@ -223,7 +269,7 @@ elif selected_page == P_NEXT:
         games = [{"home": g.home_team.team_name, "away": g.away_team.team_name, "spread": f"{abs(g.home_projected-g.away_projected):.1f}"} for g in box]
         if "next_week_comm" not in st.session_state:
             with utils.luxury_spinner("Checking Vegas..."): st.session_state["next_week_comm"] = utils.get_next_week_preview(OPENAI_KEY, games)
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_comm"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_commentary"]}</div>', unsafe_allow_html=True)
         st.header("Matchups")
         c1, c2 = st.columns(2)
         for i, g in enumerate(box):
@@ -283,6 +329,7 @@ elif selected_page == P_TROPHY:
         aw = st.session_state["awards"]
         if "season_comm" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.markdown("<h2 style='text-align: center;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
+        
         pod = aw.get("Podium", [])
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         if len(pod) > 1:
@@ -311,7 +358,6 @@ elif selected_page == P_TROPHY:
         with c3: st.markdown(f"""<div class="luxury-card award-card"><img src="{pur['Logo']}" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">Purple Heart</h4><div style="font-weight:bold; color:white;">{pur['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{pur['Count']} Inj</div><div class="award-blurb">{gen_nar("Purple", pur['Team'], pur['Count'])}</div></div>""", unsafe_allow_html=True)
         hoa = aw['Hoarder']
         with c4: st.markdown(f"""<div class="luxury-card award-card"><img src="{hoa['Logo']}" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Hoarder</h4><div style="font-weight:bold; color:white;">{hoa['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{hoa['Pts']:.1f} Pts</div><div class="award-blurb">{gen_nar("Hoarder", hoa['Team'], hoa['Pts'])}</div></div>""", unsafe_allow_html=True)
-
         st.markdown("---")
         t1, t2 = st.columns(2)
         toilet = aw['Toilet']
