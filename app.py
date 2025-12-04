@@ -418,31 +418,37 @@ def get_vegas_props(api_key):
         return pd.DataFrame(vegas_data)
     except: return None
 
-# --- [3.8.0] DRAFT IPO AUDIT ---
+# --- [3.8.0] DRAFT IPO AUDIT (With Competence Filter) ---
 @st.cache_data(ttl=3600)
-def calculate_draft_analysis():
-    # 1. Calculate "The Prescient One" (Waiver Points)
-    waiver_points = {t.team_name: {"Pts": 0, "Logo": get_logo(t)} for t in league.teams}
+def calculate_draft_analysis(current_week):
+    # 1. Setup Containers
+    # We now track Wins and Standing to filter out "Bad Churners"
+    waiver_stats = {
+        t.team_name: {
+            "Pts": 0, 
+            "Logo": get_logo(t), 
+            "Wins": t.wins, 
+            "Standing": t.final_standing
+        } for t in league.teams
+    }
     roi_data = []
 
-    # Iterate through current rosters to find drafted status and current points
+    # 2. Iterate Rosters
     for team in league.teams:
         for player in team.roster:
             if player.acquisitionType != 'DRAFT':
-                waiver_points[team.team_name]["Pts"] += player.total_points
+                waiver_stats[team.team_name]["Pts"] += player.total_points
             else:
-                # If drafted, we need to find WHERE they were drafted.
-                # This requires cross-referencing the draft list.
-                pick_no = 999 # Default if not found
+                # Calculate Draft ROI
+                pick_no = 999
                 round_no = 99
                 try:
                     for pick in league.draft:
                         if pick.playerId == player.playerId:
-                            # Calculate overall pick
                             pick_no = (pick.round_num - 1) * len(league.teams) + pick.round_pick
                             round_no = pick.round_num
                             break
-                except: pass # Handle leagues with no draft data accessible
+                except: pass
 
                 if pick_no < 999:
                      roi_data.append({
@@ -455,13 +461,39 @@ def calculate_draft_analysis():
                          "ID": player.playerId
                      })
 
-    # Determine Prescient One winner
-    prescient_team_name = max(waiver_points, key=lambda k: waiver_points[k]["Pts"])
-    prescient_data = {
-        "Team": prescient_team_name,
-        "Points": waiver_points[prescient_team_name]["Pts"],
-        "Logo": waiver_points[prescient_team_name]["Logo"]
-    }
+    # 3. Determine "The Prescient One" (With Logic)
+    # Sort everyone by Waiver Points (High to Low)
+    sorted_waiver_teams = sorted(waiver_stats.items(), key=lambda x: x[1]["Pts"], reverse=True)
+    
+    # THE FILTER: Disqualify the bottom 25% of the league
+    # (e.g. in a 12 team league, ranks 10, 11, 12 cannot win)
+    league_size = len(league.teams)
+    rank_cutoff = league_size * 0.75
+    
+    prescient_winner = None
+    prescient_data = None
+    
+    for team_name, stats in sorted_waiver_teams:
+        # If their standing is better (lower) than the cutoff, they win
+        if stats["Standing"] <= rank_cutoff:
+            prescient_winner = team_name
+            prescient_data = {
+                "Team": team_name, 
+                "Points": stats["Pts"], 
+                "Logo": stats["Logo"],
+                "Wins": stats["Wins"]
+            }
+            break
+            
+    # Fallback: If EVERYONE was below the cutoff (impossible), take the top scorer
+    if not prescient_winner:
+        prescient_winner = sorted_waiver_teams[0][0]
+        prescient_data = {
+            "Team": prescient_winner, 
+            "Points": sorted_waiver_teams[0][1]["Pts"], 
+            "Logo": sorted_waiver_teams[0][1]["Logo"],
+            "Wins": sorted_waiver_teams[0][1]["Wins"]
+        }
 
     df_roi = pd.DataFrame(roi_data)
     return df_roi, prescient_data
