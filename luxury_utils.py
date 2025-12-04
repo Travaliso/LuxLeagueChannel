@@ -3,6 +3,7 @@ from espn_api.football import League
 import pandas as pd
 import numpy as np
 import requests
+import base64
 from fpdf import FPDF
 from thefuzz import process
 from contextlib import contextmanager
@@ -10,21 +11,14 @@ import nfl_data_py as nfl
 from openai import OpenAI
 
 # ==============================================================================
-# 1. CSS & STYLING (Mobile Fixed)
+# 1. CSS & STYLING
 # ==============================================================================
 def inject_luxury_css():
     st.markdown("""
     <style>
-    /* MOBILE NAV FIX: Don't hide the header completely, just make it transparent */
-    header[data-testid="stHeader"] { background: transparent !important; }
-    
-    /* Hide the colored line at the top */
-    div[data-testid="stDecoration"] { display: none; }
-    
+    header[data-testid="stHeader"] { display: none; }
     footer { display: none; }
     .block-container { padding-top: 1rem !important; }
-    
-    /* BACKGROUND */
     .stApp {
         background-color: #060b26; 
         background-image: 
@@ -33,43 +27,31 @@ def inject_luxury_css():
             radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%);
         background-attachment: fixed; background-size: cover;
     }
-
-    /* TYPOGRAPHY */
     h1, h2, h3, h4 { color: #ffffff !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 700 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
     div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 10px rgba(0, 201, 255, 0.6); }
     div[data-testid="stMetricLabel"] { color: #a0aaba !important; font-size: 0.8rem; }
-
-    /* CARDS */
     .luxury-card { background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px) saturate(180%); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
-    
-    /* AWARDS */
-    .award-card { 
-        border-left: 4px solid #00C9FF; transition: transform 0.3s; min-height: 380px; 
-        display: flex; flex-direction: column; justify-content: flex-start; align-items: center; text-align: center;
-    }
+    .award-card { border-left: 4px solid #00C9FF; transition: transform 0.3s; min-height: 380px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; text-align: center; }
     .award-card:hover { transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 201, 255, 0.3); }
     .award-blurb { color: #a0aaba; font-size: 0.85rem; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; width: 100%; font-style: italic; }
     .shame-card { background: rgba(40, 10, 10, 0.8); border: 1px solid #FF4B4B; border-left: 4px solid #FF4B4B; min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-    
-    /* PODIUM */
+    .studio-box { border-left: 4px solid #7209b7; }
     .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
     .gold { height: 300px; width: 100%; background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #FFD700; border-bottom: none; }
     .silver { height: 240px; width: 100%; background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #C0C0C0; border-bottom: none; }
     .bronze { height: 200px; width: 100%; background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #CD7F32; border-bottom: none; }
     .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
-
-    /* SIDEBAR */
     section[data-testid="stSidebar"] { background-color: rgba(10, 14, 35, 0.95); border-right: 1px solid rgba(255,255,255,0.05); }
     div[data-testid="stRadio"] > label { color: #8a9ab0 !important; font-size: 0.9rem; margin-bottom: 10px; }
     div[role="radiogroup"] label { padding: 12px 15px !important; border-radius: 10px !important; transition: all 0.3s ease; margin-bottom: 5px; border: 1px solid transparent; background-color: transparent; }
     div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.05) !important; color: #ffffff !important; transform: translateX(5px); }
     div[role="radiogroup"] label[data-checked="true"] { background: linear-gradient(90deg, rgba(0, 201, 255, 0.15), transparent) !important; border-left: 4px solid #00C9FF !important; color: #ffffff !important; font-weight: 700 !important; }
     div[role="radiogroup"] label > div:first-child { display: none !important; }
-    
-    /* LOADING OVERLAY */
-    .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .luxury-loader-text { font-family: 'Helvetica Neue', sans-serif; font-size: 3rem; font-weight: 900; text-transform: uppercase; letter-spacing: 4px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: shine 3s linear infinite; }
+    div[data-testid="stDataFrame"] { background-color: rgba(17, 25, 40, 0.5); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); }
     @keyframes shine { to { background-position: 200% center; } }
+    .luxury-loader-text { font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: shine 3s linear infinite; }
+    .loader-sub { font-family: monospace; color: #00C9FF; font-size: 1.2rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 3px; animation: blink 1.5s infinite ease-in-out; }
+    .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -107,10 +89,11 @@ def load_lottieurl(url: str):
 def luxury_spinner(text="Initializing Protocol..."):
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown(f'<div class="luxury-overlay"><div class="luxury-loader-text">LUXURY LEAGUE</div><div style="color: #00C9FF; margin-top: 20px; font-family: monospace;">⚡ {text}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="luxury-overlay"><div class="luxury-loader-text">LUXURY LEAGUE</div><div class="loader-sub">⚡ {text}</div></div>', unsafe_allow_html=True)
     try: yield
     finally: placeholder.empty()
 
+# PDF Helpers
 def clean_for_pdf(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -144,6 +127,42 @@ def create_download_link(val, filename):
 # ==============================================================================
 # 3. ANALYTICS ENGINES
 # ==============================================================================
+
+# --- THE MISSING FUNCTION: VEGAS PROPS ---
+@st.cache_data(ttl=3600)
+def get_vegas_props(api_key):
+    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 422 or not response.json(): return pd.DataFrame({"Status": ["Market Closed"]})
+        if response.status_code != 200: return None
+        data = response.json()
+        if not data: return pd.DataFrame({"Status": ["Market Closed"]})
+        
+        player_props = {}
+        for event in data:
+            for bookmaker in event['bookmakers']:
+                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
+                    for market in bookmaker['markets']:
+                        key = market['key']
+                        for outcome in market['outcomes']:
+                            name = outcome['description']
+                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                            elif key == 'player_anytime_td':
+                                odds = outcome.get('price', 0)
+                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
+                                player_props[name]['td'] = prob
+        vegas_data = []
+        for name, s in player_props.items():
+            score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
+            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+        return pd.DataFrame(vegas_data)
+    except: return None
+
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -222,14 +241,14 @@ def run_monte_carlo_simulation(_league, simulations=1000):
     current_w = _league.current_week
     try: num_playoff_teams = _league.settings.playoff_team_count
     except: num_playoff_teams = 4
-    team_power = {t.team_name: t.points_for / (current_w - 1) for t in _league.teams}
+    team_power = {t.team_id: t.points_for / (current_w - 1) for t in _league.teams}
     results = {t.team_name: 0 for t in _league.teams}
     for i in range(simulations):
         sim_standings = {k: v.copy() for k, v in team_data.items()}
         if current_w <= reg_season_end:
              for w in range(current_w, reg_season_end + 1):
                  for tid, stats in sim_standings.items():
-                     performance = np.random.normal(team_power.get(stats["name"], 100), 15)
+                     performance = np.random.normal(team_power[tid], 15)
                      if performance > 115: sim_standings[tid]["wins"] += 1
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
         for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
@@ -350,7 +369,6 @@ def calculate_draft_analysis(_league):
         prescient_data = {"Team": top[0], "Points": top[1]["Pts"], "Logo": top[1]["Logo"], "Wins": top[1]["Wins"]}
     return pd.DataFrame(roi_data), prescient_data
 
-# --- NEXT GEN STATS ENGINE ---
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
     years_to_try = [year, year - 1]
@@ -373,10 +391,9 @@ def analyze_nextgen_metrics_v3(roster, year):
     for player in roster:
         p_name, pos, pid, p_team = player.name, player.position, getattr(player, 'playerId', None), getattr(player, 'proTeam', 'N/A')
         if pos in ['WR', 'TE'] and not df_rec.empty:
-            # FIX: SAFE UNPACKING (The Lab Fix)
-            result = process.extractOne(p_name, df_rec['player_display_name'].unique())
-            if result and result[1] > 80:
-                match_name = result[0]
+            match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
                 player_stats = df_rec[df_rec['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
@@ -388,9 +405,9 @@ def analyze_nextgen_metrics_v3(roster, year):
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
         elif pos == 'RB' and not df_rush.empty:
-            result = process.extractOne(p_name, df_rush['player_display_name'].unique())
-            if result and result[1] > 80:
-                match_name = result[0]
+            match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
                 player_stats = df_rush[df_rush['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
@@ -398,9 +415,9 @@ def analyze_nextgen_metrics_v3(roster, year):
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
         elif pos == 'QB' and not df_pass.empty:
-            result = process.extractOne(p_name, df_pass['player_display_name'].unique())
-            if result and result[1] > 80:
-                match_name = result[0]
+            match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
                 player_stats = df_pass[df_pass['player_display_name'] == match_name]
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
@@ -409,43 +426,8 @@ def analyze_nextgen_metrics_v3(roster, year):
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
     return pd.DataFrame(insights)
 
-# --- VEGAS PROPS ENGINE (FIXED) ---
-@st.cache_data(ttl=3600)
-def get_vegas_props(api_key):
-    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
-    params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 422: return pd.DataFrame({"Status": ["Market Closed"]}) 
-        if response.status_code != 200: return None
-        data = response.json()
-        if not data: return pd.DataFrame({"Status": ["Market Closed"]}) 
-        
-        player_props = {}
-        for event in data:
-            for bookmaker in event['bookmakers']:
-                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
-                    for market in bookmaker['markets']:
-                        key = market['key']
-                        for outcome in market['outcomes']:
-                            name = outcome['description']
-                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
-                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
-                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
-                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
-                            elif key == 'player_anytime_td':
-                                odds = outcome.get('price', 0)
-                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
-                                player_props[name]['td'] = prob
-        vegas_data = []
-        for name, s in player_props.items():
-            score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
-            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
-        return pd.DataFrame(vegas_data)
-    except: return None
-
 # ==============================================================================
-# 4. AI AGENTS
+# 4. INTELLIGENCE (AI AGENTS)
 # ==============================================================================
 def get_openai_client(key): return OpenAI(api_key=key) if key else None
 def ai_response(key, prompt, tokens=600):
