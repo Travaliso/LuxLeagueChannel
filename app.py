@@ -693,7 +693,8 @@ elif selected_page == P_IPO:
     if "draft_roi" not in st.session_state:
         if st.button("📠 Run Audit"):
              with luxury_spinner("Auditing draft capital..."):
-                 df_roi, prescient_data = calculate_draft_analysis()
+                 # Pass current_week to the function
+                 df_roi, prescient_data = calculate_draft_analysis(current_week)
                  st.session_state["draft_roi"] = df_roi
                  st.session_state["prescient"] = prescient_data
                  st.rerun()
@@ -710,8 +711,8 @@ elif selected_page == P_IPO:
             <div style="flex: 3; padding-left: 20px;">
                 <h3 style="color: #92FE9D; margin: 0; text-transform: uppercase; letter-spacing: 2px;">👁️ The Prescient One</h3>
                 <div style="font-size: 1.8rem; font-weight: 900; color: white;">{prescient['Team']}</div>
-                <div style="color: #a0aaba; font-size: 1.1rem;">Generation of <b>{prescient['Points']:.0f} points</b> from non-drafted assets.</div>
-                <div style="color: #92FE9D; font-size: 0.9rem; margin-top: 5px;">"The Oracle of the Waiver Wire."</div>
+                <div style="color: #a0aaba; font-size: 1.1rem;">Generated <b>{prescient['Points']:.0f} points</b> from non-drafted assets while securing <b>{prescient['Wins']} Wins</b>.</div>
+                <div style="color: #92FE9D; font-size: 0.9rem; margin-top: 5px;">"Highest impact from the Waiver Wire among contenders."</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -726,7 +727,7 @@ elif selected_page == P_IPO:
                              title="Draft Pick ROI", height=600, color_discrete_sequence=px.colors.qualitative.Bold)
             fig.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba",
-                xaxis=dict(autorange="reversed", title="Draft Pick (Lower is Higher Cost)"), # Reverse X axis so 1st pick is left
+                xaxis=dict(autorange="reversed", title="Draft Pick (Lower is Higher Cost)"),
                 yaxis=dict(title="Total Points (Return)"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
@@ -737,18 +738,17 @@ elif selected_page == P_IPO:
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader("💎 Penny Stocks (Late Round Gems)")
-                # Filter: Round 8 or later, sort by points high to low
+                # Filter: Round 8 or later
                 penny_stocks = df_roi[df_roi["Round"] >= 8].sort_values(by="Points", ascending=False).head(10)
                 st.dataframe(penny_stocks[["Player", "Team", "Round", "Points"]], use_container_width=True, hide_index=True, column_config={"Points": st.column_config.NumberColumn(format="%.0f")})
 
             with c2:
                 st.subheader("💸 Bad Debt (Early Round Busts)")
-                # Filter: Rounds 1-3, sort by points low to high
+                # Filter: Rounds 1-3
                 bad_debt = df_roi[df_roi["Round"] <= 3].sort_values(by="Points", ascending=True).head(10)
                 st.dataframe(bad_debt[["Player", "Team", "Round", "Points"]], use_container_width=True, hide_index=True, column_config={"Points": st.column_config.NumberColumn(format="%.0f")})
         else:
             st.info("Draft data unavailable or no drafted players remaining on rosters.")
-
 elif selected_page == P_LAB:
     c1, c2 = st.columns([3, 1])
     with c1: st.header("🧬 The Lab (Next Gen Biometrics)")
