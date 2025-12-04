@@ -375,3 +375,75 @@ def ai_response(key, prompt, tokens=600):
     if not client: return "⚠️ Analyst Offline."
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except: return "Analyst Offline."
+        
+# --- [3.9.0] THE MULTIVERSE ENGINE (SCENARIO PLANNING) ---
+@st.cache_data(ttl=3600)
+def run_multiverse_simulation(_league, forced_winners_list=None, simulations=1000):
+    """
+    forced_winners_list: A list of Team Names who are GUARANTEED to win next week.
+    """
+    # 1. Setup Base Data (Current Standings)
+    # We map Team Name -> Current Wins
+    base_wins = {t.team_name: t.wins for t in _league.teams}
+    base_points = {t.team_name: t.points_for for t in _league.teams}
+    
+    # 2. Apply The "Multiverse" Changes (Forced Outcomes)
+    # If a team is in the 'forced_winners_list', we give them a win NOW.
+    # We assume the opponent loses (gets 0 wins added).
+    if forced_winners_list:
+        for winner in forced_winners_list:
+            if winner in base_wins:
+                base_wins[winner] += 1
+                
+    # 3. Determine Simulation Scope
+    # If we forced outcomes for Next Week, we only simulate from (Next Week + 1) to End.
+    # If we didn't force anything, we simulate from Next Week to End.
+    reg_season_end = _league.settings.reg_season_count
+    current_w = _league.current_week
+    
+    # If we are forcing next week, the random sim starts the week AFTER next
+    sim_start_week = current_w + 1 if forced_winners_list else current_w
+    
+    try: num_playoff_teams = _league.settings.playoff_team_count
+    except: num_playoff_teams = 4
+    
+    # Calculate Team Power for random simulation
+    team_power = {t.team_name: t.points_for / (current_w - 1) for t in _league.teams}
+    
+    results = {t.team_name: 0 for t in _league.teams}
+    
+    # 4. Run Simulation
+    for i in range(simulations):
+        # Create a temporary standings board for this run
+        sim_wins = base_wins.copy()
+        
+        # Loop through remaining weeks
+        if sim_start_week <= reg_season_end:
+            for w in range(sim_start_week, reg_season_end + 1):
+                # Simple Sim: Everyone plays against league average
+                # (For a perfect sim, we'd need the exact future schedule object, which is heavy)
+                for team_name in sim_wins:
+                    power = team_power.get(team_name, 100)
+                    performance = np.random.normal(power, 15)
+                    if performance > 115: # League avg winning score
+                        sim_wins[team_name] += 1
+        
+        # 5. Determine Playoff Teams for this run
+        # Sort by Wins (Desc), then Points (Desc)
+        # We use base_points for tiebreaker (assuming points don't change drastically in 2 weeks)
+        sorted_teams = sorted(sim_wins.keys(), key=lambda x: (sim_wins[x], base_points[x]), reverse=True)
+        
+        # Top N make playoffs
+        for team_name in sorted_teams[:num_playoff_teams]:
+            results[team_name] += 1
+
+    # 6. Formatting Output
+    final_output = []
+    for team_name in results:
+        odds = (results[team_name] / simulations) * 100
+        final_output.append({
+            "Team": team_name, 
+            "New Odds": odds
+        })
+        
+    return pd.DataFrame(final_output).sort_values(by="New Odds", ascending=False)
