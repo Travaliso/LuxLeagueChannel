@@ -418,7 +418,54 @@ def get_vegas_props(api_key):
         return pd.DataFrame(vegas_data)
     except: return None
 
+# --- [3.8.0] DRAFT IPO AUDIT ---
+@st.cache_data(ttl=3600)
+def calculate_draft_analysis():
+    # 1. Calculate "The Prescient One" (Waiver Points)
+    waiver_points = {t.team_name: {"Pts": 0, "Logo": get_logo(t)} for t in league.teams}
+    roi_data = []
 
+    # Iterate through current rosters to find drafted status and current points
+    for team in league.teams:
+        for player in team.roster:
+            if player.acquisitionType != 'DRAFT':
+                waiver_points[team.team_name]["Pts"] += player.total_points
+            else:
+                # If drafted, we need to find WHERE they were drafted.
+                # This requires cross-referencing the draft list.
+                pick_no = 999 # Default if not found
+                round_no = 99
+                try:
+                    for pick in league.draft:
+                        if pick.playerId == player.playerId:
+                            # Calculate overall pick
+                            pick_no = (pick.round_num - 1) * len(league.teams) + pick.round_pick
+                            round_no = pick.round_num
+                            break
+                except: pass # Handle leagues with no draft data accessible
+
+                if pick_no < 999:
+                     roi_data.append({
+                         "Player": player.name,
+                         "Team": team.team_name,
+                         "Round": round_no,
+                         "Pick Overall": pick_no,
+                         "Points": player.total_points,
+                         "Position": player.position,
+                         "ID": player.playerId
+                     })
+
+    # Determine Prescient One winner
+    prescient_team_name = max(waiver_points, key=lambda k: waiver_points[k]["Pts"])
+    prescient_data = {
+        "Team": prescient_team_name,
+        "Points": waiver_points[prescient_team_name]["Pts"],
+        "Logo": waiver_points[prescient_team_name]["Logo"]
+    }
+
+    df_roi = pd.DataFrame(roi_data)
+    return df_roi, prescient_data
+    
 # ==============================================================================
 # [4.0.0] INTELLIGENCE (AI AGENTS)
 # ==============================================================================
@@ -458,8 +505,9 @@ if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
-P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "🧬 The Lab", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
-page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
+# WITH THESE NEW LINES (adding P_IPO):
+P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_IPO, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT = "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", "📊 The IPO Audit", "🧬 The Lab", "🔮 The Forecast", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
+page_options = [P_LEDGER, P_HIERARCHY, P_AUDIT, P_HEDGE, P_IPO, P_LAB, P_FORECAST, P_NEXT, P_PROP, P_DEAL, P_DARK, P_TROPHY, P_VAULT]
 selected_page = st.sidebar.radio("Navigation", page_options, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -605,6 +653,69 @@ elif selected_page == P_HEDGE:
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         fig.update_traces(marker=dict(size=15, line=dict(width=2, color='White')), textposition='top center')
         st.plotly_chart(fig, use_container_width=True)
+
+elif selected_page == P_IPO:
+    st.header("📊 The IPO Audit (Draft Analysis)")
+    st.caption("Analyzing return on investment from draft capital and waiver wire acuity.")
+
+    if "draft_roi" not in st.session_state:
+        if st.button("📠 Run Audit"):
+             with luxury_spinner("Auditing draft capital..."):
+                 df_roi, prescient_data = calculate_draft_analysis()
+                 st.session_state["draft_roi"] = df_roi
+                 st.session_state["prescient"] = prescient_data
+                 st.rerun()
+    else:
+        df_roi = st.session_state["draft_roi"]
+        prescient = st.session_state["prescient"]
+
+        # 1. THE PRESCIENT ONE HERO CARD
+        st.markdown(f"""
+        <div class="luxury-card" style="border-left: 4px solid #92FE9D; background: linear-gradient(90deg, rgba(146, 254, 157, 0.1), rgba(17, 25, 40, 0.8)); display: flex; align-items: center;">
+            <div style="flex: 1; text-align: center;">
+                 <img src="{prescient['Logo']}" style="width: 90px; border-radius: 50%; border: 3px solid #92FE9D; box-shadow: 0 0 20px rgba(146, 254, 157, 0.4);">
+            </div>
+            <div style="flex: 3; padding-left: 20px;">
+                <h3 style="color: #92FE9D; margin: 0; text-transform: uppercase; letter-spacing: 2px;">👁️ The Prescient One</h3>
+                <div style="font-size: 1.8rem; font-weight: 900; color: white;">{prescient['Team']}</div>
+                <div style="color: #a0aaba; font-size: 1.1rem;">Generation of <b>{prescient['Points']:.0f} points</b> from non-drafted assets.</div>
+                <div style="color: #92FE9D; font-size: 0.9rem; margin-top: 5px;">"The Oracle of the Waiver Wire."</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.divider()
+
+        # 2. ROI SCATTER PLOT
+        st.subheader("📈 Capital Allocation Efficiency (Draft ROI)")
+        st.caption("Draft Position (Cost) vs. Total Points (Return). Top-Left is ideal.")
+        if not df_roi.empty:
+            fig = px.scatter(df_roi, x="Pick Overall", y="Points", color="Team", hover_data=["Player", "Round", "Position"],
+                             title="Draft Pick ROI", height=600, color_discrete_sequence=px.colors.qualitative.Bold)
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba",
+                xaxis=dict(autorange="reversed", title="Draft Pick (Lower is Higher Cost)"), # Reverse X axis so 1st pick is left
+                yaxis=dict(title="Total Points (Return)"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            fig.update_traces(marker=dict(size=12, line=dict(width=1, color='White'), opacity=0.8))
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 3. PENNY STOCKS & BAD DEBT
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("💎 Penny Stocks (Late Round Gems)")
+                # Filter: Round 8 or later, sort by points high to low
+                penny_stocks = df_roi[df_roi["Round"] >= 8].sort_values(by="Points", ascending=False).head(10)
+                st.dataframe(penny_stocks[["Player", "Team", "Round", "Points"]], use_container_width=True, hide_index=True, column_config={"Points": st.column_config.NumberColumn(format="%.0f")})
+
+            with c2:
+                st.subheader("💸 Bad Debt (Early Round Busts)")
+                # Filter: Rounds 1-3, sort by points low to high
+                bad_debt = df_roi[df_roi["Round"] <= 3].sort_values(by="Points", ascending=True).head(10)
+                st.dataframe(bad_debt[["Player", "Team", "Round", "Points"]], use_container_width=True, hide_index=True, column_config={"Points": st.column_config.NumberColumn(format="%.0f")})
+        else:
+            st.info("Draft data unavailable or no drafted players remaining on rosters.")
 
 elif selected_page == P_LAB:
     c1, c2 = st.columns([3, 1])
