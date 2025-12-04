@@ -900,3 +900,82 @@ elif selected_page == P_VAULT:
         fig = px.line(st.session_state["dynasty_raw"], x="Year", y="Wins", color="Manager", markers=True)
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
+elif selected_page == P_MULTI:
+    st.header("🌌 The Multiverse (Scenario Planner)")
+    st.caption("Control time and space. Force specific outcomes for next week to see how they impact your playoff odds.")
+    
+    # 1. Initialize "Base Reality" (Current Odds)
+    if "base_odds" not in st.session_state:
+        with ui.luxury_spinner("Calculating Baseline Reality..."):
+            st.session_state["base_odds"] = logic.run_monte_carlo_simulation(league)
+    
+    # 2. Get Next Week's Matchups
+    next_week = league.current_week
+    box_scores = league.box_scores(week=next_week)
+    
+    # 3. Create Controls
+    st.markdown("### 🎛️ Week {} Control Panel".format(next_week))
+    
+    forced_winners = []
+    
+    # Loop through games and create toggles
+    # We use a form so the page doesn't reload on every single click
+    with st.form("multiverse_form"):
+        c1, c2 = st.columns(2)
+        for i, game in enumerate(box_scores):
+            col = c1 if i % 2 == 0 else c2
+            with col:
+                st.markdown(f"**{game.home_team.team_name}** vs **{game.away_team.team_name}**")
+                # Unique key for every radio button
+                choice = st.radio(
+                    "Result:",
+                    ["Simulate", f"{game.home_team.team_name} Win", f"{game.away_team.team_name} Win"],
+                    key=f"game_{i}",
+                    label_visibility="collapsed",
+                    horizontal=True
+                )
+                
+                if "Home" in str(choice) or game.home_team.team_name in str(choice):
+                    forced_winners.append(game.home_team.team_name)
+                elif "Away" in str(choice) or game.away_team.team_name in str(choice):
+                    forced_winners.append(game.away_team.team_name)
+        
+        st.markdown("---")
+        run_scenario = st.form_submit_button("🔮 Enter The Multiverse (Run Scenario)")
+
+    # 4. Run Scenario Logic
+    if run_scenario:
+        with ui.luxury_spinner("Simulating Alternate Timeline..."):
+            # Run sim with forced winners
+            df_scenario = logic.run_multiverse_simulation(league, forced_winners_list=forced_winners)
+            
+            # Merge with Base Odds to show Delta
+            df_base = st.session_state["base_odds"][["Team", "Playoff Odds"]].rename(columns={"Playoff Odds": "Base Odds"})
+            df_final = pd.merge(df_scenario, df_base, on="Team")
+            
+            # Calculate Delta
+            df_final["Impact"] = df_final["New Odds"] - df_final["Base Odds"]
+            
+            # Sort by New Odds
+            df_final = df_final.sort_values(by="New Odds", ascending=False)
+            
+            # Save to state to display
+            st.session_state["scenario_results"] = df_final
+            
+    # 5. Display Results
+    if "scenario_results" in st.session_state:
+        st.divider()
+        st.subheader("🧬 Timeline Results")
+        
+        # Display Dataframe with fancy formatting
+        st.dataframe(
+            st.session_state["scenario_results"],
+            use_container_width=True,
+            hide_index=True,
+            column_order=["Team", "Base Odds", "New Odds", "Impact"],
+            column_config={
+                "Base Odds": st.column_config.NumberColumn(format="%.1f%%"),
+                "New Odds": st.column_config.ProgressColumn("Scenario Odds", format="%.1f%%", min_value=0, max_value=100),
+                "Impact": st.column_config.NumberColumn("Impact", format="%+.1f%%")
+            }
+        )
