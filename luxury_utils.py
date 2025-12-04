@@ -142,9 +142,15 @@ def get_vegas_props(api_key):
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
     try:
         response = requests.get(url, params=params)
-        if response.status_code != 200: return None
+        
+        # ERROR HANDLING --------------------------
+        if response.status_code == 401: return pd.DataFrame({"Status": ["Invalid API Key"]})
+        if response.status_code == 429: return pd.DataFrame({"Status": ["API Quota Exceeded"]})
+        if response.status_code != 200: return pd.DataFrame({"Status": [f"API Error: {response.status_code}"]})
+        
         data = response.json()
-        if not data: return pd.DataFrame({"Status": ["Market Closed"]})
+        if not data: return pd.DataFrame({"Status": ["No Games/Props Found"]})
+        # -----------------------------------------
         
         player_props = {}
         for event in data:
@@ -166,8 +172,12 @@ def get_vegas_props(api_key):
         for name, s in player_props.items():
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+        
+        if not vegas_data: return pd.DataFrame({"Status": ["No Player Data Available"]})
         return pd.DataFrame(vegas_data)
-    except: return None
+        
+    except Exception as e:
+        return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
