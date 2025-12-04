@@ -117,35 +117,18 @@ df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascendi
 df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
 df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 
-# ------------------------------------------------------------------
+# ==============================================================================
 # 5. DASHBOARD UI ROUTER
-# ------------------------------------------------------------------
+# ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# HERO ROW (Mobile-Optimized Horizontal Scroll)
+# HERO ROW (Weekly Elite)
 st.markdown("### 🌟 Weekly Elite")
-
-# Prepare data for the HTML block
+h1, h2, h3 = st.columns(3)
 top_3 = df_players.head(3).reset_index(drop=True)
-
-# Create a single horizontal container string
-hero_html = '<div style="display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px;">'
-for i, p in top_3.iterrows():
-    hero_html += f"""
-    <div class="luxury-card" style="min-width: 280px; flex: 0 0 auto; padding: 15px; display: flex; align-items: center;">
-        <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{p['ID']}.png&w=80&h=60" 
-             style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);">
-        <div>
-            <div style="color: #ffffff; font-weight: 800; font-size: 16px;">{p['Name']}</div>
-            <div style="color: #00C9FF; font-size: 14px; font-weight: 600;">{p['Points']} PTS</div>
-            <div style="color: #a0aaba; font-size: 11px;">{p['Team']}</div>
-        </div>
-    </div>
-    """
-hero_html += '</div>'
-
-# Render the custom HTML block
-st.markdown(hero_html, unsafe_allow_html=True)
+if len(top_3) >= 1: utils.render_hero_card(h1, top_3.iloc[0])
+if len(top_3) >= 2: utils.render_hero_card(h2, top_3.iloc[1])
+if len(top_3) >= 3: utils.render_hero_card(h3, top_3.iloc[2])
 st.markdown("---")
 
 # --- PAGE LOGIC ---
