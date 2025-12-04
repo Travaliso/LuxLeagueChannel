@@ -56,12 +56,23 @@ def inject_luxury_css():
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. HELPERS
+# 2. GLOBAL HELPERS
 # ==============================================================================
+@st.cache_resource
+def get_league(league_id, year, espn_s2, swid):
+    return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+
 def get_logo(team):
     fallback = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
-    try: return team.logo_url if team.logo_url else fallback
+    try: 
+        if hasattr(team, 'logo_url') and team.logo_url:
+            return team.logo_url
+        return fallback
     except: return fallback
+
+def load_lottieurl(url: str):
+    try: return requests.get(url).json()
+    except: return None
 
 def render_hero_card(col, player):
     with col:
@@ -77,10 +88,6 @@ def render_hero_card(col, player):
         </div>
         """, unsafe_allow_html=True)
 
-def load_lottieurl(url: str):
-    try: return requests.get(url).json()
-    except: return None
-
 @contextmanager
 def luxury_spinner(text="Initializing Protocol..."):
     placeholder = st.empty()
@@ -89,6 +96,7 @@ def luxury_spinner(text="Initializing Protocol..."):
     try: yield
     finally: placeholder.empty()
 
+# PDF Helpers
 def clean_for_pdf(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -120,7 +128,7 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
 
 # ==============================================================================
-# 3. ANALYTICS ENGINES
+# 3. LOGIC ENGINES
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
@@ -148,6 +156,7 @@ def calculate_season_awards(_league, current_week):
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
+    
     for w in range(1, current_week + 1):
         box = _league.box_scores(week=w)
         for game in box:
@@ -165,12 +174,12 @@ def calculate_season_awards(_league, current_week):
                     if p.slot_position == 'BE': team_stats[team_name]["Bench"] += p.points
                     else: team_stats[team_name]["Starters"] += p.points
                     status = getattr(p, 'injuryStatus', 'ACTIVE')
-                    if str(status).upper() in ['OUT', 'IR', 'RESERVE']: team_stats[team_name]["Injuries"] += 1
+                    if str(status).upper() in ['OUT', 'IR', 'RESERVE', 'SUSPENDED']: team_stats[team_name]["Injuries"] += 1
                     acq = getattr(p, 'acquisitionType', 'DRAFT')
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
-    
+
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     oracle = sorted([{"Team": t, "Eff": (s["Starters"]/(s["Starters"]+s["Bench"])*100) if (s["Starters"]+s["Bench"])>0 else 0, "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
@@ -230,14 +239,14 @@ def run_monte_carlo_simulation(_league, simulations=1000):
     current_w = _league.current_week
     try: num_playoff_teams = _league.settings.playoff_team_count
     except: num_playoff_teams = 4
-    team_power = {t.team_id: t.points_for / (current_w - 1) for t in _league.teams}
+    team_power = {t.team_name: t.points_for / (current_w - 1) for t in _league.teams}
     results = {t.team_name: 0 for t in _league.teams}
     for i in range(simulations):
         sim_standings = {k: v.copy() for k, v in team_data.items()}
         if current_w <= reg_season_end:
              for w in range(current_w, reg_season_end + 1):
                  for tid, stats in sim_standings.items():
-                     performance = np.random.normal(team_power[tid], 15)
+                     performance = np.random.normal(team_power.get(stats["name"], 100), 15)
                      if performance > 115: sim_standings[tid]["wins"] += 1
         sorted_teams = sorted(sim_standings.values(), key=lambda x: (x["wins"], x["points"]), reverse=True)
         for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
@@ -278,6 +287,47 @@ def run_multiverse_simulation(_league, forced_winners_list=None, simulations=100
     return pd.DataFrame(final_output).sort_values(by="New Odds", ascending=False)
 
 @st.cache_data(ttl=3600)
+def scan_dark_pool(_league, limit=20):
+    free_agents = _league.free_agents(size=150)
+    pool_data = []
+    for player in free_agents:
+        try:
+            status = getattr(player, 'injuryStatus', 'ACTIVE')
+            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
+            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            weeks = _league.current_week if _league.current_week > 0 else 1
+            avg_pts = total / weeks
+            if avg_pts > 0.5:
+                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
+        except: continue
+    df = pd.DataFrame(pool_data)
+    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    return df
+
+@st.cache_data(ttl=3600)
+def get_dynasty_data(league_id, espn_s2, swid, current_year, start_year):
+    all_seasons_data = []
+    for y in range(start_year, current_year + 1):
+        try:
+            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
+            for team in hist_league.teams:
+                owner_id = team.owners[0]['id'] if team.owners else f"Unknown_{team.team_id}"
+                owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}" if team.owners else f"Team {team.team_id}"
+                made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
+                is_champ = 1 if team.final_standing == 1 else 0
+                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
+        except: continue
+    return pd.DataFrame(all_seasons_data)
+
+def process_dynasty_leaderboard(df_history):
+    if df_history.empty: return pd.DataFrame()
+    leaderboard = df_history.groupby("Owner ID").agg({"Manager": "last", "Wins": "sum", "Losses": "sum", "Points For": "sum", "Champ": "sum", "Playoffs": "sum", "Year": "count"}).reset_index()
+    leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
+    leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
+    return leaderboard.sort_values(by="Wins", ascending=False)
+
+@st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
@@ -308,51 +358,6 @@ def get_vegas_props(api_key):
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
         return pd.DataFrame(vegas_data)
     except: return None
-
-@st.cache_data(ttl=3600)
-def scan_dark_pool(_league, limit=20):
-    free_agents = _league.free_agents(size=150)
-    pool_data = []
-    for player in free_agents:
-        try:
-            status = getattr(player, 'injuryStatus', 'ACTIVE')
-            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
-            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
-            total = player.total_points if player.total_points > 0 else player.projected_total_points
-            weeks = _league.current_week if _league.current_week > 0 else 1
-            avg_pts = total / weeks
-            if avg_pts > 0.5:
-                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
-        except: continue
-    df = pd.DataFrame(pool_data)
-    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
-    return df
-
-@st.cache_data(ttl=3600)
-def get_dynasty_data(league_id, espn_s2, swid, current_year, start_year):
-    all_seasons_data = []
-    for y in range(start_year, current_year + 1):
-        try:
-            hist_league = League(league_id=league_id, year=y, espn_s2=espn_s2, swid=swid)
-            for team in hist_league.teams:
-                if team.owners:
-                    owner_id = team.owners[0]['id']
-                    owner_name = f"{team.owners[0]['firstName']} {team.owners[0]['lastName']}"
-                else:
-                    owner_id = f"Unknown_{team.team_id}"
-                    owner_name = f"Team {team.team_id}"
-                made_playoffs = 1 if team.final_standing <= hist_league.settings.playoff_team_count else 0
-                is_champ = 1 if team.final_standing == 1 else 0
-                all_seasons_data.append({"Year": y, "Owner ID": owner_id, "Manager": owner_name, "Team Name": team.team_name, "Wins": team.wins, "Losses": team.losses, "Points For": team.points_for, "Champ": is_champ, "Playoffs": made_playoffs})
-        except: continue
-    return pd.DataFrame(all_seasons_data)
-
-def process_dynasty_leaderboard(df_history):
-    if df_history.empty: return pd.DataFrame()
-    leaderboard = df_history.groupby("Owner ID").agg({"Manager": "last", "Wins": "sum", "Losses": "sum", "Points For": "sum", "Champ": "sum", "Playoffs": "sum", "Year": "count"}).reset_index()
-    leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
-    leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
-    return leaderboard.sort_values(by="Wins", ascending=False)
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
@@ -412,7 +417,7 @@ def analyze_nextgen_metrics_v3(roster, year):
     return pd.DataFrame(insights)
 
 # ==============================================================================
-# 4. AI AGENTS
+# 4. INTELLIGENCE (AI AGENTS)
 # ==============================================================================
 def get_openai_client(key): return OpenAI(api_key=key) if key else None
 def ai_response(key, prompt, tokens=600):
@@ -426,6 +431,6 @@ def get_rankings_commentary(key, top, bottom): return ai_response(key, f"Write a
 def get_next_week_preview(key, games_list):
     matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
     return ai_response(key, f"Act as a Vegas Sports Bookie. Preview matchups: {matchups_str}. Pick 'Lock of the Week'.", 800)
-def get_season_retrospective(key, mvp, best_mgr): return ai_response(key, f"Write a 'State of the Union' address. MVP: {mvp}. Best Manager: {best_mgr}. Style: Presidential.", 1000)
+def get_season_retrospective(key, mvp, best_mgr): return ai_response(key, f"Write a 'State of the Union' address for the league. MVP: {mvp}. Best Manager: {best_mgr}. Style: Presidential.", 1000)
 def get_ai_trade_proposal(key, t1, t2, r1, r2): return ai_response(key, f"Act as Trade Broker. Propose a trade between {t1} ({r1}) and {t2} ({r2}). Explain why.", 600)
 def get_ai_scouting_report(key, free_agents_str): return ai_response(key, f"You are an elite NFL Talent Scout. Analyze free agents: {free_agents_str}. Identify 3 'Must Adds'. Style: Scouting Notebook.", 500)
