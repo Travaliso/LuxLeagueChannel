@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import nfl_data_py as nfl
 from openai import OpenAI
 import time
+import re
 
 # ==============================================================================
 # 1. CSS & STYLING
@@ -88,6 +89,12 @@ def inject_luxury_css():
         font-size: 0.8rem;
     }
 
+    .award-card { border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
+    .studio-box { border-left: 4px solid #7209b7; }
+    .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
+
     /* --- MOBILE NAV --- */
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
     header[data-testid="stHeader"] { background-color: transparent; }
@@ -124,38 +131,44 @@ def get_logo(team):
     try: return team.logo_url if team.logo_url else fallback
     except: return fallback
 
+def normalize_name(name):
+    """
+    Strips punctuation, lowercases, and removes suffixes for better matching.
+    Ex: "D'Andre Swift" -> "deandreswift"
+    """
+    name = str(name).lower()
+    name = re.sub(r"[^a-zA-Z0-9]", "", name)
+    name = name.replace("jr", "").replace("iii", "").replace("ii", "")
+    return name
+
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""<div class="luxury-card" style="padding: 15px; display: flex; align-items: center; justify-content: start;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);"><div><div style="color: #ffffff; font-weight: 800; font-size: 16px;">{player['Name']}</div><div style="color: #00C9FF; font-size: 14px; font-weight: 600;">{player['Points']} PTS</div><div style="color: #a0aaba; font-size: 11px;">{player['Team']}</div></div></div>""", unsafe_allow_html=True)
 
 def render_prop_card(col, row):
-    # Determine Badge Class
     v = row['Verdict']
     badge_class = "badge-fire" if "Must" in v or "Elite" in v else "badge-gem" if "1" in v else "badge-ok"
     
-    # Player Image (Use ID from ESPN if available)
+    # SAFE GET for Headshots
     pid = row.get('ESPN ID', 0)
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     
-    # Formatting Stats
     main_stat = ""
     if row['Pass Yds'] > 0: main_stat = f"{row['Pass Yds']:.0f} Pass Yds"
     elif row['Rush Yds'] > 0: main_stat = f"{row['Rush Yds']:.0f} Rush Yds"
     elif row['Rec Yds'] > 0: main_stat = f"{row['Rec Yds']:.0f} Rec Yds"
     
-    # Edge Calculation (Vegas - ESPN)
-    edge_val = row['Edge']
+    edge_val = row.get('Edge', 0.0)
     edge_color = "#00C9FF" if edge_val > 0 else "#FF4B4B"
     edge_arrow = "▲" if edge_val > 0 else "▼"
     
-    # Flattened HTML for Markdown
     html = f"""
 <div class="luxury-card">
 <div style="display:flex; justify-content:space-between; align-items:start;">
     <div style="flex:1;">
         <div class="prop-badge {badge_class}">{v}</div>
         <div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div>
-        <div style="color:#a0aaba; font-size:0.8rem;">{row['Position']} | {row['Team']}</div>
+        <div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div>
     </div>
     <img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;">
 </div>
@@ -192,38 +205,38 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (VEGAS + ESPN MERGE)
+# 3. ANALYTICS (IMPROVED MATCHING)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league):
     # 1. PREPARE ESPN ROSTER MAP
-    # We scan all rosters to build a map: Name -> {ID, Pos, Team, ESPN_Proj}
     espn_map = {}
     
-    # Collect all players from all teams
+    # Helper to add players to map
+    def add_player(p, team_name):
+        # We store normalized keys for direct lookup
+        norm_key = normalize_name(p.name)
+        espn_map[norm_key] = {
+            "name": p.name, # Keep original display name
+            "id": p.playerId,
+            "pos": p.position,
+            "team": team_name, 
+            "proTeam": p.proTeam,
+            "espn_proj": p.projected_total_points
+        }
+
     for team in _league.teams:
         for player in team.roster:
-            espn_map[player.name] = {
-                "id": player.playerId,
-                "pos": player.position,
-                "team": team.team_name, # User's fantasy team
-                "proTeam": player.proTeam,
-                "espn_proj": player.projected_total_points
-            }
+            add_player(player, team.team_name)
             
-    # Also fetch free agents (top 100) to ensure we cover waivers
+    # Expanded FA Pool
     try:
-        fas = _league.free_agents(size=100)
+        fas = _league.free_agents(size=500)
         for player in fas:
-            if player.name not in espn_map:
-                espn_map[player.name] = {
-                    "id": player.playerId,
-                    "pos": player.position,
-                    "team": "Free Agent",
-                    "proTeam": player.proTeam,
-                    "espn_proj": player.projected_total_points
-                }
-    except: pass # Ignore if FA fetch fails
+            norm_key = normalize_name(player.name)
+            if norm_key not in espn_map:
+                add_player(player, "Free Agent")
+    except: pass 
 
     # 2. FETCH VEGAS ODDS
     url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
@@ -236,7 +249,7 @@ def get_vegas_props(api_key, _league):
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        target_games = games[:8] # Limit to next 8 games
+        target_games = games[:16] # Full slate
         player_props = {}
         
         for game in target_games:
@@ -254,7 +267,6 @@ def get_vegas_props(api_key, _league):
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
                             
-                            # Simple aggregation (latest non-zero)
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -264,32 +276,33 @@ def get_vegas_props(api_key, _league):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # 3. MERGE & CALCULATE VERDICT
+        # 3. MATCHING LOGIC (ROBUST)
         vegas_data = []
+        # Get list of all ESPN normalized names for fuzzy matching backup
+        espn_keys = list(espn_map.keys())
+        
         for name, s in player_props.items():
-            # MATCHING
-            # Try exact match first, then fuzzy
-            match_name = name
-            match_data = espn_map.get(name)
+            norm_vegas_name = normalize_name(name)
             
+            # A) Direct Match
+            match_data = espn_map.get(norm_vegas_name)
+            
+            # B) Fuzzy Match if Direct Fails
             if not match_data:
-                # Fuzzy match if exact fails
-                best_match = process.extractOne(name, list(espn_map.keys()))
-                if best_match and best_match[1] > 85:
-                    match_name = best_match[0]
-                    match_data = espn_map[match_name]
+                # Fuzzy match against the normalized keys
+                best_match = process.extractOne(norm_vegas_name, espn_keys)
+                if best_match and best_match[1] > 80: # Lowered threshold
+                    match_data = espn_map[best_match[0]]
             
-            # If still no match, skip (likely defensive player or irrelevant)
             if not match_data: continue
             
-            # SCORING
+            # Calculate Score
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             espn_proj = match_data['espn_proj']
             edge = score - espn_proj
             pos = match_data['pos']
             
             if score > 3.0: 
-                # POSITION-AWARE VERDICTS
                 verdict = "⚠️ Risky"
                 if pos == 'QB':
                     if score >= 22: verdict = "🔥 Elite QB1"
@@ -299,15 +312,15 @@ def get_vegas_props(api_key, _league):
                     if score >= 14: verdict = "🔥 Elite TE"
                     elif score >= 10: verdict = "💎 TE1"
                     elif score >= 6: verdict = "🆗 Startable"
-                else: # RB/WR
+                else: 
                     if score >= 18: verdict = "🔥 Must Start"
                     elif score >= 14: verdict = "💎 RB1/WR1"
                     elif score >= 10: verdict = "🆗 Flex Play"
                 
                 vegas_data.append({
-                    "Player": match_name, # Use ESPN name for consistency
+                    "Player": match_data['name'], # Use ESPN display name
                     "Position": pos,
-                    "Team": match_data['team'], # Fantasy Owner
+                    "Team": match_data['team'], 
                     "ESPN ID": match_data['id'],
                     "Proj Pts": score,
                     "ESPN Proj": espn_proj,
@@ -327,7 +340,7 @@ def get_vegas_props(api_key, _league):
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
-# (Keep other analytics functions same as before...)
+# (Keep other analytics functions same...)
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -344,7 +357,7 @@ def calculate_heavy_analytics(_league, current_week):
         true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
         luck_rating = (actual_win_pct - true_win_pct) * 10
-        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating})
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
     return pd.DataFrame(data_rows).sort_values(by="Power Score", ascending=False)
 
 @st.cache_data(ttl=3600)
