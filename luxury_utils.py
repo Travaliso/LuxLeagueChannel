@@ -138,6 +138,7 @@ def luxury_spinner(text="Initializing Protocol..."):
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
+    # Expanded logic to catch ANY available bookmaker
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
     try:
@@ -153,28 +154,38 @@ def get_vegas_props(api_key):
         # -----------------------------------------
         
         player_props = {}
+        # Iterate through ALL events and ALL bookmakers (removed strict filter)
         for event in data:
             for bookmaker in event['bookmakers']:
-                if bookmaker['key'] in ['draftkings', 'fanduel', 'mgm', 'caesars']:
-                    for market in bookmaker['markets']:
-                        key = market['key']
-                        for outcome in market['outcomes']:
-                            name = outcome['description']
-                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
-                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
-                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
-                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
-                            elif key == 'player_anytime_td':
-                                odds = outcome.get('price', 0)
-                                prob = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
-                                player_props[name]['td'] = prob
+                # We accept any bookmaker now to ensure data coverage
+                for market in bookmaker['markets']:
+                    key = market['key']
+                    for outcome in market['outcomes']:
+                        name = outcome['description']
+                        if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                        
+                        # We simply take the last value found. 
+                        # Ideally we'd average, but for speed/simplicity this works.
+                        if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                        elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                        elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                        elif key == 'player_anytime_td':
+                            odds = outcome.get('price', 0)
+                            # Convert american odds to probability
+                            if odds > 0: prob = 100/(odds+100)
+                            else: prob = abs(odds)/(abs(odds)+100)
+                            player_props[name]['td'] = prob
+
         vegas_data = []
         for name, s in player_props.items():
+            # Custom "Vegas Score" to highlight valuable players
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
-            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score})
+            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score, "TD Prob": s['td']})
         
-        if not vegas_data: return pd.DataFrame({"Status": ["No Player Data Available"]})
-        return pd.DataFrame(vegas_data)
+        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found in Feed"]})
+        
+        df = pd.DataFrame(vegas_data).sort_values(by="Vegas Score", ascending=False)
+        return df
         
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
