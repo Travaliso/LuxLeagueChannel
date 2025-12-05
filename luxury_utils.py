@@ -22,7 +22,7 @@ def inject_luxury_css():
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'Lato', sans-serif; color: #E0E0E0; }
     h1, h2, h3 { font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    .stApp { background-color: #060b26; background-image: radial-gradient(circle at 0% 0%, rgba(58, 12, 163, 0.4) 0%, transparent 50%), radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%); background-attachment: fixed; background-size: cover; }
+    .stApp { }
     
     .luxury-card { background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
     
