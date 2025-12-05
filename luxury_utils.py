@@ -70,7 +70,7 @@ def inject_luxury_css():
     
     .stat-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr; /* Added column for Hit Rate */
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 5px;
         margin-top: 15px;
         padding-top: 15px;
@@ -149,8 +149,13 @@ def get_logo(team):
     except: return fallback
 
 def normalize_name(name):
+    """
+    Standardize names for matching (e.g. "Josh Allen" == "joshallen")
+    """
     name = str(name).lower()
+    # Remove punctuation like apostrophes, dots, hyphens
     name = re.sub(r"[^a-zA-Z0-9]", "", name)
+    # Remove common suffixes
     name = name.replace("jr", "").replace("iii", "").replace("ii", "")
     return name
 
@@ -186,8 +191,10 @@ def render_prop_card(col, row):
     hit_rate_str = row.get('Hit Rate', 'N/A')
     hit_color = "#E0E0E0"
     if isinstance(hit_rate_str, str) and "%" in hit_rate_str:
-        pct = int(hit_rate_str.replace('%',''))
-        hit_color = "#00C9FF" if pct >= 60 else "#FF4B4B" if pct <= 40 else "#E0E0E0"
+        try:
+            pct = int(hit_rate_str.replace('%',''))
+            hit_color = "#00C9FF" if pct >= 60 else "#FF4B4B" if pct <= 40 else "#E0E0E0"
+        except: pass
 
     html = f"""
 <div class="luxury-card">
@@ -242,36 +249,66 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (HIT RATES)
+# 3. ANALYTICS (HIT RATES + BOX SCORE PROJECTIONS)
 # ==============================================================================
 @st.cache_data(ttl=3600*24)
 def load_nfl_stats(year):
-    # Fetch season stats for Hit Rate calculation
     try:
+        # Load data, try current year
         df = nfl.import_weekly_data([year])
+        # Add Normalized Name Column for easier matching
+        if not df.empty:
+            df['norm_name'] = df['player_display_name'].apply(normalize_name)
         return df
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def get_vegas_props(api_key, _league):
-    # 1. LOAD HISTORICAL DATA (For Hit Rates)
-    # We load this once per day (ttl=24h)
-    stats_df = load_nfl_stats(2024) # Assuming current season, could pass YEAR var
+def get_vegas_props(api_key, _league, week):
+    # 1. LOAD HISTORICAL STATS (For Hit Rate)
+    # Note: Use 2024 if 2025 data isn't fully available in library yet
+    stats_df = load_nfl_stats(2024) 
     
-    # 2. PREPARE ESPN ROSTER MAP
+    # 2. PREPARE ESPN ROSTER MAP (Using Weekly Box Scores for Accurate Projections)
     espn_map = {}
-    def add_player(p, team_name):
+    
+    # We fetch the box scores for the SELECTED week to get accurate weekly projections
+    box_scores = _league.box_scores(week=week)
+    
+    # Helper to process players
+    def process_player(p, team_name):
         norm_key = normalize_name(p.name)
+        # Use projected_points (weekly) not total (season)
+        proj = p.projected_points if p.projected_points > 0 else 0
+        
         espn_map[norm_key] = {
-            "name": p.name, "id": p.playerId, "pos": p.position,
-            "team": team_name, "proTeam": p.proTeam, "espn_proj": p.projected_total_points
+            "name": p.name, 
+            "id": p.playerId, 
+            "pos": p.position,
+            "team": team_name, 
+            "proTeam": p.proTeam,
+            "espn_proj": proj
         }
 
-    for team in _league.teams:
-        for player in team.roster: add_player(player, team.team_name)
+    # Iterate through matchups to get starters + bench
+    for game in box_scores:
+        for player in game.home_lineup: process_player(player, game.home_team.team_name)
+        for player in game.away_lineup: process_player(player, game.away_team.team_name)
+            
+    # Free Agents (Fallback to season avg or 0 if weekly proj unavailable)
     try:
-        for player in _league.free_agents(size=500):
-            if normalize_name(player.name) not in espn_map: add_player(player, "Free Agent")
+        fas = _league.free_agents(size=500)
+        for player in fas:
+            norm_key = normalize_name(player.name)
+            if norm_key not in espn_map:
+                # FA object might not have weekly projection, use 0 as fallback or try to infer
+                espn_map[norm_key] = {
+                    "name": player.name, 
+                    "id": player.playerId, 
+                    "pos": player.position,
+                    "team": "Free Agent", 
+                    "proTeam": player.proTeam,
+                    "espn_proj": getattr(player, 'projected_points', 0)
+                }
     except: pass 
 
     # 3. FETCH VEGAS ODDS
@@ -310,45 +347,41 @@ def get_vegas_props(api_key, _league):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # 4. MERGE & CALCULATE HIT RATES
+        # 4. MERGE & HIT RATE
         vegas_data = []
         espn_keys = list(espn_map.keys())
         
         for name, s in player_props.items():
             norm_vegas_name = normalize_name(name)
+            
+            # Lookup in ESPN Map
             match_data = espn_map.get(norm_vegas_name)
             if not match_data:
+                # Fuzzy fallback if exact normalized match fails
                 best_match = process.extractOne(norm_vegas_name, espn_keys)
                 if best_match and best_match[1] > 80: match_data = espn_map[best_match[0]]
+            
             if not match_data: continue
             
-            # --- HIT RATE CALCULATION ---
+            # HIT RATE LOGIC (Using Normalized Names in Stats DF)
             hit_rate_display = "N/A"
             if not stats_df.empty:
-                # Find stats for this player (fuzzy match against stats DB)
-                # nfl_data_py names are usually "J.Allen", so we normalize slightly differently or fuzzy match
-                # For speed, we try exact first then fuzzy on display name
-                p_stats = stats_df[stats_df['player_display_name'] == match_data['name']]
-                if p_stats.empty:
-                    # Try fuzzy match on stats DB names (expensive, do only if needed)
-                    # For performance, skipping deep fuzzy here, relying on exact display name match
-                    pass
+                # Look for player in stats DB using normalized name
+                p_stats = stats_df[stats_df['norm_name'] == norm_vegas_name]
                 
                 if not p_stats.empty:
-                    # Get last 5 games
                     last_5 = p_stats.sort_values(by='week', ascending=False).head(5)
                     hits = 0
                     total_g = len(last_5)
                     
                     if total_g > 0:
-                        if s['pass'] > 0: hits = sum(last_5['passing_yards'] > s['pass'])
-                        elif s['rush'] > 0: hits = sum(last_5['rushing_yards'] > s['rush'])
-                        elif s['rec'] > 0: hits = sum(last_5['receiving_yards'] > s['rec'])
-                        
+                        if s['pass'] > 0: hits = sum(last_5['passing_yards'] >= s['pass'])
+                        elif s['rush'] > 0: hits = sum(last_5['rushing_yards'] >= s['rush'])
+                        elif s['rec'] > 0: hits = sum(last_5['receiving_yards'] >= s['rec'])
                         pct = (hits / total_g) * 100
                         hit_rate_display = f"{int(pct)}%"
 
-            # --- SCORING ---
+            # SCORING
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             espn_proj = match_data['espn_proj']
             edge = score - espn_proj
@@ -378,7 +411,7 @@ def get_vegas_props(api_key, _league):
                     "ESPN Proj": espn_proj,
                     "Edge": edge,
                     "Verdict": verdict,
-                    "Hit Rate": hit_rate_display, # NEW FIELD
+                    "Hit Rate": hit_rate_display,
                     "TD %": s['td'],
                     "Pass Yds": s['pass'] if s['pass']>0 else 0,
                     "Rush Yds": s['rush'] if s['rush']>0 else 0,
@@ -391,7 +424,7 @@ def get_vegas_props(api_key, _league):
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
-# (Keep other analytics functions same...)
+# (Rest of file unchanged...)
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -425,12 +458,10 @@ def calculate_season_awards(_league, current_week):
             margin = abs(game.home_score - game.away_score)
             if game.home_score > game.away_score: winner, loser = game.home_team.team_name, game.away_team.team_name
             else: winner, loser = game.away_team.team_name, game.home_team.team_name
-            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
-            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
