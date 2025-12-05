@@ -323,7 +323,7 @@ elif selected_page == P_PROP:
             if "Status" in df.columns: 
                 st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
-                # --- FILTERS ROW ---
+                # --- FILTER ROW (TOP) ---
                 c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
                 with c1:
                     search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
@@ -332,16 +332,32 @@ elif selected_page == P_PROP:
                 with c3:
                     verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
                 with c4:
-                    # TEAM FILTER ADDED
                     team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 
-                # Apply Filters
+                # --- SORT ROW (BOTTOM) ---
+                c_sort, c_space = st.columns([1, 3])
+                with c_sort:
+                    # NEW SORT FILTER
+                    sort_order = st.selectbox(
+                        "Sort Order", 
+                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"]
+                    )
+
+                # APPLY FILTERS
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
                 
-                # Render Cards
+                # APPLY SORT
+                if "Highest Projection" in sort_order:
+                    df = df.sort_values(by="Proj Pts", ascending=False)
+                elif "Best Edge" in sort_order:
+                    df = df.sort_values(by="Edge", ascending=False) # Positive Edge First
+                elif "Worst Edge" in sort_order:
+                    df = df.sort_values(by="Edge", ascending=True)  # Negative Edge First
+
+                # RENDER CARDS
                 if df.empty:
                     st.info("No players match your search.")
                 else:
@@ -395,7 +411,7 @@ elif selected_page == P_TROPHY:
     else:
         aw = st.session_state["awards"]
         if "season_comm" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.markdown("<h2 style='text-align: center;'>THE PODIUM</h2>", unsafe_allow_html=True)
+        st.divider(); st.markdown("<h2 style='text-align: center;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
         
         pod = aw.get("Podium", [])
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
