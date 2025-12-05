@@ -116,12 +116,11 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (FIXED 422 ERROR)
+# 3. ANALYTICS (TRANSLATED FOR HUMANS)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # FIXED: The URL was previously 'events/upcoming/odds', which caused the 422 error.
-    # It must be just '/odds' to get the list of games first.
+    # Use general odds endpoint first to avoid 422 error
     url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
     
@@ -132,14 +131,11 @@ def get_vegas_props(api_key):
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        # STEP 2: Loop through the next 5 games to fetch props
-        # We limit to 5 to prevent slow loading
-        target_games = games[:5] 
+        target_games = games[:8] # Fetch props for next 8 games
         player_props = {}
         
         for game in target_games:
             game_id = game['id']
-            # Specific Endpoint for Props per Event
             url_event = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game_id}/odds'
             params_event = {
                 'api_key': api_key, 
@@ -148,7 +144,6 @@ def get_vegas_props(api_key):
                 'oddsFormat': 'american'
             }
             
-            # Fetch props for this specific game
             r_prop = requests.get(url_event, params=params_event)
             if r_prop.status_code == 200:
                 data = r_prop.json()
@@ -160,7 +155,7 @@ def get_vegas_props(api_key):
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
                             
-                            # Grab values (simplest: take latest found)
+                            # Simplistic aggregation: take last non-zero value found
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -171,16 +166,33 @@ def get_vegas_props(api_key):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # STEP 3: Aggregate
+        # TRANSLATION LAYER
         vegas_data = []
         for name, s in player_props.items():
-            # "Vegas Score" = Fantasy Points projection based on lines
+            # 1. Calculate Fantasy Points (PPR approx)
+            # 0.04 pts/pass yd, 0.1 pts/rush/rec yd, 6 pts/TD
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
-            if score > 1: vegas_data.append({"Player": name, "Vegas Score": score, "TD Prob": s['td']})
+            
+            if score > 2.0: # Filter out irrelevant players
+                # 2. Assign Verdict
+                if score >= 18: verdict = "🔥 Must Start"
+                elif score >= 14: verdict = "💎 RB1/WR1"
+                elif score >= 10: verdict = "🆗 Flex Play"
+                else: verdict = "⚠️ Risky"
+                
+                vegas_data.append({
+                    "Player": name,
+                    "Proj Pts": score,
+                    "Verdict": verdict,
+                    "TD %": s['td'],
+                    "Pass Yds": s['pass'] if s['pass'] > 0 else None,
+                    "Rush Yds": s['rush'] if s['rush'] > 0 else None,
+                    "Rec Yds": s['rec'] if s['rec'] > 0 else None
+                })
         
-        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found (Try Closer to Gametime)"]})
+        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found (Check closer to gametime)"]})
         
-        df = pd.DataFrame(vegas_data).sort_values(by="Vegas Score", ascending=False)
+        df = pd.DataFrame(vegas_data).sort_values(by="Proj Pts", ascending=False)
         return df
         
     except Exception as e:
