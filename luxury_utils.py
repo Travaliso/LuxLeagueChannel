@@ -9,9 +9,10 @@ from thefuzz import process
 from contextlib import contextmanager
 import nfl_data_py as nfl
 from openai import OpenAI
+import time
 
 # ==============================================================================
-# 1. CSS & STYLING (RESPONSIVE)
+# 1. CSS & STYLING
 # ==============================================================================
 def inject_luxury_css():
     st.markdown("""
@@ -54,45 +55,26 @@ def inject_luxury_css():
     .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
     .studio-box { border-left: 4px solid #7209b7; }
     .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .gold { height: 300px; width: 100%; background: linear-gradient(180deg, rgba(255, 215, 0, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #FFD700; border-bottom: none; }
-    .silver { height: 240px; width: 100%; background: linear-gradient(180deg, rgba(192, 192, 192, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #C0C0C0; border-bottom: none; }
-    .bronze { height: 200px; width: 100%; background: linear-gradient(180deg, rgba(205, 127, 50, 0.2), rgba(17, 25, 40, 0.9)); border: 1px solid #CD7F32; border-bottom: none; }
     .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
 
-    /* --- MOBILE & NAVIGATION FIX --- */
-    [data-testid="stSidebarNav"] {
-        display: block !important;
-        visibility: visible !important;
-    }
-    header[data-testid="stHeader"] {
-        background-color: transparent;
-    }
+    /* --- MOBILE NAV --- */
+    [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
+    header[data-testid="stHeader"] { background-color: transparent; }
 
-    /* --- RESPONSIVE BREAKPOINTS --- */
+    /* --- BREAKPOINTS --- */
     @media (max-width: 800px) {
-        .block-container {
-            padding-top: 3rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
+        .block-container { padding-top: 3rem !important; }
         h1 { font-size: 1.8rem !important; }
-        h2 { font-size: 1.5rem !important; }
         img { max-width: 100% !important; height: auto !important; }
     }
     
     /* --- LOADER --- */
     @keyframes shine { to { background-position: 200% center; } }
     .luxury-loader-text { 
-        font-family: 'Helvetica Neue', sans-serif; 
-        font-size: 4rem; 
-        font-weight: 900; 
-        text-transform: uppercase; 
-        letter-spacing: 8px; 
+        font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; 
+        text-transform: uppercase; letter-spacing: 8px; 
         background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); 
-        background-size: 200% auto; 
-        color: transparent; 
-        -webkit-background-clip: text; 
-        background-clip: text; 
+        background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; 
         animation: shine 3s linear infinite; 
     }
     .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -116,9 +98,9 @@ def render_hero_card(col, player):
         st.markdown(f"""
         <div class="luxury-card" style="padding: 15px; display: flex; align-items: center; justify-content: start;">
             <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" 
-                 style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5); box-shadow: 0 0 10px rgba(0, 201, 255, 0.2);">
+                 style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);">
             <div>
-                <div style="color: #ffffff; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">{player['Name']}</div>
+                <div style="color: #ffffff; font-weight: 800; font-size: 16px;">{player['Name']}</div>
                 <div style="color: #00C9FF; font-size: 14px; font-weight: 600;">{player['Points']} PTS</div>
                 <div style="color: #a0aaba; font-size: 11px;">{player['Team']}</div>
             </div>
@@ -134,55 +116,70 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS
+# 3. ANALYTICS (FIXED 422 ERROR LOGIC)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # Expanded logic to catch ANY available bookmaker
-    url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
-    params = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american', 'dateFormat': 'iso'}
+    # STEP 1: Get Upcoming Game IDs
+    url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
+    
     try:
-        response = requests.get(url, params=params)
+        res = requests.get(url_list, params=params_list)
+        if res.status_code != 200: return pd.DataFrame({"Status": [f"API Connection Error: {res.status_code}"]})
         
-        # ERROR HANDLING --------------------------
-        if response.status_code == 401: return pd.DataFrame({"Status": ["Invalid API Key"]})
-        if response.status_code == 429: return pd.DataFrame({"Status": ["API Quota Exceeded"]})
-        if response.status_code != 200: return pd.DataFrame({"Status": [f"API Error: {response.status_code}"]})
+        games = res.json()
+        if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        data = response.json()
-        if not data: return pd.DataFrame({"Status": ["No Games/Props Found"]})
-        # -----------------------------------------
-        
+        # STEP 2: Loop through the next 5 games to fetch props (Avoids 422 Error)
+        # We limit to 5 to prevent slow loading or rate limits
+        target_games = games[:5] 
         player_props = {}
-        # Iterate through ALL events and ALL bookmakers (removed strict filter)
-        for event in data:
-            for bookmaker in event['bookmakers']:
-                # We accept any bookmaker now to ensure data coverage
-                for market in bookmaker['markets']:
-                    key = market['key']
-                    for outcome in market['outcomes']:
-                        name = outcome['description']
-                        if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
-                        
-                        # We simply take the last value found. 
-                        # Ideally we'd average, but for speed/simplicity this works.
-                        if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
-                        elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
-                        elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
-                        elif key == 'player_anytime_td':
-                            odds = outcome.get('price', 0)
-                            # Convert american odds to probability
-                            if odds > 0: prob = 100/(odds+100)
-                            else: prob = abs(odds)/(abs(odds)+100)
-                            player_props[name]['td'] = prob
+        
+        for game in target_games:
+            game_id = game['id']
+            # Specific Endpoint for Props per Event
+            url_event = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game_id}/odds'
+            params_event = {
+                'api_key': api_key, 
+                'regions': 'us', 
+                'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 
+                'oddsFormat': 'american'
+            }
+            
+            # Fetch props for this specific game
+            r_prop = requests.get(url_event, params=params_event)
+            if r_prop.status_code == 200:
+                data = r_prop.json()
+                # Extract bookmakers
+                bookmakers = data.get('bookmakers', [])
+                for bookmaker in bookmakers:
+                    for market in bookmaker['markets']:
+                        key = market['key']
+                        for outcome in market['outcomes']:
+                            name = outcome['description']
+                            if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            
+                            # Grab values
+                            if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
+                            elif key == 'player_anytime_td':
+                                odds = outcome.get('price', 0)
+                                if odds > 0: prob = 100/(odds+100)
+                                else: prob = abs(odds)/(abs(odds)+100)
+                                player_props[name]['td'] = prob
+            # Small sleep to be nice to the API
+            time.sleep(0.1)
 
+        # STEP 3: Aggregate
         vegas_data = []
         for name, s in player_props.items():
-            # Custom "Vegas Score" to highlight valuable players
+            # "Vegas Score" = Fantasy Points projection based on lines
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             if score > 1: vegas_data.append({"Player": name, "Vegas Score": score, "TD Prob": s['td']})
         
-        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found in Feed"]})
+        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found (Try Closer to Gametime)"]})
         
         df = pd.DataFrame(vegas_data).sort_values(by="Vegas Score", ascending=False)
         return df
