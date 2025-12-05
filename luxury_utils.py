@@ -78,12 +78,15 @@ def inject_luxury_css():
     .stat-box { text-align: center; }
     .stat-val { font-size: 1.2rem; font-weight: 700; color: white; }
     .stat-label { font-size: 0.7rem; color: #a0aaba; text-transform: uppercase; }
-
-    .award-card { border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-    .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
-    .studio-box { border-left: 4px solid #7209b7; }
-    .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
+    
+    .edge-box {
+        margin-top: 10px;
+        background: rgba(0,0,0,0.3);
+        padding: 8px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 0.8rem;
+    }
 
     /* --- MOBILE NAV --- */
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
@@ -110,7 +113,7 @@ def inject_luxury_css():
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. HELPERS
+# 2. HELPERS & RENDERERS
 # ==============================================================================
 @st.cache_resource
 def get_league(league_id, year, espn_s2, swid):
@@ -123,37 +126,53 @@ def get_logo(team):
 
 def render_hero_card(col, player):
     with col:
-        # No Indentation inside the f-string to prevent markdown code block
         st.markdown(f"""<div class="luxury-card" style="padding: 15px; display: flex; align-items: center; justify-content: start;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);"><div><div style="color: #ffffff; font-weight: 800; font-size: 16px;">{player['Name']}</div><div style="color: #00C9FF; font-size: 14px; font-weight: 600;">{player['Points']} PTS</div><div style="color: #a0aaba; font-size: 11px;">{player['Team']}</div></div></div>""", unsafe_allow_html=True)
 
 def render_prop_card(col, row):
+    # Determine Badge Class
     v = row['Verdict']
-    badge_class = "badge-fire" if "Must" in v else "badge-gem" if "RB1" in v or "WR1" in v else "badge-ok"
+    badge_class = "badge-fire" if "Must" in v or "Elite" in v else "badge-gem" if "1" in v else "badge-ok"
+    
+    # Player Image (Use ID from ESPN if available)
+    pid = row.get('ESPN ID', 0)
+    headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
+    
+    # Formatting Stats
     main_stat = ""
     if row['Pass Yds'] > 0: main_stat = f"{row['Pass Yds']:.0f} Pass Yds"
     elif row['Rush Yds'] > 0: main_stat = f"{row['Rush Yds']:.0f} Rush Yds"
     elif row['Rec Yds'] > 0: main_stat = f"{row['Rec Yds']:.0f} Rec Yds"
     
-    td_color = '#00C9FF' if row['TD %'] > 0.4 else '#E0E0E0'
-    td_val = int(row['TD %']*100)
+    # Edge Calculation (Vegas - ESPN)
+    edge_val = row['Edge']
+    edge_color = "#00C9FF" if edge_val > 0 else "#FF4B4B"
+    edge_arrow = "▲" if edge_val > 0 else "▼"
     
-    # IMPORTANT: The HTML string is flattened to one line (or carefully dedented) to avoid the code block bug
+    # Flattened HTML for Markdown
     html = f"""
 <div class="luxury-card">
 <div style="display:flex; justify-content:space-between; align-items:start;">
-<div><div class="prop-badge {badge_class}">{v}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.9rem;">{main_stat}</div></div>
+    <div style="flex:1;">
+        <div class="prop-badge {badge_class}">{v}</div>
+        <div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div>
+        <div style="color:#a0aaba; font-size:0.8rem;">{row['Position']} | {row['Team']}</div>
+    </div>
+    <img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;">
+</div>
+<div class="edge-box" style="border:1px solid {edge_color}; color:{edge_color};">
+    <b>VEGAS EDGE:</b> {edge_arrow} {abs(edge_val):.1f} pts vs ESPN
 </div>
 <div class="stat-grid">
-<div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Proj Pts</div></div>
-<div class="stat-box"><div class="stat-val" style="color:{td_color};">{td_val}%</div><div class="stat-label">TD Prob</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Proj</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:#fff;">{int(row['TD %']*100)}%</div><div class="stat-label">TD Prob</div></div>
 </div>
+<div style="text-align:center; margin-top:10px; font-size:0.8rem; color:#666;">Line: {main_stat}</div>
 </div>
 """
     with col:
         st.markdown(html, unsafe_allow_html=True)
 
 def render_team_card(col, team_data, rank):
-    # Flattened HTML to prevent rendering issues
     html = f"""
 <div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;">
 <div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div>
@@ -173,35 +192,69 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS
+# 3. ANALYTICS (VEGAS + ESPN MERGE)
 # ==============================================================================
 @st.cache_data(ttl=3600)
-def get_vegas_props(api_key):
+def get_vegas_props(api_key, _league):
+    # 1. PREPARE ESPN ROSTER MAP
+    # We scan all rosters to build a map: Name -> {ID, Pos, Team, ESPN_Proj}
+    espn_map = {}
+    
+    # Collect all players from all teams
+    for team in _league.teams:
+        for player in team.roster:
+            espn_map[player.name] = {
+                "id": player.playerId,
+                "pos": player.position,
+                "team": team.team_name, # User's fantasy team
+                "proTeam": player.proTeam,
+                "espn_proj": player.projected_total_points
+            }
+            
+    # Also fetch free agents (top 100) to ensure we cover waivers
+    try:
+        fas = _league.free_agents(size=100)
+        for player in fas:
+            if player.name not in espn_map:
+                espn_map[player.name] = {
+                    "id": player.playerId,
+                    "pos": player.position,
+                    "team": "Free Agent",
+                    "proTeam": player.proTeam,
+                    "espn_proj": player.projected_total_points
+                }
+    except: pass # Ignore if FA fetch fails
+
+    # 2. FETCH VEGAS ODDS
     url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
+    
     try:
         res = requests.get(url_list, params=params_list)
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Connection Error: {res.status_code}"]})
+        
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        target_games = games[:8] 
+        target_games = games[:8] # Limit to next 8 games
         player_props = {}
         
         for game in target_games:
             game_id = game['id']
             url_event = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game_id}/odds'
             params_event = {'api_key': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american'}
+            
             r_prop = requests.get(url_event, params=params_event)
             if r_prop.status_code == 200:
                 data = r_prop.json()
-                bookmakers = data.get('bookmakers', [])
-                for bookmaker in bookmakers:
+                for bookmaker in data.get('bookmakers', []):
                     for market in bookmaker['markets']:
                         key = market['key']
                         for outcome in market['outcomes']:
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
+                            
+                            # Simple aggregation (latest non-zero)
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -211,21 +264,70 @@ def get_vegas_props(api_key):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
+        # 3. MERGE & CALCULATE VERDICT
         vegas_data = []
         for name, s in player_props.items():
+            # MATCHING
+            # Try exact match first, then fuzzy
+            match_name = name
+            match_data = espn_map.get(name)
+            
+            if not match_data:
+                # Fuzzy match if exact fails
+                best_match = process.extractOne(name, list(espn_map.keys()))
+                if best_match and best_match[1] > 85:
+                    match_name = best_match[0]
+                    match_data = espn_map[match_name]
+            
+            # If still no match, skip (likely defensive player or irrelevant)
+            if not match_data: continue
+            
+            # SCORING
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
+            espn_proj = match_data['espn_proj']
+            edge = score - espn_proj
+            pos = match_data['pos']
+            
             if score > 3.0: 
-                if score >= 18: verdict = "🔥 Must Start"
-                elif score >= 14: verdict = "💎 RB1/WR1"
-                elif score >= 10: verdict = "🆗 Flex Play"
-                else: verdict = "⚠️ Risky"
-                vegas_data.append({"Player": name, "Proj Pts": score, "Verdict": verdict, "TD %": s['td'], "Pass Yds": s['pass'] if s['pass']>0 else 0, "Rush Yds": s['rush'] if s['rush']>0 else 0, "Rec Yds": s['rec'] if s['rec']>0 else 0})
+                # POSITION-AWARE VERDICTS
+                verdict = "⚠️ Risky"
+                if pos == 'QB':
+                    if score >= 22: verdict = "🔥 Elite QB1"
+                    elif score >= 18: verdict = "💎 QB1"
+                    elif score >= 15: verdict = "🆗 Streamer"
+                elif pos == 'TE':
+                    if score >= 14: verdict = "🔥 Elite TE"
+                    elif score >= 10: verdict = "💎 TE1"
+                    elif score >= 6: verdict = "🆗 Startable"
+                else: # RB/WR
+                    if score >= 18: verdict = "🔥 Must Start"
+                    elif score >= 14: verdict = "💎 RB1/WR1"
+                    elif score >= 10: verdict = "🆗 Flex Play"
+                
+                vegas_data.append({
+                    "Player": match_name, # Use ESPN name for consistency
+                    "Position": pos,
+                    "Team": match_data['team'], # Fantasy Owner
+                    "ESPN ID": match_data['id'],
+                    "Proj Pts": score,
+                    "ESPN Proj": espn_proj,
+                    "Edge": edge,
+                    "Verdict": verdict,
+                    "TD %": s['td'],
+                    "Pass Yds": s['pass'] if s['pass']>0 else 0,
+                    "Rush Yds": s['rush'] if s['rush']>0 else 0,
+                    "Rec Yds": s['rec'] if s['rec']>0 else 0
+                })
         
-        if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found (Check closer to gametime)"]})
-        return pd.DataFrame(vegas_data).sort_values(by="Proj Pts", ascending=False)
+        if not vegas_data: return pd.DataFrame({"Status": ["No Matching Player Props Found"]})
+        
+        df = pd.DataFrame(vegas_data).sort_values(by="Proj Pts", ascending=False)
+        return df
+        
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
+# (Keep other analytics functions same as before...)
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -242,7 +344,7 @@ def calculate_heavy_analytics(_league, current_week):
         true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
         luck_rating = (actual_win_pct - true_win_pct) * 10
-        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating})
     return pd.DataFrame(data_rows).sort_values(by="Power Score", ascending=False)
 
 @st.cache_data(ttl=3600)
@@ -259,10 +361,12 @@ def calculate_season_awards(_league, current_week):
             margin = abs(game.home_score - game.away_score)
             if game.home_score > game.away_score: winner, loser = game.home_team.team_name, game.away_team.team_name
             else: winner, loser = game.away_team.team_name, game.home_team.team_name
+            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
+            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
