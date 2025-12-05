@@ -3,12 +3,15 @@ from espn_api.football import League
 import pandas as pd
 import numpy as np
 import requests
-import nfl_data_py as nfl
+import base64
+from fpdf import FPDF
 from thefuzz import process
-import re
-import time
 from contextlib import contextmanager
+import nfl_data_py as nfl
 from openai import OpenAI
+import time
+import re
+from datetime import datetime
 
 # ==============================================================================
 # 1. CSS & STYLING
@@ -33,9 +36,8 @@ def inject_luxury_css():
     .matchup-bad { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
     .matchup-mid { color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }
 
-    /* WEATHER BOX */
-    .weather-box { font-size: 0.8rem; color: #a0aaba; margin-top: 5px; padding: 4px; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); }
-    .weather-warn { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
+    .weather-box { font-size: 0.8rem; color: #a0aaba; margin-top: 5px; display: flex; align-items: center; gap: 10px; }
+    .weather-warn { color: #FF4B4B; font-weight: bold; }
     
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
     .stat-box { text-align: center; }
@@ -45,7 +47,7 @@ def inject_luxury_css():
     .edge-box { margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }
     
     .tooltip { position: relative; display: inline-block; cursor: pointer; }
-    .tooltip .tooltiptext { visibility: hidden; width: 220px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    .tooltip .tooltiptext { visibility: hidden; width: 200px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
 
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
@@ -72,11 +74,7 @@ def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    # Map ESPN abbreviations to Standard/Weather keys
-    mapping = {
-        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 
-        'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'
-    }
+    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
     return mapping.get(abbr, abbr)
 
 @contextmanager
@@ -176,10 +174,10 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
-# --- WEATHER ENGINE (NEW) ---
-@st.cache_data(ttl=3600*6)
+# --- WEATHER ENGINE ---
+@st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    # NFL Stadium Coordinates & Dome Status
+    # Coordinate Map for NFL Stadiums (Lat, Lon, Dome)
     stadiums = {
         'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
         'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
@@ -200,7 +198,7 @@ def get_nfl_weather():
             weather_data[team] = {"Dome": True}
             continue
         
-        # Call Open-Meteo (No Key Required)
+        # Free Open-Meteo API
         try:
             url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph"
             res = requests.get(url)
@@ -210,7 +208,7 @@ def get_nfl_weather():
                     "Dome": False,
                     "Temp": d.get('temperature', 70),
                     "Wind": d.get('windspeed', 0),
-                    "Precip": 0 # Simple current weather doesn't give precip probability, assume clear if not in forecast
+                    "Precip": 0 
                 }
             else:
                 weather_data[team] = {"Dome": False, "Temp": 70, "Wind": 0, "Precip": 0}
@@ -224,28 +222,33 @@ def get_vegas_props(api_key, _league, week):
     current_year = _league.year
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
-    weather_map = get_nfl_weather() # Load Weather Map
+    weather_map = get_nfl_weather() 
     
     espn_map = {}
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
-            espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
+            espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0}
 
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
-        h_abbr = clean_team_abbr(game.home_team.team_abbrev)
-        a_abbr = clean_team_abbr(game.away_team.team_abbrev)
-        
-        # Both teams play at the HOME stadium (h_abbr)
+        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
+        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': a_abbr, 'game_site': h_abbr})
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(h_opp)
+                # Home player plays at Home stadium (usually)
+                espn_map[norm]['game_site'] = clean_team_abbr(game.home_team.team_abbrev)
+                
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': h_abbr, 'game_site': h_abbr})
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(a_opp)
+                # Away player plays at Home stadium
+                espn_map[norm]['game_site'] = clean_team_abbr(game.home_team.team_abbrev)
 
     try:
         for p in _league.free_agents(size=500):
@@ -317,7 +320,7 @@ def get_vegas_props(api_key, _league, week):
                         rank = dvp_map[opp][p_pos]
                         dvp_txt = f"vs #{rank} {p_pos} Def"
                     
-                    # WEATHER LOGIC (Using game_site)
+                    # WEATHER LOOKUP
                     w_data = {}
                     site = match.get('game_site', 'UNK')
                     if site in weather_map: w_data = weather_map[site]
@@ -359,7 +362,7 @@ def calculate_heavy_analytics(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
-    # Awards Logic (simplified)
+    # (Awards Logic)
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in _league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
