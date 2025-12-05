@@ -300,7 +300,6 @@ elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
-        # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
             with utils.luxury_spinner("Calling Vegas..."): 
                 st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league)
@@ -311,21 +310,27 @@ elif selected_page == P_PROP:
             if "Status" in df.columns: 
                 st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
-                # FILTERS
-                c1, c2 = st.columns(2)
+                # --- NEW FILTER ROW ---
+                c1, c2, c3 = st.columns([1.5, 1, 1])
                 with c1:
-                    pos_filter = st.multiselect("Filter Position", options=sorted(df['Position'].unique()))
+                    search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
                 with c2:
-                    verdict_filter = st.multiselect("Filter Verdict", options=sorted(df['Verdict'].unique()))
+                    pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
+                with c3:
+                    verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
                 
                 # Apply Filters
+                if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 
                 # Render Cards
-                cols = st.columns(3)
-                for i, row in df.reset_index(drop=True).iterrows():
-                    utils.render_prop_card(cols[i % 3], row)
+                if df.empty:
+                    st.info("No players match your search.")
+                else:
+                    cols = st.columns(3)
+                    for i, row in df.reset_index(drop=True).iterrows():
+                        utils.render_prop_card(cols[i % 3], row)
         else: st.info("No data available.")
 
 elif selected_page == P_DEAL:
