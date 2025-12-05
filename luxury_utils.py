@@ -9,7 +9,6 @@ import re
 import time
 from contextlib import contextmanager
 from openai import OpenAI
-from datetime import datetime
 
 # ==============================================================================
 # 1. CSS & STYLING
@@ -24,7 +23,7 @@ def inject_luxury_css():
     
     .luxury-card { background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
     
-    .prop-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
+    .prop-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px; }
     .badge-fire { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }
     .badge-gem { background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }
     .badge-ok { background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }
@@ -34,8 +33,9 @@ def inject_luxury_css():
     .matchup-bad { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
     .matchup-mid { color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }
 
-    .weather-box { font-size: 0.8rem; color: #a0aaba; margin-top: 5px; display: flex; align-items: center; gap: 10px; }
-    .weather-warn { color: #FF4B4B; font-weight: bold; }
+    /* WEATHER BOX */
+    .weather-box { font-size: 0.8rem; color: #a0aaba; margin-top: 5px; padding: 4px; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); }
+    .weather-warn { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
     
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
     .stat-box { text-align: center; }
@@ -45,7 +45,7 @@ def inject_luxury_css():
     .edge-box { margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }
     
     .tooltip { position: relative; display: inline-block; cursor: pointer; }
-    .tooltip .tooltiptext { visibility: hidden; width: 200px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    .tooltip .tooltiptext { visibility: hidden; width: 220px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
 
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
@@ -72,7 +72,11 @@ def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
+    # Map ESPN abbreviations to Standard/Weather keys
+    mapping = {
+        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 
+        'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'
+    }
     return mapping.get(abbr, abbr)
 
 @contextmanager
@@ -119,7 +123,7 @@ def render_prop_card(col, row):
             matchup_html = f'<div class="matchup-badge {m_class}">{row["Matchup Rank"]}</div>'
         except: pass
 
-    # WEATHER
+    # WEATHER DISPLAY
     weather_html = ""
     w = row.get('Weather', {})
     if w and isinstance(w, dict):
@@ -133,11 +137,11 @@ def render_prop_card(col, row):
              
              w_icon = "☀️"
              w_class = ""
-             if precip > 0.5: w_icon = "🌧️"; w_class = "weather-warn"
+             if precip > 0.1: w_icon = "🌧️"; w_class = "weather-warn"
              elif wind > 15: w_icon = "💨"; w_class = "weather-warn"
              elif temp < 32: w_icon = "❄️"; w_class = "weather-warn"
              
-             weather_html = f'<div class="weather-box {w_class}">{w_icon} {temp:.0f}°F | {wind}mph Wind | {int(precip*100)}% Rain</div>'
+             weather_html = f'<div class="weather-box {w_class}">{w_icon} {temp:.0f}°F | {wind}mph Wind</div>'
 
     html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; margin-bottom:10px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div>{weather_html}</div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
@@ -172,10 +176,10 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
-# --- WEATHER ENGINE ---
-@st.cache_data(ttl=3600*12)
+# --- WEATHER ENGINE (NEW) ---
+@st.cache_data(ttl=3600*6)
 def get_nfl_weather():
-    # Coordinate Map for NFL Stadiums (Lat, Lon, Dome)
+    # NFL Stadium Coordinates & Dome Status
     stadiums = {
         'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
         'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
@@ -195,24 +199,23 @@ def get_nfl_weather():
         if is_dome:
             weather_data[team] = {"Dome": True}
             continue
-            
-        # Free Open-Meteo API
+        
+        # Call Open-Meteo (No Key Required)
         try:
-            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=3"
-            r = requests.get(url)
-            if r.status_code == 200:
-                d = r.json()
-                # Take approximation for game time (e.g., index 36 ~ Sunday afternoon)
-                # Real implementation would match exact game time
-                idx = 36 if len(d['hourly']['time']) > 36 else 0
+            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph"
+            res = requests.get(url)
+            if res.status_code == 200:
+                d = res.json().get('current_weather', {})
                 weather_data[team] = {
                     "Dome": False,
-                    "Temp": d['hourly']['temperature_2m'][idx],
-                    "Wind": d['hourly']['wind_speed_10m'][idx],
-                    "Precip": d['hourly']['precipitation'][idx]
+                    "Temp": d.get('temperature', 70),
+                    "Wind": d.get('windspeed', 0),
+                    "Precip": 0 # Simple current weather doesn't give precip probability, assume clear if not in forecast
                 }
+            else:
+                weather_data[team] = {"Dome": False, "Temp": 70, "Wind": 0, "Precip": 0}
         except:
-            weather_data[team] = {"Dome": False, "Temp": 70, "Wind": 0, "Precip": 0} # Fallback
+            weather_data[team] = {"Dome": False, "Temp": 70, "Wind": 0, "Precip": 0}
             
     return weather_data
 
@@ -221,34 +224,34 @@ def get_vegas_props(api_key, _league, week):
     current_year = _league.year
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
-    weather_map = get_nfl_weather() # NEW: Load Weather
+    weather_map = get_nfl_weather() # Load Weather Map
     
     espn_map = {}
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
-            espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0}
+            espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
 
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
-        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
-        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
+        h_abbr = clean_team_abbr(game.home_team.team_abbrev)
+        a_abbr = clean_team_abbr(game.away_team.team_abbrev)
+        
+        # Both teams play at the HOME stadium (h_abbr)
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm]['espn_proj'] = p.projected_points
-                espn_map[norm]['opponent'] = clean_team_abbr(h_opp)
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': a_abbr, 'game_site': h_abbr})
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm]['espn_proj'] = p.projected_points
-                espn_map[norm]['opponent'] = clean_team_abbr(a_opp)
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': h_abbr, 'game_site': h_abbr})
 
     try:
         for p in _league.free_agents(size=500):
             norm = normalize_name(p.name)
             if norm not in espn_map:
-                espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0)}
+                espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": "UNK"}
     except: pass
 
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
@@ -314,17 +317,10 @@ def get_vegas_props(api_key, _league, week):
                         rank = dvp_map[opp][p_pos]
                         dvp_txt = f"vs #{rank} {p_pos} Def"
                     
-                    # WEATHER LOOKUP
+                    # WEATHER LOGIC (Using game_site)
                     w_data = {}
-                    # Look up weather by the HOME team's stadium
-                    # We need to know who is home. 
-                    # match['proTeam'] gives the player's team.
-                    # opp gives the opponent. 
-                    # If we assume we have home/away context from ESPN, we can use it.
-                    # For simplicity in this view, we'll try to find the game location.
-                    # Using "home team" logic from box scores is better, but here we just use proTeam for now.
-                    tm = clean_team_abbr(match['proTeam'])
-                    if tm in weather_map: w_data = weather_map[tm]
+                    site = match.get('game_site', 'UNK')
+                    if site in weather_map: w_data = weather_map[site]
 
                     rows.append({
                         "Player": match['name'], "Position": p_pos, "Team": match['team'],
@@ -363,22 +359,25 @@ def calculate_heavy_analytics(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
-    # (Awards Logic)
+    # Awards Logic (simplified)
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in _league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
+    
     for w in range(1, current_week + 1):
         box = _league.box_scores(week=w)
         for game in box:
             margin = abs(game.home_score - game.away_score)
             winner = game.home_team.team_name if game.home_score > game.away_score else game.away_team.team_name
             loser = game.away_team.team_name if game.home_score > game.away_score else game.home_team.team_name
+            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
+            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
@@ -391,80 +390,28 @@ def calculate_season_awards(_league, current_week):
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
+
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     oracle_list = []
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
         eff = (s["Starters"] / total * 100) if total > 0 else 0
         oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
+    
     oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     toilet = sorted(_league.teams, key=lambda x: x.points_for)[0]
-    podium = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:3]
+    podium_sort = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+    
     return {
-        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium,
+        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium_sort[:3],
         "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
         "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": get_logo(toilet)},
         "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
-        "Best Manager": {"Team": podium[0].team_name, "Points": podium[0].points_for, "Logo": get_logo(podium[0])}
+        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": get_logo(podium_sort[0])}
     }
-
-@st.cache_data(ttl=3600)
-def calculate_draft_analysis(_league):
-    live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
-    total_teams = len(_league.teams)
-    cutoff_index = int(total_teams * 0.75) 
-    safe_team_names = {t.team_name for t in live_standings[:cutoff_index]}
-    waiver_points = {}
-    roi_data = []
-    for team in _league.teams:
-        waiver_sum = 0
-        logo = get_logo(team)
-        for player in team.roster:
-            if player.acquisitionType != 'DRAFT': waiver_sum += player.total_points
-            else:
-                pick_no = 999
-                round_no = 99
-                if hasattr(_league, 'draft'):
-                    for pick in _league.draft:
-                        if pick.playerId == player.playerId:
-                            pick_no = (pick.round_num - 1) * len(_league.teams) + pick.round_pick
-                            round_no = pick.round_num
-                            break
-                if pick_no < 999:
-                     roi_data.append({"Player": player.name, "Team": team.team_name, "Round": round_no, "Pick Overall": pick_no, "Points": player.total_points, "Position": player.position, "ID": player.playerId})
-        waiver_points[team.team_name] = {"Pts": waiver_sum, "Logo": logo, "Wins": team.wins}
-    sorted_candidates = sorted(waiver_points.items(), key=lambda x: x[1]["Pts"], reverse=True)
-    prescient_data = None
-    for team_name, stats in sorted_candidates:
-        if team_name in safe_team_names:
-            prescient_data = {"Team": team_name, "Points": stats["Pts"], "Logo": stats["Logo"], "Wins": stats["Wins"]}
-            break
-    if not prescient_data and sorted_candidates:
-        top = sorted_candidates[0]
-        prescient_data = {"Team": top[0], "Points": top[1]["Pts"], "Logo": top[1]["Logo"], "Wins": top[1]["Wins"]}
-    return pd.DataFrame(roi_data), prescient_data
-
-@st.cache_data(ttl=3600)
-def scan_dark_pool(_league, limit=20):
-    free_agents = _league.free_agents(size=150)
-    pool_data = []
-    for player in free_agents:
-        try:
-            status = getattr(player, 'injuryStatus', 'ACTIVE')
-            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
-            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
-            total = player.total_points if player.total_points > 0 else player.projected_total_points
-            weeks = _league.current_week if _league.current_week > 0 else 1
-            avg_pts = total / weeks
-            if avg_pts > 0.5:
-                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
-        except: continue
-    df = pd.DataFrame(pool_data)
-    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
-    return df
 
 @st.cache_data(ttl=3600)
 def run_monte_carlo_simulation(_league, simulations=1000):
@@ -521,6 +468,25 @@ def run_multiverse_simulation(_league, forced_winners_list=None, simulations=100
     return pd.DataFrame(final_output).sort_values(by="New Odds", ascending=False)
 
 @st.cache_data(ttl=3600)
+def scan_dark_pool(_league, limit=20):
+    free_agents = _league.free_agents(size=150)
+    pool_data = []
+    for player in free_agents:
+        try:
+            status = getattr(player, 'injuryStatus', 'ACTIVE')
+            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
+            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            weeks = _league.current_week if _league.current_week > 0 else 1
+            avg_pts = total / weeks
+            if avg_pts > 0.5:
+                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
+        except: continue
+    df = pd.DataFrame(pool_data)
+    if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
+    return df
+
+@st.cache_data(ttl=3600)
 def get_dynasty_data(league_id, espn_s2, swid, current_year, start_year):
     all_seasons_data = []
     for y in range(start_year, current_year + 1):
@@ -545,6 +511,42 @@ def process_dynasty_leaderboard(df_history):
     leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
+
+@st.cache_data(ttl=3600)
+def calculate_draft_analysis(_league):
+    live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+    total_teams = len(_league.teams)
+    cutoff_index = int(total_teams * 0.75) 
+    safe_team_names = {t.team_name for t in live_standings[:cutoff_index]}
+    waiver_points = {}
+    roi_data = []
+    for team in _league.teams:
+        waiver_sum = 0
+        logo = get_logo(team)
+        for player in team.roster:
+            if player.acquisitionType != 'DRAFT': waiver_sum += player.total_points
+            else:
+                pick_no = 999
+                round_no = 99
+                if hasattr(_league, 'draft'):
+                    for pick in _league.draft:
+                        if pick.playerId == player.playerId:
+                            pick_no = (pick.round_num - 1) * len(_league.teams) + pick.round_pick
+                            round_no = pick.round_num
+                            break
+                if pick_no < 999:
+                     roi_data.append({"Player": player.name, "Team": team.team_name, "Round": round_no, "Pick Overall": pick_no, "Points": player.total_points, "Position": player.position, "ID": player.playerId})
+        waiver_points[team.team_name] = {"Pts": waiver_sum, "Logo": logo, "Wins": team.wins}
+    sorted_candidates = sorted(waiver_points.items(), key=lambda x: x[1]["Pts"], reverse=True)
+    prescient_data = None
+    for team_name, stats in sorted_candidates:
+        if team_name in safe_team_names:
+            prescient_data = {"Team": team_name, "Points": stats["Pts"], "Logo": stats["Logo"], "Wins": stats["Wins"]}
+            break
+    if not prescient_data and sorted_candidates:
+        top = sorted_candidates[0]
+        prescient_data = {"Team": top[0], "Points": top[1]["Pts"], "Logo": top[1]["Logo"], "Wins": top[1]["Wins"]}
+    return pd.DataFrame(roi_data), prescient_data
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
@@ -607,24 +609,58 @@ def analyze_nextgen_metrics_v3(roster, year):
 # 4. INTELLIGENCE (AI AGENTS)
 # ==============================================================================
 def get_openai_client(key): return OpenAI(api_key=key) if key else None
-
 def ai_response(key, prompt, tokens=600):
-    if not key: return "⚠️ OpenAI Key Missing in secrets.toml"
     client = get_openai_client(key)
-    if not client: return "⚠️ Invalid Client Config"
+    if not client: return "⚠️ Analyst Offline."
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
-    except Exception as e: return f"⚠️ AI Error: {str(e)}"
+    except: return "Analyst Offline."
 
 def get_ai_scouting_report(key, free_agents_str):
-    return ai_response(key, f"You are an elite NFL Talent Scout. Analyze: {free_agents_str}. Identify 3 'Must Add'. Style: Scouting Notebook.", 500)
+    return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
+
 def get_weekly_recap(key, selected_week, top_team):
-    return ai_response(key, f"Write a 5 sentence fantasy recap for Week {selected_week}. Highlight {top_team}. Style: Wall Street Report.", 800)
-def get_rankings_commentary(key, top, bottom):
-    return ai_response(key, f"Write a 5 sentence commentary on rankings. Praise {top}, mock {bottom}. Style: Stephen A. Smith.", 600)
+    return ai_response(key, f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_team}. Style: Wall Street Report.", 800)
+
+def get_rankings_commentary(key, top_team, bottom_team):
+    return ai_response(key, f"Write a 5-8 sentence commentary on Power Rankings. Praise {top_team} and mock {bottom_team}. Style: Stephen A. Smith.", 600)
+
 def get_next_week_preview(key, games_list):
-    matchups_str = ", ".join([f"{g['home']} vs {g['away']}" for g in games_list])
-    return ai_response(key, f"Act as a Vegas Bookie. Preview: {matchups_str}. Pick 'Lock of the Week'.", 800)
+    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
+    return ai_response(key, f"Act as a Vegas Sports Bookie. Provide a detailed preview of next week's matchups: {matchups_str}. Pick 'Lock of the Week' and 'Upset Alert'.", 800)
+
 def get_season_retrospective(key, mvp, best_mgr):
-    return ai_response(key, f"Write a 'State of the Union'. MVP: {mvp}. Best: {best_mgr}. Style: Presidential.", 1000)
-def get_ai_trade_proposal(key, t1, t2, r1, r2):
-    return ai_response(key, f"Propose a fair trade between {t1}: {r1} and {t2}: {r2}. Explain why.", 600)
+    return ai_response(key, f"Write a 'State of the Union' address for the league. MVP: {mvp}. Best Manager: {best_mgr}. Style: Presidential.", 1000)
+
+def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
+    return ai_response(key, f"Act as Trade Broker. Propose a fair trade between Team A ({team_a}): {roster_a} and Team B ({team_b}): {roster_b}. Explain why.", 600)
+
+# PDF Helpers
+def clean_for_pdf(text):
+    if not isinstance(text, str): return str(text)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 201, 255)
+        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
+        self.ln(5)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(0, 114, 255)
+        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
+        self.ln(2)
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.set_text_color(50)
+        self.multi_cell(0, 6, clean_for_pdf(body))
+        self.ln()
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
