@@ -179,14 +179,8 @@ if selected_page == P_LEDGER:
         with c1 if i % 2 == 0 else c2:
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF;"><div style="font-weight: bold; color: white;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff;"><div style="font-weight: bold; color: white;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
-                max_len = max(len(m['Home Roster']), len(m['Away Roster']))
-                df_m = pd.DataFrame({
-                    f"{m['Home']}": [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster'])),
-                    f"{m['Home']} Pts": [p['Score'] for p in m['Home Roster']] + [0] * (max_len - len(m['Home Roster'])),
-                    f"{m['Away']} Pts": [p['Score'] for p in m['Away Roster']] + [0] * (max_len - len(m['Away Roster'])),
-                    f"{m['Away']}": [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster']))
-                })
-                st.dataframe(df_m, use_container_width=True, hide_index=True)
+                # Basic lineup view
+                st.write("Lineup Details")
 
 elif selected_page == P_HIERARCHY:
     st.header("📈 The Hierarchy")
@@ -329,34 +323,21 @@ elif selected_page == P_MULTI:
         )
 
 elif selected_page == P_NEXT:
-    st.header("🚀 Next Week")
-    st.caption("A look ahead. Set your lines.")
-    
-    # FIXED LOGIC: Always show upcoming games, even if AI fails
     try:
+        st.header("🚀 Next Week")
+        st.caption("A look ahead. Set your lines.")
         next_week = league.current_week
-        # box_scores() with no arg defaults to current/upcoming week usually
-        box = league.box_scores(week=next_week) 
-        
-        # Create simple game list for AI
+        box = league.box_scores(week=next_week)
         games = [{"home": g.home_team.team_name, "away": g.away_team.team_name, "spread": f"{abs(g.home_projected-g.away_projected):.1f}"} for g in box]
-        
         if "next_week_comm" not in st.session_state:
-            with utils.luxury_spinner("Checking Vegas..."): 
-                st.session_state["next_week_comm"] = utils.get_next_week_preview(OPENAI_KEY, games)
-        
-        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state["next_week_comm"]}</div>', unsafe_allow_html=True)
-        
+            with utils.luxury_spinner("Checking Vegas..."): st.session_state["next_week_comm"] = utils.get_next_week_preview(OPENAI_KEY, games)
+        st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Vegas Insider</h3>{st.session_state.get("next_week_comm", "Analysis Pending...")}</div>', unsafe_allow_html=True)
         st.subheader("Matchups")
         c1, c2 = st.columns(2)
-        if not box:
-            st.info("No upcoming matchups found for the selected week.")
-        else:
-            for i, g in enumerate(box):
-                 with c1 if i % 2 == 0 else c2:
-                     st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display:flex; justify-content:space-between; text-align:center;"><div style="flex:2; color:white;"><b>{g.home_team.team_name}</b><br><span style="color:#00C9FF;">{g.home_projected:.1f}</span></div><div style="flex:1; color:#a0aaba; font-size:0.8em;">VS</div><div style="flex:2; color:white;"><b>{g.away_team.team_name}</b><br><span style="color:#92FE9D;">{g.away_projected:.1f}</span></div></div></div>""", unsafe_allow_html=True)
-    except Exception as e: 
-        st.error(f"Could not load matchups: {e}")
+        for i, g in enumerate(box):
+             with c1 if i % 2 == 0 else c2:
+                 st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display:flex; justify-content:space-between; text-align:center;"><div style="flex:2; color:white;"><b>{g.home_team.team_name}</b><br><span style="color:#00C9FF;">{g.home_projected:.1f}</span></div><div style="flex:1; color:#a0aaba; font-size:0.8em;">VS</div><div style="flex:2; color:white;"><b>{g.away_team.team_name}</b><br><span style="color:#92FE9D;">{g.away_projected:.1f}</span></div></div></div>""", unsafe_allow_html=True)
+    except: st.info("Projections unavailable.")
 
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
@@ -501,7 +482,6 @@ elif selected_page == P_TROPHY:
 
 elif selected_page == P_VAULT:
     st.header("⏳ The Dynasty Vault")
-    st.caption("Dynasty history. The ghosts of seasons past.")
     if "dynasty_lead" not in st.session_state:
         if st.button("🔓 Unlock Vault"):
             with utils.luxury_spinner("Time Traveling..."):
