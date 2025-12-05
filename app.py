@@ -159,14 +159,12 @@ elif selected_page == P_HIERARCHY:
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.header("Power Rankings")
     
-    # CARD VIEW UPDATE
     if "df_advanced" not in st.session_state:
         st.session_state["df_advanced"] = utils.calculate_heavy_analytics(league, current_week)
     
     df = st.session_state["df_advanced"]
     cols = st.columns(3)
     for i, row in df.reset_index(drop=True).iterrows():
-        # Cycle through 3 columns on desktop, stacks automatically on mobile
         utils.render_team_card(cols[i % 3], row, i+1)
 
 elif selected_page == P_AUDIT:
@@ -251,10 +249,8 @@ elif selected_page == P_MULTI:
     box = league.box_scores(week=league.current_week)
     forced = []
     
-    # MOBILE FIX: Use form for better control
     with st.form("multi_form"):
         st.markdown("### 🔮 Pick This Week's Winners")
-        # Use a more compact display loop
         for i, g in enumerate(box):
             home_n = g.home_team.team_name
             away_n = g.away_team.team_name
@@ -274,7 +270,6 @@ elif selected_page == P_MULTI:
             st.session_state["multi_res"] = final.sort_values(by="New Odds", ascending=False)
             
     if "multi_res" in st.session_state:
-        # MOBILE FIX: st.dataframe allows scrolling on phones, unlike columns
         st.dataframe(
             st.session_state["multi_res"], 
             use_container_width=True, 
@@ -305,13 +300,29 @@ elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
-        if "vegas" not in st.session_state:
-            with utils.luxury_spinner("Calling Vegas..."): st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY)
+        # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
+        if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
+            with utils.luxury_spinner("Calling Vegas..."): 
+                st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league)
+        
         df = st.session_state["vegas"]
+        
         if df is not None and not df.empty:
-            if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
+            if "Status" in df.columns: 
+                st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
-                # CARD VIEW
+                # FILTERS
+                c1, c2 = st.columns(2)
+                with c1:
+                    pos_filter = st.multiselect("Filter Position", options=sorted(df['Position'].unique()))
+                with c2:
+                    verdict_filter = st.multiselect("Filter Verdict", options=sorted(df['Verdict'].unique()))
+                
+                # Apply Filters
+                if pos_filter: df = df[df['Position'].isin(pos_filter)]
+                if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
+                
+                # Render Cards
                 cols = st.columns(3)
                 for i, row in df.reset_index(drop=True).iterrows():
                     utils.render_prop_card(cols[i % 3], row)
