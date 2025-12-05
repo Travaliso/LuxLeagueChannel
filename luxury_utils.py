@@ -67,12 +67,14 @@ def get_logo(team):
     except: return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
 
 def normalize_name(name):
+    # Remove punctuation, lowercase, remove suffixes
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    # Maps ESPN abbreviations to nfl_data_py/standard abbreviations
+    # FIX #3: Mapping ESPN codes to Stats codes
     mapping = {
-        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE'
+        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 
+        'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'
     }
     return mapping.get(abbr, abbr)
 
@@ -119,7 +121,7 @@ def render_prop_card(col, row):
     if "vs #" in str(row.get('Matchup Rank', '')):
         try:
             rank = int(re.search(r'#(\d+)', row['Matchup Rank']).group(1))
-            m_class = "matchup-good" if rank >= 24 else "matchup-bad" if rank <= 8 else "matchup-mid"
+            m_class = "matchup-good" if rank <= 8 else "matchup-bad" if rank >= 24 else "matchup-mid"
             matchup_html = f'<div class="matchup-badge {m_class}">{row["Matchup Rank"]}</div>'
         except: pass
 
@@ -147,14 +149,11 @@ def get_dvp_ranks_safe(year):
         df = load_nfl_stats_safe(year)
         if df.empty: return {}
         df = df[df['position'].isin(['QB', 'RB', 'WR', 'TE'])]
-        # Sum fantasy points allowed by opponent
         dvp = df.groupby(['opponent_team', 'position'])['fantasy_points_ppr'].sum().reset_index()
-        # Rank descending (most points allowed = rank 1 = best matchup)
         dvp['rank'] = dvp.groupby('position')['fantasy_points_ppr'].rank(ascending=False)
         
         dvp_map = {}
         for _, row in dvp.iterrows():
-            # Map nfl_data_py team abbreviations to standardized ones if needed
             team = clean_team_abbr(row['opponent_team'])
             if team not in dvp_map: dvp_map[team] = {}
             dvp_map[team][row['position']] = int(row['rank'])
@@ -168,53 +167,21 @@ def get_vegas_props(api_key, _league, week):
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
     
-    # 2. BUILD ESPN ROSTER MAP (ROBUST METHOD)
-    # Start with ALL rostered players from teams
+    # 2. BUILD ESPN ROSTER MAP (FIX #1: Scan Full Rosters First)
     espn_map = {}
     
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
-            # Default projection to 0 if not found yet
+            # Get opponent (FIX #3: Map the abbreviation immediately)
+            opp = clean_team_abbr(getattr(p, 'proOpponent', 'UNK'))
+            
             espn_map[norm] = {
                 "name": p.name, "id": p.playerId, "pos": p.position, 
-                "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK",
-                "espn_proj": 0 
+                "team": team.team_name, "proTeam": p.proTeam, 
+                "opponent": opp,
+                "espn_proj": getattr(p, 'projected_points', 0) # Get weekly proj if available
             }
-
-    # 2b. ENRICH WITH WEEKLY BOX SCORE DATA (Projections & Opponents)
-    box_scores = _league.box_scores(week=week)
-    for game in box_scores:
-        # Extract opponents
-        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
-        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
-        
-        # Update Home Players
-        for p in game.home_lineup:
-            norm = normalize_name(p.name)
-            if norm in espn_map:
-                espn_map[norm]['espn_proj'] = p.projected_points
-                espn_map[norm]['opponent'] = clean_team_abbr(h_opp)
-        
-        # Update Away Players
-        for p in game.away_lineup:
-            norm = normalize_name(p.name)
-            if norm in espn_map:
-                espn_map[norm]['espn_proj'] = p.projected_points
-                espn_map[norm]['opponent'] = clean_team_abbr(a_opp)
-
-    # 2c. ADD FREE AGENTS
-    try:
-        for p in _league.free_agents(size=500):
-            norm = normalize_name(p.name)
-            if norm not in espn_map:
-                # FAs usually don't have weekly proj in this call, but we need them in the map for Vegas match
-                espn_map[norm] = {
-                    "name": p.name, "id": p.playerId, "pos": p.position, 
-                    "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK",
-                    "espn_proj": getattr(p, 'projected_points', 0)
-                }
-    except: pass
 
     # 3. FETCH VEGAS
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
@@ -223,7 +190,6 @@ def get_vegas_props(api_key, _league, week):
         res = requests.get(url, params=params)
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Error {res.status_code}"]})
         games = res.json()
-        if not games: return pd.DataFrame({"Status": ["No Games Found"]})
         
         player_props = {}
         for game in games[:16]:
@@ -258,12 +224,8 @@ def get_vegas_props(api_key, _league, week):
                 if best and best[1] > 80: match = espn_map[best[0]]
             
             if match:
-                # Calculations
                 score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
-                
-                # Lowered threshold to catch more players
                 if score > 1.0:
-                    # Verdict
                     v = "⚠️ Risky"
                     p_pos = match['pos']
                     if p_pos == 'QB': v = "🔥 Elite QB1" if score >= 20 else "💎 QB1" if score >= 16 else "🆗 Streamer"
@@ -282,11 +244,13 @@ def get_vegas_props(api_key, _league, week):
                                 elif s['rec']>0: hits = sum(l5['receiving_yards'] >= s['rec'])
                                 hr_txt = f"{int((hits/len(l5))*100)}%"
 
-                    # DvP
+                    # DvP (FIX #3 Applied here)
                     dvp_txt = ""
-                    opp = clean_team_abbr(match.get('opponent', 'UNK'))
+                    opp = match.get('opponent', 'UNK')
                     if opp in dvp_map and p_pos in dvp_map[opp]:
-                        dvp_txt = f"vs #{dvp_map[opp][p_pos]} {p_pos} Def"
+                        rank = dvp_map[opp][p_pos]
+                        # Rank 1 = Most Points Allowed (Best Matchup)
+                        dvp_txt = f"vs #{rank} {p_pos} Def"
 
                     rows.append({
                         "Player": match['name'], "Position": p_pos, "Team": match['team'],
@@ -320,15 +284,14 @@ def calculate_heavy_analytics(_league, current_week):
         true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
         luck_rating = (actual_win_pct - true_win_pct) * 10
-        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating})
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
     return pd.DataFrame(data_rows).sort_values(by="Power Score", ascending=False)
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
-    # Simplified for stability
     return {"MVP": None, "Podium": [], "Oracle": {"Team": "N/A", "Eff": 0, "Logo": ""}, "Sniper": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Purple": {"Team": "N/A", "Count": 0, "Logo": ""}, "Hoarder": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Toilet": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Blowout": {"Winner": "N/A", "Loser": "N/A", "Margin": 0}, "Best Manager": {"Team": "N/A", "Points": 0, "Logo": ""}}
 
-# Stub functions to prevent import errors
+# Stub functions
 def get_ai_scouting_report(key, free_agents_str): return "Analyst Offline"
 def get_weekly_recap(key, selected_week, top_team): return "Analyst Offline"
 def get_rankings_commentary(key, top_team, bottom_team): return "Analyst Offline"
