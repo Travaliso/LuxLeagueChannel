@@ -23,7 +23,6 @@ def inject_luxury_css():
     
     .luxury-card { background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
     
-    /* BADGES */
     .prop-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
     .badge-fire { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }
     .badge-gem { background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }
@@ -34,13 +33,13 @@ def inject_luxury_css():
     .matchup-bad { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
     .matchup-mid { color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }
     
-    /* GRID & TEXT */
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
     .stat-box { text-align: center; }
     .stat-val { font-size: 1.1rem; font-weight: 700; color: white; }
     .stat-label { font-size: 0.65rem; color: #a0aaba; text-transform: uppercase; }
     
-    /* TOOLTIP */
+    .edge-box { margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }
+    
     .tooltip { position: relative; display: inline-block; cursor: pointer; }
     .tooltip .tooltiptext { visibility: hidden; width: 200px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
@@ -48,7 +47,6 @@ def inject_luxury_css():
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
     header[data-testid="stHeader"] { background-color: transparent; }
     
-    /* LOADER */
     @keyframes shine { to { background-position: 200% center; } }
     .luxury-loader-text { font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 3s linear infinite; }
     .luxury-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -67,15 +65,10 @@ def get_logo(team):
     except: return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
 
 def normalize_name(name):
-    # Remove punctuation, lowercase, remove suffixes
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    # FIX #3: Mapping ESPN codes to Stats codes
-    mapping = {
-        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 
-        'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'
-    }
+    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
     return mapping.get(abbr, abbr)
 
 @contextmanager
@@ -126,7 +119,6 @@ def render_prop_card(col, row):
         except: pass
 
     html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; margin-bottom:10px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
-    
     with col: st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
@@ -151,7 +143,6 @@ def get_dvp_ranks_safe(year):
         df = df[df['position'].isin(['QB', 'RB', 'WR', 'TE'])]
         dvp = df.groupby(['opponent_team', 'position'])['fantasy_points_ppr'].sum().reset_index()
         dvp['rank'] = dvp.groupby('position')['fantasy_points_ppr'].rank(ascending=False)
-        
         dvp_map = {}
         for _, row in dvp.iterrows():
             team = clean_team_abbr(row['opponent_team'])
@@ -162,35 +153,52 @@ def get_dvp_ranks_safe(year):
 
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league, week):
-    # 1. LOAD CONTEXT
     current_year = _league.year
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
     
-    # 2. BUILD ESPN ROSTER MAP (FIX #1: Scan Full Rosters First)
     espn_map = {}
-    
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
-            # Get opponent (FIX #3: Map the abbreviation immediately)
-            opp = clean_team_abbr(getattr(p, 'proOpponent', 'UNK'))
-            
             espn_map[norm] = {
                 "name": p.name, "id": p.playerId, "pos": p.position, 
-                "team": team.team_name, "proTeam": p.proTeam, 
-                "opponent": opp,
-                "espn_proj": getattr(p, 'projected_points', 0) # Get weekly proj if available
+                "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK",
+                "espn_proj": 0
             }
 
-    # 3. FETCH VEGAS
+    box_scores = _league.box_scores(week=week)
+    for game in box_scores:
+        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
+        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
+        for p in game.home_lineup:
+            norm = normalize_name(p.name)
+            if norm in espn_map:
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(h_opp)
+        for p in game.away_lineup:
+            norm = normalize_name(p.name)
+            if norm in espn_map:
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(a_opp)
+
+    try:
+        for p in _league.free_agents(size=500):
+            norm = normalize_name(p.name)
+            if norm not in espn_map:
+                espn_map[norm] = {
+                    "name": p.name, "id": p.playerId, "pos": p.position, 
+                    "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK",
+                    "espn_proj": getattr(p, 'projected_points', 0)
+                }
+    except: pass
+
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
     try:
         res = requests.get(url, params=params)
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Error {res.status_code}"]})
         games = res.json()
-        
         player_props = {}
         for game in games[:16]:
             g_url = f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game['id']}/odds"
@@ -212,17 +220,14 @@ def get_vegas_props(api_key, _league, week):
                                 player_props[name]['td'] = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
             time.sleep(0.05)
 
-        # 4. MERGE
         rows = []
         espn_keys = list(espn_map.keys())
-        
         for name, s in player_props.items():
             norm = normalize_name(name)
             match = espn_map.get(norm)
             if not match:
                 best = process.extractOne(norm, espn_keys)
                 if best and best[1] > 80: match = espn_map[best[0]]
-            
             if match:
                 score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
                 if score > 1.0:
@@ -231,7 +236,6 @@ def get_vegas_props(api_key, _league, week):
                     if p_pos == 'QB': v = "🔥 Elite QB1" if score >= 20 else "💎 QB1" if score >= 16 else "🆗 Streamer"
                     else: v = "🔥 Must Start" if score >= 15 else "💎 RB1/WR1" if score >= 12 else "🆗 Flex Play"
                     
-                    # Hit Rate
                     hr_txt = "N/A"
                     if not stats_df.empty:
                         p_stats = stats_df[stats_df['norm_name'] == norm]
@@ -244,12 +248,10 @@ def get_vegas_props(api_key, _league, week):
                                 elif s['rec']>0: hits = sum(l5['receiving_yards'] >= s['rec'])
                                 hr_txt = f"{int((hits/len(l5))*100)}%"
 
-                    # DvP (FIX #3 Applied here)
                     dvp_txt = ""
                     opp = match.get('opponent', 'UNK')
                     if opp in dvp_map and p_pos in dvp_map[opp]:
                         rank = dvp_map[opp][p_pos]
-                        # Rank 1 = Most Points Allowed (Best Matchup)
                         dvp_txt = f"vs #{rank} {p_pos} Def"
 
                     rows.append({
@@ -261,47 +263,39 @@ def get_vegas_props(api_key, _league, week):
         
         if not rows: return pd.DataFrame({"Status": ["No Matching Props Found"]})
         return pd.DataFrame(rows).sort_values(by="Proj Pts", ascending=False)
-
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
-# ---------------------------------------------------------
-# OTHER ANALYTICS
-# ---------------------------------------------------------
+# ==============================================================================
+# 4. INTELLIGENCE (AI AGENTS - DIAGNOSTICS MODE)
+# ==============================================================================
+def get_openai_client(key): return OpenAI(api_key=key) if key else None
+
+def ai_response(key, prompt, tokens=600):
+    if not key: return "⚠️ OpenAI Key Missing in secrets.toml"
+    client = get_openai_client(key)
+    if not client: return "⚠️ Invalid Client Config"
+    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
+    except Exception as e: return f"⚠️ AI Error: {str(e)}"
+
+def get_ai_scouting_report(key, free_agents_str):
+    return ai_response(key, f"You are an elite NFL Talent Scout. Analyze: {free_agents_str}. Identify 3 'Must Add'. Style: Scouting Notebook.", 500)
+def get_weekly_recap(key, selected_week, top_team):
+    return ai_response(key, f"Write a 5 sentence fantasy recap for Week {selected_week}. Highlight {top_team}. Style: Wall Street Report.", 800)
+def get_rankings_commentary(key, top, bottom):
+    return ai_response(key, f"Write a 5 sentence commentary on rankings. Praise {top}, mock {bottom}. Style: Stephen A. Smith.", 600)
+def get_next_week_preview(key, games_list):
+    matchups_str = ", ".join([f"{g['home']} vs {g['away']}" for g in games_list])
+    return ai_response(key, f"Act as a Vegas Bookie. Preview: {matchups_str}. Pick 'Lock of the Week'.", 800)
+def get_season_retrospective(key, mvp, best_mgr):
+    return ai_response(key, f"Write a 'State of the Union'. MVP: {mvp}. Best: {best_mgr}. Style: Presidential.", 1000)
+def get_ai_trade_proposal(key, t1, t2, r1, r2):
+    return ai_response(key, f"Propose a fair trade between {t1}: {r1} and {t2}: {r2}. Explain why.", 600)
+
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
     for team in _league.teams:
         power_score = round(team.points_for / current_week, 1)
-        true_wins, total_matchups = 0, 0
-        for w in range(1, current_week + 1):
-            box = _league.box_scores(week=w)
-            my_score = next((g.home_score if g.home_team == team else g.away_score for g in box if g.home_team == team or g.away_team == team), 0)
-            all_scores = [g.home_score for g in box] + [g.away_score for g in box]
-            wins_this_week = sum(1 for s in all_scores if my_score > s)
-            true_wins += wins_this_week
-            total_matchups += (len(_league.teams) - 1)
-        true_win_pct = true_wins / total_matchups if total_matchups > 0 else 0
-        actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
-        luck_rating = (actual_win_pct - true_win_pct) * 10
-        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
+        data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": 0})
     return pd.DataFrame(data_rows).sort_values(by="Power Score", ascending=False)
-
-@st.cache_data(ttl=3600)
-def calculate_season_awards(_league, current_week):
-    return {"MVP": None, "Podium": [], "Oracle": {"Team": "N/A", "Eff": 0, "Logo": ""}, "Sniper": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Purple": {"Team": "N/A", "Count": 0, "Logo": ""}, "Hoarder": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Toilet": {"Team": "N/A", "Pts": 0, "Logo": ""}, "Blowout": {"Winner": "N/A", "Loser": "N/A", "Margin": 0}, "Best Manager": {"Team": "N/A", "Points": 0, "Logo": ""}}
-
-# Stub functions
-def get_ai_scouting_report(key, free_agents_str): return "Analyst Offline"
-def get_weekly_recap(key, selected_week, top_team): return "Analyst Offline"
-def get_rankings_commentary(key, top_team, bottom_team): return "Analyst Offline"
-def get_next_week_preview(key, games_list): return "Analyst Offline"
-def get_season_retrospective(key, mvp, best_mgr): return "Analyst Offline"
-def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b): return "Analyst Offline"
-def scan_dark_pool(_league): return pd.DataFrame()
-def calculate_draft_analysis(_league): return pd.DataFrame(), None
-def get_dynasty_data(league_id, espn_s2, swid, current_year, start_year): return pd.DataFrame()
-def process_dynasty_leaderboard(df): return pd.DataFrame()
-def run_monte_carlo_simulation(_league): return pd.DataFrame()
-def run_multiverse_simulation(_league, forced): return pd.DataFrame()
-def analyze_nextgen_metrics_v3(roster, year): return pd.DataFrame()
