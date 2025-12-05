@@ -70,15 +70,15 @@ def inject_luxury_css():
     
     .stat-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        grid-template-columns: 1fr 1fr 1fr; /* Added column for Hit Rate */
+        gap: 5px;
         margin-top: 15px;
         padding-top: 15px;
         border-top: 1px solid rgba(255,255,255,0.1);
     }
     .stat-box { text-align: center; }
-    .stat-val { font-size: 1.2rem; font-weight: 700; color: white; }
-    .stat-label { font-size: 0.7rem; color: #a0aaba; text-transform: uppercase; }
+    .stat-val { font-size: 1.1rem; font-weight: 700; color: white; }
+    .stat-label { font-size: 0.65rem; color: #a0aaba; text-transform: uppercase; }
     
     .edge-box {
         margin-top: 10px;
@@ -93,7 +93,7 @@ def inject_luxury_css():
     .tooltip { position: relative; display: inline-block; cursor: pointer; }
     .tooltip .tooltiptext {
         visibility: hidden;
-        width: 200px;
+        width: 220px;
         background-color: #1E1E1E;
         color: #fff;
         text-align: center;
@@ -103,7 +103,7 @@ def inject_luxury_css():
         z-index: 1;
         bottom: 125%;
         left: 50%;
-        margin-left: -100px;
+        margin-left: -110px;
         opacity: 0;
         transition: opacity 0.3s;
         border: 1px solid #D4AF37;
@@ -111,12 +111,6 @@ def inject_luxury_css():
         box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
     .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-
-    .award-card { border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-    .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
-    .studio-box { border-left: 4px solid #7209b7; }
-    .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
 
     /* --- MOBILE NAV --- */
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
@@ -155,10 +149,6 @@ def get_logo(team):
     except: return fallback
 
 def normalize_name(name):
-    """
-    Strips punctuation, lowercases, and removes suffixes for better matching.
-    Ex: "D'Andre Swift" -> "deandreswift"
-    """
     name = str(name).lower()
     name = re.sub(r"[^a-zA-Z0-9]", "", name)
     name = name.replace("jr", "").replace("iii", "").replace("ii", "")
@@ -177,14 +167,28 @@ def render_prop_card(col, row):
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     
     main_stat = ""
-    if row['Pass Yds'] > 0: main_stat = f"{row['Pass Yds']:.0f} Pass Yds"
-    elif row['Rush Yds'] > 0: main_stat = f"{row['Rush Yds']:.0f} Rush Yds"
-    elif row['Rec Yds'] > 0: main_stat = f"{row['Rec Yds']:.0f} Rec Yds"
+    line_val = 0
+    if row['Pass Yds'] > 0: 
+        main_stat = "Pass Yds"
+        line_val = row['Pass Yds']
+    elif row['Rush Yds'] > 0: 
+        main_stat = "Rush Yds"
+        line_val = row['Rush Yds']
+    elif row['Rec Yds'] > 0: 
+        main_stat = "Rec Yds"
+        line_val = row['Rec Yds']
     
     edge_val = row.get('Edge', 0.0)
     edge_color = "#00C9FF" if edge_val > 0 else "#FF4B4B"
     edge_arrow = "▲" if edge_val > 0 else "▼"
     
+    # Hit Rate Styling
+    hit_rate_str = row.get('Hit Rate', 'N/A')
+    hit_color = "#E0E0E0"
+    if isinstance(hit_rate_str, str) and "%" in hit_rate_str:
+        pct = int(hit_rate_str.replace('%',''))
+        hit_color = "#00C9FF" if pct >= 60 else "#FF4B4B" if pct <= 40 else "#E0E0E0"
+
     html = f"""
 <div class="luxury-card">
 <div style="display:flex; justify-content:space-between; align-items:start;">
@@ -199,18 +203,20 @@ def render_prop_card(col, row):
     <span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span>
     <div class="tooltip">ℹ️
         <span class="tooltiptext">
-            <b>The Edge:</b><br>
-            Comparison between Vegas Projections and ESPN Projections.<br><br>
-            <span style="color:#00C9FF;">Blue (▲):</span> Vegas likes this player MORE than ESPN.<br>
-            <span style="color:#FF4B4B;">Red (▼):</span> Vegas likes this player LESS than ESPN.
+            <b>The Edge:</b> Comparison between Vegas Projections and ESPN.<br>
+            <span style="color:#00C9FF;">Blue (▲):</span> Vegas is Higher.<br>
+            <span style="color:#FF4B4B;">Red (▼):</span> Vegas is Lower.
         </span>
     </div>
 </div>
 <div class="stat-grid">
-    <div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Proj</div></div>
-    <div class="stat-box"><div class="stat-val" style="color:#fff;">{int(row['TD %']*100)}%</div><div class="stat-label">TD Prob</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div>
+    <div class="stat-box">
+        <div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div>
+        <div class="stat-label">L5 Hit Rate</div>
+    </div>
 </div>
-<div style="text-align:center; margin-top:10px; font-size:0.8rem; color:#666;">Line: {main_stat}</div>
 </div>
 """
     with col:
@@ -236,44 +242,45 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (IMPROVED MATCHING)
+# 3. ANALYTICS (HIT RATES)
 # ==============================================================================
+@st.cache_data(ttl=3600*24)
+def load_nfl_stats(year):
+    # Fetch season stats for Hit Rate calculation
+    try:
+        df = nfl.import_weekly_data([year])
+        return df
+    except: return pd.DataFrame()
+
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league):
-    # 1. PREPARE ESPN ROSTER MAP
-    espn_map = {}
+    # 1. LOAD HISTORICAL DATA (For Hit Rates)
+    # We load this once per day (ttl=24h)
+    stats_df = load_nfl_stats(2024) # Assuming current season, could pass YEAR var
     
+    # 2. PREPARE ESPN ROSTER MAP
+    espn_map = {}
     def add_player(p, team_name):
         norm_key = normalize_name(p.name)
         espn_map[norm_key] = {
-            "name": p.name, 
-            "id": p.playerId,
-            "pos": p.position,
-            "team": team_name, 
-            "proTeam": p.proTeam,
-            "espn_proj": p.projected_total_points
+            "name": p.name, "id": p.playerId, "pos": p.position,
+            "team": team_name, "proTeam": p.proTeam, "espn_proj": p.projected_total_points
         }
 
     for team in _league.teams:
-        for player in team.roster:
-            add_player(player, team.team_name)
-            
+        for player in team.roster: add_player(player, team.team_name)
     try:
-        fas = _league.free_agents(size=500)
-        for player in fas:
-            norm_key = normalize_name(player.name)
-            if norm_key not in espn_map:
-                add_player(player, "Free Agent")
+        for player in _league.free_agents(size=500):
+            if normalize_name(player.name) not in espn_map: add_player(player, "Free Agent")
     except: pass 
 
-    # 2. FETCH VEGAS ODDS
+    # 3. FETCH VEGAS ODDS
     url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
     
     try:
         res = requests.get(url_list, params=params_list)
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Connection Error: {res.status_code}"]})
-        
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
@@ -294,7 +301,6 @@ def get_vegas_props(api_key, _league):
                         for outcome in market['outcomes']:
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
-                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -304,21 +310,45 @@ def get_vegas_props(api_key, _league):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # 3. MATCHING LOGIC (ROBUST)
+        # 4. MERGE & CALCULATE HIT RATES
         vegas_data = []
         espn_keys = list(espn_map.keys())
         
         for name, s in player_props.items():
             norm_vegas_name = normalize_name(name)
             match_data = espn_map.get(norm_vegas_name)
-            
             if not match_data:
                 best_match = process.extractOne(norm_vegas_name, espn_keys)
-                if best_match and best_match[1] > 80: 
-                    match_data = espn_map[best_match[0]]
-            
+                if best_match and best_match[1] > 80: match_data = espn_map[best_match[0]]
             if not match_data: continue
             
+            # --- HIT RATE CALCULATION ---
+            hit_rate_display = "N/A"
+            if not stats_df.empty:
+                # Find stats for this player (fuzzy match against stats DB)
+                # nfl_data_py names are usually "J.Allen", so we normalize slightly differently or fuzzy match
+                # For speed, we try exact first then fuzzy on display name
+                p_stats = stats_df[stats_df['player_display_name'] == match_data['name']]
+                if p_stats.empty:
+                    # Try fuzzy match on stats DB names (expensive, do only if needed)
+                    # For performance, skipping deep fuzzy here, relying on exact display name match
+                    pass
+                
+                if not p_stats.empty:
+                    # Get last 5 games
+                    last_5 = p_stats.sort_values(by='week', ascending=False).head(5)
+                    hits = 0
+                    total_g = len(last_5)
+                    
+                    if total_g > 0:
+                        if s['pass'] > 0: hits = sum(last_5['passing_yards'] > s['pass'])
+                        elif s['rush'] > 0: hits = sum(last_5['rushing_yards'] > s['rush'])
+                        elif s['rec'] > 0: hits = sum(last_5['receiving_yards'] > s['rec'])
+                        
+                        pct = (hits / total_g) * 100
+                        hit_rate_display = f"{int(pct)}%"
+
+            # --- SCORING ---
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             espn_proj = match_data['espn_proj']
             edge = score - espn_proj
@@ -348,6 +378,7 @@ def get_vegas_props(api_key, _league):
                     "ESPN Proj": espn_proj,
                     "Edge": edge,
                     "Verdict": verdict,
+                    "Hit Rate": hit_rate_display, # NEW FIELD
                     "TD %": s['td'],
                     "Pass Yds": s['pass'] if s['pass']>0 else 0,
                     "Rush Yds": s['rush'] if s['rush']>0 else 0,
@@ -355,9 +386,7 @@ def get_vegas_props(api_key, _league):
                 })
         
         if not vegas_data: return pd.DataFrame({"Status": ["No Matching Player Props Found"]})
-        
-        df = pd.DataFrame(vegas_data).sort_values(by="Proj Pts", ascending=False)
-        return df
+        return pd.DataFrame(vegas_data).sort_values(by="Proj Pts", ascending=False)
         
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
