@@ -35,9 +35,7 @@ except Exception as e:
 # ==============================================================================
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week
-# Adjust for playoffs or offseason if needed
 if current_week == 0: current_week = 1
-
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
@@ -88,7 +86,7 @@ if 'box_scores' not in st.session_state or st.session_state.get('week') != selec
 
 box_scores = st.session_state['box_scores']
 
-# --- RESTORED: Full Data Collection Loop ---
+# --- DATA COLLECTION LOOP ---
 matchup_data = []
 efficiency_data = []
 all_active_players = [] 
@@ -124,32 +122,43 @@ for game in box_scores:
                     })
         return starters, bench
 
-    h_s, h_b = get_roster_data(game.home_lineup, home.team_name)
-    a_s, a_b = get_roster_data(game.away_lineup, away.team_name)
+    h_r, h_br = get_roster_data(game.home_lineup, home.team_name)
+    a_r, a_br = get_roster_data(game.away_lineup, away.team_name)
     
     # Matchup Data (Ledger)
     matchup_data.append({
-        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": utils.get_logo(home), "Home Roster": h_s,
-        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": utils.get_logo(away), "Away Roster": a_s
+        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": utils.get_logo(home), "Home Roster": h_r,
+        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": utils.get_logo(away), "Away Roster": a_r
     })
     
     # Efficiency Data (Hierarchy)
-    h_p = sum(p['Score'] for p in h_s) + sum(p['Score'] for p in h_b)
-    a_p = sum(p['Score'] for p in a_s) + sum(p['Score'] for p in a_b)
-    efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_s), "Bench": sum(p['Score'] for p in h_b)})
-    efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_s), "Bench": sum(p['Score'] for p in a_b)})
+    h_p = sum(p['Score'] for p in h_r) + sum(p['Score'] for p in h_br)
+    a_p = sum(p['Score'] for p in a_r) + sum(p['Score'] for p in a_br)
+    efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_r), "Bench": sum(p['Score'] for p in h_br)})
+    efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_br)})
 
-# Create DataFrames
-df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
-df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
-df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
+# --- SAFE DATAFRAME CREATION (The Fix) ---
+if efficiency_data:
+    df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
+else:
+    df_eff = pd.DataFrame(columns=["Team", "Total Potential", "Starters", "Bench"])
+
+if all_active_players:
+    df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
+else:
+    df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
+
+if bench_highlights:
+    df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
+else:
+    df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
 
 # ==============================================================================
 # 5. DASHBOARD UI ROUTER
 # ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# --- HERO ROW (RESTORED) ---
+# --- HERO ROW ---
 st.markdown("### 🌟 Weekly Elite")
 h1, h2, h3 = st.columns(3)
 if not df_players.empty:
@@ -179,8 +188,10 @@ if selected_page == P_LEDGER:
         with c1 if i % 2 == 0 else c2:
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF;"><div style="font-weight: bold; color: white;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff;"><div style="font-weight: bold; color: white;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
-                # Basic lineup view
-                st.write("Lineup Details")
+                # Simplified Lineup Display
+                if m['Home Roster']:
+                    df_m = pd.DataFrame(m['Home Roster'])
+                    st.dataframe(df_m, use_container_width=True, hide_index=True)
 
 elif selected_page == P_HIERARCHY:
     st.header("📈 The Hierarchy")
@@ -205,10 +216,11 @@ elif selected_page == P_AUDIT:
     st.header("🔎 The Audit")
     st.caption("Forensic analysis of your lineup decisions. We see those bench points.")
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
-    fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255,255,255,0.1)'))
-    fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
-    st.plotly_chart(fig, use_container_width=True)
+    if not df_eff.empty:
+        fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
+        fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Bench"], name='Bench Waste', marker_color='rgba(255,255,255,0.1)'))
+        fig.update_layout(barmode='stack', plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
+        st.plotly_chart(fig, use_container_width=True)
     if not df_bench_stars.empty: st.dataframe(df_bench_stars, use_container_width=True, hide_index=True)
 
 elif selected_page == P_HEDGE:
@@ -234,9 +246,7 @@ elif selected_page == P_IPO:
                  st.rerun()
     else:
         df_roi, prescient = st.session_state["draft_roi"], st.session_state["prescient"]
-        if prescient:
-             st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #92FE9D; background: linear-gradient(90deg, rgba(146, 254, 157, 0.1), rgba(17, 25, 40, 0.8)); display: flex; align-items: center;"><div style="flex: 1; text-align: center;"><img src="{prescient['Logo']}" style="width: 90px; border-radius: 50%; border: 3px solid #92FE9D;"></div><div style="flex: 3; padding-left: 20px;"><h3 style="color: #92FE9D; margin: 0;">The Prescient One</h3><div style="font-size: 1.8rem; font-weight: 900; color: white;">{prescient['Team']}</div><div style="color: #a0aaba; font-size: 1.1rem;">Generated <b>{prescient['Points']:.0f} points</b> from waivers while securing <b>{prescient['Wins']} Wins</b>.</div></div></div>""", unsafe_allow_html=True)
-        
+        st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #92FE9D; background: linear-gradient(90deg, rgba(146, 254, 157, 0.1), rgba(17, 25, 40, 0.8)); display: flex; align-items: center;"><div style="flex: 1; text-align: center;"><img src="{prescient['Logo']}" style="width: 90px; border-radius: 50%; border: 3px solid #92FE9D;"></div><div style="flex: 3; padding-left: 20px;"><h3 style="color: #92FE9D; margin: 0;">The Prescient One</h3><div style="font-size: 1.8rem; font-weight: 900; color: white;">{prescient['Team']}</div><div style="color: #a0aaba; font-size: 1.1rem;">Generated <b>{prescient['Points']:.0f} points</b> from waivers while securing <b>{prescient['Wins']} Wins</b>.</div></div></div>""", unsafe_allow_html=True)
         if not df_roi.empty:
             fig = px.scatter(df_roi, x="Pick Overall", y="Points", color="Team", hover_data=["Player", "Round"], title="Draft Pick ROI", height=600)
             fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba", xaxis=dict(autorange="reversed"))
