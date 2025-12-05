@@ -158,7 +158,16 @@ elif selected_page == P_HIERARCHY:
         with utils.luxury_spinner("Analyzing..."): st.session_state["rank_comm"] = utils.get_rankings_commentary(OPENAI_KEY, df_eff.iloc[0]['Team'], df_eff.iloc[-1]['Team'])
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
     st.header("Power Rankings")
-    st.bar_chart(df_eff.set_index("Team")["Total Potential"], color="#00C9FF")
+    
+    # CARD VIEW UPDATE
+    if "df_advanced" not in st.session_state:
+        st.session_state["df_advanced"] = utils.calculate_heavy_analytics(league, current_week)
+    
+    df = st.session_state["df_advanced"]
+    cols = st.columns(3)
+    for i, row in df.reset_index(drop=True).iterrows():
+        # Cycle through 3 columns on desktop, stacks automatically on mobile
+        utils.render_team_card(cols[i % 3], row, i+1)
 
 elif selected_page == P_AUDIT:
     st.header("Efficiency Audit")
@@ -301,7 +310,11 @@ elif selected_page == P_PROP:
         df = st.session_state["vegas"]
         if df is not None and not df.empty:
             if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
-            else: st.dataframe(df, use_container_width=True)
+            else:
+                # CARD VIEW
+                cols = st.columns(3)
+                for i, row in df.reset_index(drop=True).iterrows():
+                    utils.render_prop_card(cols[i % 3], row)
         else: st.info("No data available.")
 
 elif selected_page == P_DEAL:
