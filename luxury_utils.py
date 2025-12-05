@@ -88,6 +88,29 @@ def inject_luxury_css():
         text-align: center;
         font-size: 0.8rem;
     }
+    
+    /* TOOLTIP */
+    .tooltip { position: relative; display: inline-block; cursor: pointer; }
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 200px;
+        background-color: #1E1E1E;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 10px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -100px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        border: 1px solid #D4AF37;
+        font-size: 0.7rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
 
     .award-card { border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
     .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
@@ -172,8 +195,16 @@ def render_prop_card(col, row):
     </div>
     <img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;">
 </div>
-<div class="edge-box" style="border:1px solid {edge_color}; color:{edge_color};">
-    <b>VEGAS EDGE:</b> {edge_arrow} {abs(edge_val):.1f} pts vs ESPN
+<div class="edge-box" style="border:1px solid {edge_color}; color:{edge_color}; display:flex; justify-content:center; align-items:center;">
+    <span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span>
+    <div class="tooltip">ℹ️
+        <span class="tooltiptext">
+            <b>The Edge:</b><br>
+            Comparison between Vegas Projections and ESPN Projections.<br><br>
+            <span style="color:#00C9FF;">Blue (▲):</span> Vegas likes this player MORE than ESPN.<br>
+            <span style="color:#FF4B4B;">Red (▼):</span> Vegas likes this player LESS than ESPN.
+        </span>
+    </div>
 </div>
 <div class="stat-grid">
     <div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Proj</div></div>
@@ -212,12 +243,10 @@ def get_vegas_props(api_key, _league):
     # 1. PREPARE ESPN ROSTER MAP
     espn_map = {}
     
-    # Helper to add players to map
     def add_player(p, team_name):
-        # We store normalized keys for direct lookup
         norm_key = normalize_name(p.name)
         espn_map[norm_key] = {
-            "name": p.name, # Keep original display name
+            "name": p.name, 
             "id": p.playerId,
             "pos": p.position,
             "team": team_name, 
@@ -229,7 +258,6 @@ def get_vegas_props(api_key, _league):
         for player in team.roster:
             add_player(player, team.team_name)
             
-    # Expanded FA Pool
     try:
         fas = _league.free_agents(size=500)
         for player in fas:
@@ -249,7 +277,7 @@ def get_vegas_props(api_key, _league):
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        target_games = games[:16] # Full slate
+        target_games = games[:16] 
         player_props = {}
         
         for game in target_games:
@@ -278,25 +306,19 @@ def get_vegas_props(api_key, _league):
 
         # 3. MATCHING LOGIC (ROBUST)
         vegas_data = []
-        # Get list of all ESPN normalized names for fuzzy matching backup
         espn_keys = list(espn_map.keys())
         
         for name, s in player_props.items():
             norm_vegas_name = normalize_name(name)
-            
-            # A) Direct Match
             match_data = espn_map.get(norm_vegas_name)
             
-            # B) Fuzzy Match if Direct Fails
             if not match_data:
-                # Fuzzy match against the normalized keys
                 best_match = process.extractOne(norm_vegas_name, espn_keys)
-                if best_match and best_match[1] > 80: # Lowered threshold
+                if best_match and best_match[1] > 80: 
                     match_data = espn_map[best_match[0]]
             
             if not match_data: continue
             
-            # Calculate Score
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             espn_proj = match_data['espn_proj']
             edge = score - espn_proj
@@ -318,7 +340,7 @@ def get_vegas_props(api_key, _league):
                     elif score >= 10: verdict = "🆗 Flex Play"
                 
                 vegas_data.append({
-                    "Player": match_data['name'], # Use ESPN display name
+                    "Player": match_data['name'], 
                     "Position": pos,
                     "Team": match_data['team'], 
                     "ESPN ID": match_data['id'],
