@@ -12,7 +12,7 @@ from openai import OpenAI
 import time
 
 # ==============================================================================
-# 1. CSS & STYLING
+# 1. CSS & STYLING (RESPONSIVE)
 # ==============================================================================
 def inject_luxury_css():
     st.markdown("""
@@ -116,12 +116,13 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (FIXED 422 ERROR LOGIC)
+# 3. ANALYTICS (FIXED 422 ERROR)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # STEP 1: Get Upcoming Game IDs
-    url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/upcoming/odds'
+    # FIXED: The URL was previously 'events/upcoming/odds', which caused the 422 error.
+    # It must be just '/odds' to get the list of games first.
+    url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
     
     try:
@@ -131,8 +132,8 @@ def get_vegas_props(api_key):
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        # STEP 2: Loop through the next 5 games to fetch props (Avoids 422 Error)
-        # We limit to 5 to prevent slow loading or rate limits
+        # STEP 2: Loop through the next 5 games to fetch props
+        # We limit to 5 to prevent slow loading
         target_games = games[:5] 
         player_props = {}
         
@@ -151,7 +152,6 @@ def get_vegas_props(api_key):
             r_prop = requests.get(url_event, params=params_event)
             if r_prop.status_code == 200:
                 data = r_prop.json()
-                # Extract bookmakers
                 bookmakers = data.get('bookmakers', [])
                 for bookmaker in bookmakers:
                     for market in bookmaker['markets']:
@@ -160,7 +160,7 @@ def get_vegas_props(api_key):
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
                             
-                            # Grab values
+                            # Grab values (simplest: take latest found)
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -169,7 +169,6 @@ def get_vegas_props(api_key):
                                 if odds > 0: prob = 100/(odds+100)
                                 else: prob = abs(odds)/(abs(odds)+100)
                                 player_props[name]['td'] = prob
-            # Small sleep to be nice to the API
             time.sleep(0.1)
 
         # STEP 3: Aggregate
