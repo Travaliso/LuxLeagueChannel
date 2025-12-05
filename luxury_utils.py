@@ -17,6 +17,29 @@ from datetime import datetime
 # ==============================================================================
 # 1. CSS & STYLING
 # ==============================================================================
+import base64
+
+def set_background_image(image_file):
+    """
+    Sets a local image as the background for the Streamlit app.
+    """
+    with open(image_file, "rb") as f:
+        data = f.read()
+    bin_str = base64.b64encode(data).decode()
+    
+    page_bg_img = f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/png;base64,{bin_str}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }}
+    </style>
+    """
+    st.markdown(page_bg_img, unsafe_allow_html=True)
+    
 def inject_luxury_css():
     st.markdown("""
     <style>
