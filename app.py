@@ -315,7 +315,8 @@ elif selected_page == P_PROP:
         # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
             with utils.luxury_spinner("Calling Vegas..."): 
-                st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league)
+                # PASS SELECTED WEEK to get accurate weekly projections
+                st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league, selected_week)
         
         df = st.session_state["vegas"]
         
@@ -323,7 +324,7 @@ elif selected_page == P_PROP:
             if "Status" in df.columns: 
                 st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
-                # --- FILTER ROW (TOP) ---
+                # --- FILTER ROW ---
                 c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
                 with c1:
                     search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
@@ -334,22 +335,21 @@ elif selected_page == P_PROP:
                 with c4:
                     team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 
-                # --- SORT ROW (BOTTOM) ---
+                # --- SORT ROW ---
                 c_sort, c_space = st.columns([1, 3])
                 with c_sort:
-                    # NEW SORT FILTER
                     sort_order = st.selectbox(
                         "Sort Order", 
                         ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"]
                     )
 
-                # APPLY FILTERS
+                # Apply Filters
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
                 
-                # APPLY SORT
+                # Apply Sort
                 if "Highest Projection" in sort_order:
                     df = df.sort_values(by="Proj Pts", ascending=False)
                 elif "Best Edge" in sort_order:
@@ -357,7 +357,7 @@ elif selected_page == P_PROP:
                 elif "Worst Edge" in sort_order:
                     df = df.sort_values(by="Edge", ascending=True)  # Negative Edge First
 
-                # RENDER CARDS
+                # Render Cards
                 if df.empty:
                     st.info("No players match your search.")
                 else:
