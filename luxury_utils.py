@@ -68,6 +68,17 @@ def inject_luxury_css():
     .badge-gem { background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }
     .badge-ok { background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }
     
+    .matchup-badge {
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-left: 5px;
+        font-weight: bold;
+    }
+    .matchup-good { color: #92FE9D; border: 1px solid #92FE9D; background: rgba(146, 254, 157, 0.1); }
+    .matchup-bad { color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }
+    .matchup-mid { color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }
+
     .stat-grid {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
@@ -149,13 +160,8 @@ def get_logo(team):
     except: return fallback
 
 def normalize_name(name):
-    """
-    Standardize names for matching (e.g. "Josh Allen" == "joshallen")
-    """
     name = str(name).lower()
-    # Remove punctuation like apostrophes, dots, hyphens
     name = re.sub(r"[^a-zA-Z0-9]", "", name)
-    # Remove common suffixes
     name = name.replace("jr", "").replace("iii", "").replace("ii", "")
     return name
 
@@ -167,27 +173,23 @@ def render_prop_card(col, row):
     v = row['Verdict']
     badge_class = "badge-fire" if "Must" in v or "Elite" in v else "badge-gem" if "1" in v else "badge-ok"
     
-    # SAFE GET for Headshots
+    # Headshot
     pid = row.get('ESPN ID', 0)
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     
+    # Line
     main_stat = ""
     line_val = 0
-    if row['Pass Yds'] > 0: 
-        main_stat = "Pass Yds"
-        line_val = row['Pass Yds']
-    elif row['Rush Yds'] > 0: 
-        main_stat = "Rush Yds"
-        line_val = row['Rush Yds']
-    elif row['Rec Yds'] > 0: 
-        main_stat = "Rec Yds"
-        line_val = row['Rec Yds']
+    if row['Pass Yds'] > 0: main_stat, line_val = "Pass Yds", row['Pass Yds']
+    elif row['Rush Yds'] > 0: main_stat, line_val = "Rush Yds", row['Rush Yds']
+    elif row['Rec Yds'] > 0: main_stat, line_val = "Rec Yds", row['Rec Yds']
     
+    # Edge
     edge_val = row.get('Edge', 0.0)
     edge_color = "#00C9FF" if edge_val > 0 else "#FF4B4B"
     edge_arrow = "▲" if edge_val > 0 else "▼"
     
-    # Hit Rate Styling
+    # Hit Rate
     hit_rate_str = row.get('Hit Rate', 'N/A')
     hit_color = "#E0E0E0"
     if isinstance(hit_rate_str, str) and "%" in hit_rate_str:
@@ -196,11 +198,25 @@ def render_prop_card(col, row):
             hit_color = "#00C9FF" if pct >= 60 else "#FF4B4B" if pct <= 40 else "#E0E0E0"
         except: pass
 
+    # Matchup (DvP)
+    matchup_text = row.get('Matchup Rank', '')
+    matchup_class = "matchup-mid"
+    if "vs #" in matchup_text:
+        try:
+            # Extract rank
+            rank = int(re.search(r'#(\d+)', matchup_text).group(1))
+            if rank >= 24: matchup_class = "matchup-good" # Opponent is bad (24-32)
+            elif rank <= 8: matchup_class = "matchup-bad" # Opponent is good (1-8)
+        except: pass
+
     html = f"""
 <div class="luxury-card">
 <div style="display:flex; justify-content:space-between; align-items:start;">
     <div style="flex:1;">
-        <div class="prop-badge {badge_class}">{v}</div>
+        <div style="display:flex; align-items:center; margin-bottom:10px;">
+            <div class="prop-badge {badge_class}">{v}</div>
+            <div class="matchup-badge {matchup_class}">{matchup_text}</div>
+        </div>
         <div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div>
         <div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div>
     </div>
@@ -249,64 +265,105 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (HIT RATES + BOX SCORE PROJECTIONS)
+# 3. ANALYTICS (DVP + HIT RATES)
 # ==============================================================================
 @st.cache_data(ttl=3600*24)
 def load_nfl_stats(year):
     try:
-        # Load data, try current year
         df = nfl.import_weekly_data([year])
-        # Add Normalized Name Column for easier matching
         if not df.empty:
             df['norm_name'] = df['player_display_name'].apply(normalize_name)
         return df
     except: return pd.DataFrame()
 
+@st.cache_data(ttl=3600*24)
+def get_dvp_ranks(year):
+    # Calculates Defense vs Position Ranks based on Fantasy Points Allowed
+    try:
+        df = nfl.import_weekly_data([year])
+        if df.empty: return {}
+        
+        # Aggregate points by Opponent and Position
+        # We look at 'opponent_team' and 'position' columns
+        # Filter for QB, RB, WR, TE
+        df = df[df['position'].isin(['QB', 'RB', 'WR', 'TE'])]
+        
+        # Group by Opponent Team (the defense) and Position
+        # Sum fantasy points allowed
+        dvp = df.groupby(['opponent_team', 'position'])['fantasy_points_ppr'].sum().reset_index()
+        
+        # Also need game count to get average, but sum is fine for ranking if all played same games
+        # To be safe, we can rank by total points allowed (Assuming roughly equal games)
+        
+        dvp['rank'] = dvp.groupby('position')['fantasy_points_ppr'].rank(ascending=False)
+        # Rank 1 = Allowed Most Points (Best Matchup for Offense)
+        # Rank 32 = Allowed Fewest Points (Worst Matchup for Offense)
+        
+        # Create lookup map: { "BUF": {'QB': 5, 'WR': 20...} }
+        dvp_map = {}
+        for i, row in dvp.iterrows():
+            team = row['opponent_team']
+            pos = row['position']
+            rank = int(row['rank'])
+            
+            if team not in dvp_map: dvp_map[team] = {}
+            dvp_map[team][pos] = rank
+            
+        return dvp_map
+    except: return {}
+
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league, week):
-    # 1. LOAD HISTORICAL STATS (For Hit Rate)
-    # Note: Use 2024 if 2025 data isn't fully available in library yet
+    # 1. LOAD DATA
     stats_df = load_nfl_stats(2024) 
+    dvp_map = get_dvp_ranks(2024)
     
-    # 2. PREPARE ESPN ROSTER MAP (Using Weekly Box Scores for Accurate Projections)
+    # 2. PREPARE ESPN ROSTER MAP
     espn_map = {}
-    
-    # We fetch the box scores for the SELECTED week to get accurate weekly projections
     box_scores = _league.box_scores(week=week)
     
-    # Helper to process players
-    def process_player(p, team_name):
+    def process_player(p, team_name, opponent):
         norm_key = normalize_name(p.name)
-        # Use projected_points (weekly) not total (season)
         proj = p.projected_points if p.projected_points > 0 else 0
-        
         espn_map[norm_key] = {
             "name": p.name, 
             "id": p.playerId, 
             "pos": p.position,
             "team": team_name, 
             "proTeam": p.proTeam,
+            "opponent": opponent, # NFL Opponent abbreviation
             "espn_proj": proj
         }
 
-    # Iterate through matchups to get starters + bench
     for game in box_scores:
-        for player in game.home_lineup: process_player(player, game.home_team.team_name)
-        for player in game.away_lineup: process_player(player, game.away_team.team_name)
+        # Home players face Away Team
+        opp_away = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "N/A"
+        opp_home = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "N/A"
+        
+        # Fallback if abbrev is missing, try proOpponent/proTeam from player, 
+        # but box_score usually has team info. 
+        # Actually ESPN API usually gives us the matchup in the player object too.
+        
+        for player in game.home_lineup: 
+            # Opponent is the NFL team they are playing.
+            # We can try to get it from proOpponent if available
+            opp = getattr(player, 'proOpponent', "UNK")
+            process_player(player, game.home_team.team_name, opp)
             
-    # Free Agents (Fallback to season avg or 0 if weekly proj unavailable)
+        for player in game.away_lineup: 
+            opp = getattr(player, 'proOpponent', "UNK")
+            process_player(player, game.away_team.team_name, opp)
+            
+    # FA Logic (Simplified, no opponent usually available easily without schedule lookup)
+    # For now we skip DvP for FAs to keep it fast, or could look up schedule.
     try:
         fas = _league.free_agents(size=500)
         for player in fas:
             norm_key = normalize_name(player.name)
             if norm_key not in espn_map:
-                # FA object might not have weekly projection, use 0 as fallback or try to infer
                 espn_map[norm_key] = {
-                    "name": player.name, 
-                    "id": player.playerId, 
-                    "pos": player.position,
-                    "team": "Free Agent", 
-                    "proTeam": player.proTeam,
+                    "name": player.name, "id": player.playerId, "pos": player.position,
+                    "team": "Free Agent", "proTeam": player.proTeam, "opponent": getattr(player, 'proOpponent', "UNK"), 
                     "espn_proj": getattr(player, 'projected_points', 0)
                 }
     except: pass 
@@ -347,33 +404,27 @@ def get_vegas_props(api_key, _league, week):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # 4. MERGE & HIT RATE
+        # 4. MERGE, HIT RATE, DVP
         vegas_data = []
         espn_keys = list(espn_map.keys())
         
         for name, s in player_props.items():
             norm_vegas_name = normalize_name(name)
-            
-            # Lookup in ESPN Map
             match_data = espn_map.get(norm_vegas_name)
             if not match_data:
-                # Fuzzy fallback if exact normalized match fails
                 best_match = process.extractOne(norm_vegas_name, espn_keys)
                 if best_match and best_match[1] > 80: match_data = espn_map[best_match[0]]
             
             if not match_data: continue
             
-            # HIT RATE LOGIC (Using Normalized Names in Stats DF)
+            # --- HIT RATE ---
             hit_rate_display = "N/A"
             if not stats_df.empty:
-                # Look for player in stats DB using normalized name
                 p_stats = stats_df[stats_df['norm_name'] == norm_vegas_name]
-                
                 if not p_stats.empty:
                     last_5 = p_stats.sort_values(by='week', ascending=False).head(5)
                     hits = 0
                     total_g = len(last_5)
-                    
                     if total_g > 0:
                         if s['pass'] > 0: hits = sum(last_5['passing_yards'] >= s['pass'])
                         elif s['rush'] > 0: hits = sum(last_5['rushing_yards'] >= s['rush'])
@@ -381,11 +432,29 @@ def get_vegas_props(api_key, _league, week):
                         pct = (hits / total_g) * 100
                         hit_rate_display = f"{int(pct)}%"
 
+            # --- DVP RANK ---
+            matchup_display = ""
+            opp_team = match_data.get('opponent', 'UNK')
+            pos = match_data['pos']
+            
+            # nfl_data_py team codes map: ARZ->ARI, BLT->BAL, CLV->CLE, HST->HOU, SL->STL (old)
+            # We might need a small mapper, but let's try direct first.
+            # ESPN 'proOpponent' is usually standard (e.g. "BUF").
+            
+            if opp_team in dvp_map and pos in dvp_map[opp_team]:
+                rank = dvp_map[opp_team][pos]
+                # Rank 1 = Gives up most points (Best Matchup)
+                # Rank 32 = Gives up fewest points (Worst Matchup)
+                # Let's flip it for display: #1 is best for offense.
+                
+                # Actually, in calculate_dvp, I ranked descending on points allowed.
+                # So Rank 1 = Most Points Allowed = Best Matchup.
+                matchup_display = f"vs #{rank} {pos} Def"
+
             # SCORING
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             espn_proj = match_data['espn_proj']
             edge = score - espn_proj
-            pos = match_data['pos']
             
             if score > 3.0: 
                 verdict = "⚠️ Risky"
@@ -412,6 +481,7 @@ def get_vegas_props(api_key, _league, week):
                     "Edge": edge,
                     "Verdict": verdict,
                     "Hit Rate": hit_rate_display,
+                    "Matchup Rank": matchup_display, # NEW FIELD
                     "TD %": s['td'],
                     "Pass Yds": s['pass'] if s['pass']>0 else 0,
                     "Rush Yds": s['rush'] if s['rush']>0 else 0,
@@ -424,7 +494,7 @@ def get_vegas_props(api_key, _league, week):
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
-# (Rest of file unchanged...)
+# (Keep other analytics functions same...)
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -458,10 +528,12 @@ def calculate_season_awards(_league, current_week):
             margin = abs(game.home_score - game.away_score)
             if game.home_score > game.away_score: winner, loser = game.home_team.team_name, game.away_team.team_name
             else: winner, loser = game.away_team.team_name, game.home_team.team_name
+            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
+            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
