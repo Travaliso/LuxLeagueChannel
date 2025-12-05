@@ -12,7 +12,7 @@ from openai import OpenAI
 import time
 
 # ==============================================================================
-# 1. CSS & STYLING (RESPONSIVE)
+# 1. CSS & STYLING (THE LUXURY SUITE)
 # ==============================================================================
 def inject_luxury_css():
     st.markdown("""
@@ -48,14 +48,36 @@ def inject_luxury_css():
         border-radius: 16px; 
         border: 1px solid rgba(255, 255, 255, 0.08); 
         padding: 20px; 
-        margin-bottom: 15px; 
+        margin-bottom: 20px; 
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); 
+        transition: transform 0.2s;
     }
-    .award-card { border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-    .shame-card { background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }
-    .studio-box { border-left: 4px solid #7209b7; }
-    .podium-step { border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .rank-num { font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }
+    .luxury-card:hover { transform: translateY(-5px); border-color: #D4AF37; }
+    
+    .prop-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+    .badge-fire { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }
+    .badge-gem { background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }
+    .badge-ok { background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }
+    
+    .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .stat-box { text-align: center; }
+    .stat-val { font-size: 1.2rem; font-weight: 700; color: white; }
+    .stat-label { font-size: 0.7rem; color: #a0aaba; text-transform: uppercase; }
 
     /* --- MOBILE NAV --- */
     [data-testid="stSidebarNav"] { display: block !important; visibility: visible !important; }
@@ -82,7 +104,7 @@ def inject_luxury_css():
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. HELPERS
+# 2. UI RENDERERS (THE MAGIC)
 # ==============================================================================
 @st.cache_resource
 def get_league(league_id, year, espn_s2, swid):
@@ -94,6 +116,7 @@ def get_logo(team):
     except: return fallback
 
 def render_hero_card(col, player):
+    # Used for top 3 weekly players
     with col:
         st.markdown(f"""
         <div class="luxury-card" style="padding: 15px; display: flex; align-items: center; justify-content: start;">
@@ -107,6 +130,64 @@ def render_hero_card(col, player):
         </div>
         """, unsafe_allow_html=True)
 
+def render_prop_card(col, row):
+    # Dynamic styling for the verdict badge
+    v = row['Verdict']
+    badge_class = "badge-fire" if "Must" in v else "badge-gem" if "RB1" in v or "WR1" in v else "badge-ok"
+    
+    # Try to find a player ID for headshot (fuzzy match or generic)
+    # Note: Real implementation would map this better, for now we use a generic NFL logo if ID missing
+    headshot = "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
+    
+    # Construct the primary stat display string
+    main_stat = ""
+    if row['Pass Yds'] > 0: main_stat = f"{row['Pass Yds']:.0f} Pass Yds"
+    elif row['Rush Yds'] > 0: main_stat = f"{row['Rush Yds']:.0f} Rush Yds"
+    elif row['Rec Yds'] > 0: main_stat = f"{row['Rec Yds']:.0f} Rec Yds"
+    
+    with col:
+        st.markdown(f"""
+        <div class="luxury-card">
+            <div style="display:flex; justify-content:space-between; align-items:start;">
+                <div>
+                    <div class="prop-badge {badge_class}">{v}</div>
+                    <div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2;">{row['Player']}</div>
+                    <div style="color:#a0aaba; font-size:0.9rem;">{main_stat}</div>
+                </div>
+            </div>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div>
+                    <div class="stat-label">Proj Pts</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" style="color:{'#00C9FF' if row['TD %'] > 0.4 else '#E0E0E0'};">
+                        {int(row['TD %']*100)}%
+                    </div>
+                    <div class="stat-label">TD Prob</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+def render_team_card(col, team_data, rank):
+    # Used for Power Rankings
+    with col:
+        st.markdown(f"""
+        <div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;">
+            <div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div>
+            <div style="flex:1;">
+                <div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div>
+                <div style="font-size:0.8rem; color:#a0aaba;">Power Score: <span style="color:#00C9FF;">{team_data['Power Score']}</span></div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div>
+                <div style="font-size:0.7rem; color:#a0aaba;">Luck: {team_data['Luck Rating']:.1f}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 @contextmanager
 def luxury_spinner(text="Initializing Protocol..."):
     placeholder = st.empty()
@@ -116,11 +197,11 @@ def luxury_spinner(text="Initializing Protocol..."):
     finally: placeholder.empty()
 
 # ==============================================================================
-# 3. ANALYTICS (TRANSLATED FOR HUMANS)
+# 3. ANALYTICS
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key):
-    # Use general odds endpoint first to avoid 422 error
+    # 1. Fetch Schedule first to avoid 422
     url_list = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params_list = {'api_key': api_key, 'regions': 'us', 'markets': 'h2h', 'oddsFormat': 'american'}
     
@@ -131,9 +212,10 @@ def get_vegas_props(api_key):
         games = res.json()
         if not games: return pd.DataFrame({"Status": ["No Upcoming Games Found"]})
         
-        target_games = games[:8] # Fetch props for next 8 games
+        target_games = games[:8] # Next 8 games
         player_props = {}
         
+        # 2. Fetch Props per game
         for game in target_games:
             game_id = game['id']
             url_event = f'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game_id}/odds'
@@ -155,7 +237,6 @@ def get_vegas_props(api_key):
                             name = outcome['description']
                             if name not in player_props: player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0}
                             
-                            # Simplistic aggregation: take last non-zero value found
                             if key == 'player_pass_yds': player_props[name]['pass'] = outcome.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = outcome.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = outcome.get('point', 0)
@@ -166,15 +247,13 @@ def get_vegas_props(api_key):
                                 player_props[name]['td'] = prob
             time.sleep(0.1)
 
-        # TRANSLATION LAYER
+        # 3. Translation to Fantasy
         vegas_data = []
         for name, s in player_props.items():
-            # 1. Calculate Fantasy Points (PPR approx)
-            # 0.04 pts/pass yd, 0.1 pts/rush/rec yd, 6 pts/TD
+            # Approx Fantasy Pts
             score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
             
-            if score > 2.0: # Filter out irrelevant players
-                # 2. Assign Verdict
+            if score > 3.0: 
                 if score >= 18: verdict = "🔥 Must Start"
                 elif score >= 14: verdict = "💎 RB1/WR1"
                 elif score >= 10: verdict = "🆗 Flex Play"
@@ -185,9 +264,9 @@ def get_vegas_props(api_key):
                     "Proj Pts": score,
                     "Verdict": verdict,
                     "TD %": s['td'],
-                    "Pass Yds": s['pass'] if s['pass'] > 0 else None,
-                    "Rush Yds": s['rush'] if s['rush'] > 0 else None,
-                    "Rec Yds": s['rec'] if s['rec'] > 0 else None
+                    "Pass Yds": s['pass'] if s['pass'] > 0 else 0,
+                    "Rush Yds": s['rush'] if s['rush'] > 0 else 0,
+                    "Rec Yds": s['rec'] if s['rec'] > 0 else 0
                 })
         
         if not vegas_data: return pd.DataFrame({"Status": ["No Player Props Found (Check closer to gametime)"]})
@@ -215,7 +294,7 @@ def calculate_heavy_analytics(_league, current_week):
         actual_win_pct = team.wins / (team.wins + team.losses + 0.001)
         luck_rating = (actual_win_pct - true_win_pct) * 10
         data_rows.append({"Team": team.team_name, "Wins": team.wins, "Points For": team.points_for, "Power Score": power_score, "Luck Rating": luck_rating, "True Win %": true_win_pct})
-    return pd.DataFrame(data_rows)
+    return pd.DataFrame(data_rows).sort_values(by="Power Score", ascending=False)
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
