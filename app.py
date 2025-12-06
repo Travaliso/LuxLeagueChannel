@@ -305,6 +305,50 @@ elif selected_page == P_LAB:
                              row['ESPN Proj']
                          )
                          st.info(assessment)
+        # ... (Inside the P_LAB section of app.py) ...
+
+elif selected_page == P_LAB:
+    st.header("🧬 The Lab")
+    c1, c2 = st.columns([3, 1])
+    with c1: target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
+    with c2:
+         if st.button("🧪 Analyze"):
+             with ui.luxury_spinner("Calibrating..."): st.session_state["trigger_lab"] = True; st.rerun()
+    
+    if st.session_state.get("trigger_lab"):
+        roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+        st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
+        st.session_state["trigger_lab"] = False; st.rerun()
+    
+    if "ngs_data" in st.session_state:
+        if not st.session_state["ngs_data"].empty:
+            cols = st.columns(2)
+            for i, row in st.session_state["ngs_data"].iterrows():
+                with cols[i % 2]:
+                    ui.render_lab_card(cols[i % 2], row)
+                    
+                    vegas_line = "N/A"
+                    if "vegas" in st.session_state and not st.session_state["vegas"].empty:
+                         v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
+                         if not v_row.empty: vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
+
+                    if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
+                         matchup_rank = row.get('Matchup Rank', 'N/A')
+                         def_stat = row.get('Def Stat', 'N/A') # NEW FIELD
+                         
+                         assessment = intel.get_lab_assessment(
+                             OPENAI_KEY, 
+                             row['Player'], 
+                             row['Team'], 
+                             row['Position'], 
+                             row['Opponent'], 
+                             matchup_rank, 
+                             def_stat, # PASS TO AI
+                             f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
+                             vegas_line, 
+                             row['ESPN Proj']
+                         )
+                         st.info(assessment)
         else: st.info("No Next Gen data available.")
 
 elif selected_page == P_FORECAST:
