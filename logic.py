@@ -35,10 +35,10 @@ def load_nfl_stats_safe(year):
         except: continue
     return pd.DataFrame()
 
-# --- NEW: LINEUP EFFICIENCY AUDIT ---
+# --- THE AUDIT (FIXED: Added _league to prevent hashing error) ---
 @st.cache_data(ttl=3600)
-def analyze_lineup_efficiency(league, week):
-    box = league.box_scores(week=week)
+def analyze_lineup_efficiency(_league, week):
+    box = _league.box_scores(week=week)
     audit_data = []
     
     for game in box:
@@ -49,8 +49,7 @@ def analyze_lineup_efficiency(league, week):
             start_pts = sum(p.points for p in starters)
             bench_pts = sum(p.points for p in bench)
             
-            # Find "Regret": Best Bench vs Worst Starter (Naive calculation)
-            # In a real app, you'd check slot eligibility, but this is a good proxy for "pain"
+            # Simple Regret: Best Bench > Worst Starter
             sorted_starters = sorted(starters, key=lambda x: x.points)
             sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
             
@@ -60,18 +59,20 @@ def analyze_lineup_efficiency(league, week):
             if sorted_bench and sorted_starters:
                 best_bench = sorted_bench[0]
                 worst_starter = sorted_starters[0]
-                # Only count it as a regret if the bench player actually outscored the starter
                 if best_bench.points > worst_starter.points:
                     regret_player = best_bench.name
                     lost_pts = best_bench.points - worst_starter.points
             
-            # Grade Calculation (Based on lost points)
+            # Grading Scale
             if lost_pts < 2: grade = "A+"
             elif lost_pts < 5: grade = "A"
             elif lost_pts < 10: grade = "B"
             elif lost_pts < 20: grade = "C"
             elif lost_pts < 30: grade = "D"
             else: grade = "F"
+
+            total_pts = start_pts + bench_pts
+            eff = (start_pts / total_pts * 100) if total_pts > 0 else 0
 
             audit_data.append({
                 "Team": team.team_name,
@@ -81,7 +82,7 @@ def analyze_lineup_efficiency(league, week):
                 "Regret": regret_player,
                 "Lost Pts": lost_pts,
                 "Grade": grade,
-                "Efficiency": (start_pts / (start_pts + bench_pts) * 100) if (start_pts + bench_pts) > 0 else 0
+                "Efficiency": eff
             })
             
     return pd.DataFrame(audit_data).sort_values(by="Lost Pts", ascending=False)
@@ -143,6 +144,7 @@ def get_vegas_props(api_key, _league, week):
         for p in team.roster:
             norm = normalize_name(p.name)
             espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
+
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
@@ -274,7 +276,6 @@ def calculate_heavy_analytics(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
-    # (Same awards logic as before, kept short for brevity but assume full content)
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": safe_get_logo(t)} for t in _league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
@@ -520,7 +521,7 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, 
                         "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
+                        "Alpha Stat": f"Sep: {sep:.1f}", "Beta Stat": f"aDOT: {adot:.1f}",
                         "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
                         "Def Stat": def_context
                     })
