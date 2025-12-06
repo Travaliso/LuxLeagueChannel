@@ -29,20 +29,21 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 def get_ai_scouting_report(key, free_agents_str):
     return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
 
-# --- NEW FUNCTION ---
-def get_lab_assessment(key, player_name, team, position, opponent, metrics, vegas_line, espn_proj):
+# --- UPDATED ASSISTANT GM ---
+def get_lab_assessment(key, player_name, team, position, opponent, matchup_rank, metrics, vegas_line, espn_proj):
     prompt = f"""
-    Act as an expert NFL Assistant GM. Provide a strategic assessment for {player_name} ({position}, {team}) this week. Account for the opponents defensive analytics and performance against the position the player plays. Account for the weather and how that effects this player. Be more difinitive then speculative.
+    Act as a decisive, cold-hard NFL General Manager. Analyze {player_name} ({position}, {team}).
     
-    Data Context:
+    Hard Data:
     - Opponent: {opponent}
-    - Next Gen Stats: {metrics}
-    - Vegas Implied: {vegas_line if vegas_line else 'N/A'}
+    - Matchup Rank: {matchup_rank} (1=Softest, 32=Hardest). Use this to justify your verdict.
+    - Advanced Stats: {metrics}
+    - Vegas Projection: {vegas_line}
     - ESPN Projection: {espn_proj}
     
-    Output Format:
-    1. **Verdict:** (Start/Sit/Trade/Hold)
-    2. **The Read:** 2-3 sentences analyzing the matchup and metrics. Mention if Vegas differs from ESPN.
-    3. **X-Factor:** One specific thing to watch (e.g. "Redzone targets" or "Deep ball accuracy").
+    Instructions:
+    1. Verdict: One word (START, SIT, HOLD, TRADE).
+    2. The Read: 2-3 sentences. BE SPECIFIC. Reference the Matchup Rank number and the Advanced Stats directly. Do not say "might" or "could". Say "will" or "is". 
+    3. X-Factor: The one stat that matters most this week.
     """
     return ai_response(key, prompt, 600)
