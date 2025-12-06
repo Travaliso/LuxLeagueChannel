@@ -85,26 +85,26 @@ def inject_luxury_css():
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
     /* TOOLTIP */
-    .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 5px; }}
+    .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
     .tooltip .tooltiptext {{ 
         visibility: hidden; 
-        width: 240px; 
+        width: 220px; 
         background-color: #1E1E1E; 
         color: #fff; 
         text-align: left; 
         border-radius: 6px; 
         padding: 10px; 
         position: absolute; 
-        z-index: 100; 
-        bottom: 125%; 
+        z-index: 9999; 
+        bottom: 140%; 
         left: 50%; 
-        margin-left: -120px; 
+        margin-left: -110px; 
         opacity: 0; 
         transition: opacity 0.3s; 
         border: 1px solid #D4AF37; 
-        font-size: 0.75rem; 
+        font-size: 0.7rem; 
         line-height: 1.4;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
     }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
@@ -116,7 +116,7 @@ def inject_luxury_css():
     .studio-box {{ border-left: 4px solid #7209b7; }}
     .podium-step {{ border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }}
     .rank-num {{ font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }}
-    
+
     @keyframes shine {{ to {{ background-position: 200% center; }} }}
     .luxury-loader-text {{ font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 3s linear infinite; }}
     .luxury-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
@@ -149,13 +149,33 @@ def luxury_spinner(text="Processing..."):
     try: yield
     finally: placeholder.empty()
 
+# --- METRIC DEFINITIONS ---
+METRIC_DEFINITIONS = {
+    "Power Score": "<b>Power Score:</b><br>Measures a team's dominance based on points scored per week relative to the league average.",
+    "Luck": "<b>Luck Rating:</b><br>The difference between your actual Win % and your 'True Win %' (record if you played every team each week).<br><br><span style='color:#00C9FF'>Positive:</span> Lucky<br><span style='color:#FF4B4B'>Negative:</span> Unlucky",
+    "Edge": "<b>The Edge:</b><br>Difference between Vegas Implied Points and ESPN Projections.<br><br><span style='color:#00C9FF'>Blue (▲):</span> Vegas is Higher (Sleeper).<br><span style='color:#FF4B4B'>Red (▼):</span> Vegas is Lower (Bust Risk).",
+    "WOPR": "<b>WOPR (Weighted Opportunity Rating):</b><br>Combines Target Share & Air Yards Share. The #1 predictor of future WR fantasy performance.",
+    "RYOE": "<b>RYOE (Rush Yards Over Expected):</b><br>Yards gained compared to what an average RB would get in the same blocking situation. Measures pure RB talent.",
+    "CPOE": "<b>CPOE (Completion % Over Expected):</b><br>Accuracy metric that accounts for the difficulty of throws (depth, pressure, coverage).",
+    "Efficiency": "<b>Efficiency (North/South):</b><br>Total distance traveled per yard gained. Lower is better (less dancing, more hitting the hole).",
+    "Air Yards": "<b>Avg Intended Air Yards:</b><br>How far the ball travels in the air per attempt. High = Aggressive/Deep Threat."
+}
+
+def get_tooltip_html(key):
+    text = METRIC_DEFINITIONS.get(key, "")
+    if not text: return ""
+    return f'<div class="tooltip">ℹ️<span class="tooltiptext">{text}</span></div>'
+
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""<div class="luxury-card" style="padding: 15px; display: flex; align-items: center;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);"><div><div style="color: white; font-weight: 800;">{player['Name']}</div><div style="color: #00C9FF; font-weight: 600;">{player['Points']} PTS</div><div style="color: #a0aaba; font-size: 0.8rem;">{player['Team']}</div></div></div>""", unsafe_allow_html=True)
 
 def render_team_card(col, team_data, rank):
+    power_tip = get_tooltip_html("Power Score")
+    luck_tip = get_tooltip_html("Luck")
+    
     with col:
-        st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;"><div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div><div style="flex:1;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div><div style="font-size:0.8rem; color:#a0aaba;">Power Score: <span style="color:#00C9FF;">{team_data['Power Score']}</span></div></div><div style="text-align:right;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div><div style="font-size:0.7rem; color:#a0aaba;">Luck: {team_data['Luck Rating']:.1f}</div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;"><div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div><div style="flex:1;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div><div style="font-size:0.8rem; color:#a0aaba; display:flex; align-items:center;">Power Score: <span style="color:#00C9FF; margin-left:4px;">{team_data['Power Score']}</span>{power_tip}</div></div><div style="text-align:right;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div><div style="font-size:0.7rem; color:#a0aaba; display:flex; justify-content:flex-end; align-items:center;">Luck: {team_data['Luck Rating']:.1f}{luck_tip}</div></div></div>""", unsafe_allow_html=True)
 
 def render_prop_card(col, row):
     v = row['Verdict']
@@ -171,6 +191,7 @@ def render_prop_card(col, row):
     edge_val = row.get('Edge', 0.0)
     edge_color = "#00C9FF" if edge_val > 0 else "#FF4B4B"
     edge_arrow = "▲" if edge_val > 0 else "▼"
+    edge_tip = get_tooltip_html("Edge")
     
     hit_rate_str = row.get('Hit Rate', 'N/A')
     hit_color = "#E0E0E0"
@@ -182,7 +203,7 @@ def render_prop_card(col, row):
         try:
             rank = int(re.search(r'#(\d+)', row['Matchup Rank']).group(1))
             m_class = "matchup-good" if rank <= 8 else "matchup-bad" if rank >= 24 else "matchup-mid"
-            matchup_html = f'<div class="meta-badge {m_class}">{row["Matchup Rank"]}</div>'
+            matchup_html = f'<div class="matchup-badge {m_class}">{row["Matchup Rank"]}</div>'
         except: pass
 
     weather_html = ""
@@ -204,31 +225,28 @@ def render_prop_card(col, row):
     if insight:
         weather_html += f'<div class="meta-badge insight-purple">{insight}</div>'
 
-    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">{badges_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
+    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">{badges_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color}; display:flex; justify-content:center; align-items:center;"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span>{edge_tip}</div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
 # --- LAB CARD RENDERER (ENHANCED) ---
 def render_lab_card(col, row):
     v = row['Verdict']
     badge_class = "badge-gem" if "ELITE" in v or "MONSTER" in v else "badge-ok" if "WORKHORSE" in v or "SNIPER" in v else "weather-neutral"
-    
     pid = row.get('ID', 0)
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
+    val_color = "#4cc9f0"
+    if "-" in str(row['Value']): val_color = "#FF4B4B"
     
-    val_color = "#4cc9f0" # Cyan default
-    if "-" in str(row['Value']): val_color = "#FF4B4B" # Negative values
+    # Dynamic Tooltip
+    metric_key = "WOPR"
+    if "RYOE" in row['Metric']: metric_key = "RYOE"
+    elif "CPOE" in row['Metric']: metric_key = "CPOE"
+    elif "Efficiency" in row['Beta Stat']: metric_key = "Efficiency"
+    elif "Air Yds" in row['Beta Stat']: metric_key = "Air Yards"
     
-    # Tooltip content logic
-    metric_def = "No definition available."
-    m = row['Metric']
-    if "WOPR" in m: metric_def = "<b>WOPR (Weighted Opportunity Rating):</b><br>Combines Target Share & Air Yards Share. The best predictor of future fantasy points for WRs."
-    elif "RYOE" in m: metric_def = "<b>RYOE (Rush Yards Over Expected):</b><br>Yards gained compared to what an average RB would get in the same situation. Measures pure talent."
-    elif "CPOE" in m: metric_def = "<b>CPOE (Completion % Over Expected):</b><br>Accuracy metric that accounts for difficulty of throws."
-    elif "Efficiency" in m: metric_def = "<b>Efficiency (North/South):</b><br>Total distance traveled per yard gained. Lower is better (less dancing)."
-    elif "Air Yards" in m: metric_def = "<b>Avg Air Yards:</b><br>Average depth of target. High = Deep threat / Aggressive."
+    tip_html = get_tooltip_html(metric_key)
 
-    html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; align-items:center;"><div style="text-align:center;"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">{row['Metric']} <div class="tooltip">ℹ️<span class="tooltiptext">{metric_def}</span></div></div><div style="font-size:1.2rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Metric II</div><div style="font-size:0.9rem; color:#fff;">{row.get('Beta Stat', '-')}</div></div></div></div>"""
-    
+    html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; align-items:center;"><div style="text-align:center;"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase; display:flex; justify-content:center; align-items:center;">{row['Metric']}{tip_html}</div><div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Metric II</div><div style="font-size:0.9rem; color:#fff;">{row.get('Beta Stat', '-')}</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
@@ -264,19 +282,7 @@ def get_dvp_ranks_safe(year):
 # --- WEATHER ENGINE ---
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    stadiums = {
-        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
-        'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
-        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True),
-        'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
-        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False),
-        'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
-        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True),
-        'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
-        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False),
-        'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
-        'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)
-    }
+    stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
         if is_dome: weather_data[team] = {"Dome": True}; continue
@@ -308,7 +314,6 @@ def get_vegas_props(api_key, _league, week):
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
         a_abbr = clean_team_abbr(game.away_team.team_abbrev)
         site = h_abbr 
-        
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
@@ -326,6 +331,7 @@ def get_vegas_props(api_key, _league, week):
                 espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": tm}
     except: pass
 
+    # FETCH VEGAS
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params = {'apiKey': api_key, 'regions': 'us', 'markets': 'h2h,spreads,totals', 'oddsFormat': 'american'}
     try:
@@ -406,6 +412,7 @@ def get_vegas_props(api_key, _league, week):
                     site = match.get('game_site', 'UNK')
                     if site in weather_map: w_data = weather_map[site]
 
+                    # INSIGHT LOGIC
                     insight_msg = ""
                     ctx = s.get('context', {'total':0, 'spread':0})
                     if ctx['total'] > 48: insight_msg = "🔥 Barn Burner"
@@ -634,8 +641,7 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    years_to_try = [year, year - 1]
-    for y in years_to_try:
+    for y in [year, year-1]:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
@@ -661,25 +667,12 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep, yac_exp = stats.get('avg_separation', 0), stats.get('avg_yac_above_expectation', 0)
-                    
-                    # NEW: Fetch aDOT & Catch Rate
-                    adot = stats.get('avg_intended_air_yards', 0)
-                    catch_pct = stats.get('catch_percentage', 0)
-                    
                     wopr = 0
                     if not df_seas.empty:
                         seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                         if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
-                    
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
-                    
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict,
-                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f} yds",
-                        "Beta Stat": f"aDOT: {adot:.1f}" # NEW COLUMN
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -688,19 +681,8 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     ryoe, box_8 = stats.get('rush_yards_over_expected_per_att', 0), stats.get('percent_attempts_gte_eight_defenders', 0)
-                    
-                    # NEW: Fetch Efficiency (North/South)
-                    eff = stats.get('efficiency', 0)
-                    
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
-                    
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Verdict": verdict,
-                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box",
-                        "Beta Stat": f"Eff: {eff:.2f}" # NEW COLUMN
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -709,19 +691,8 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe, time_throw = stats.get('completion_percentage_above_expectation', 0), stats.get('avg_time_to_throw', 0)
-                    
-                    # NEW: Air Yards
-                    air_yds = stats.get('avg_intended_air_yards', 0)
-
                     verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
-                    
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict,
-                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time",
-                        "Beta Stat": f"Air Yds: {air_yds:.1f}" # NEW COLUMN
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
     return pd.DataFrame(insights)
 
 # ==============================================================================
