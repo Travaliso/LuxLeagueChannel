@@ -35,6 +35,71 @@ def load_nfl_stats_safe(year):
         except: continue
     return pd.DataFrame()
 
+# --- NEW: LINEUP EFFICIENCY AUDIT ---
+@st.cache_data(ttl=3600)
+def analyze_lineup_efficiency(league, week):
+    box = league.box_scores(week=week)
+    audit_data = []
+    
+    for game in box:
+        for team, lineup in [(game.home_team, game.home_lineup), (game.away_team, game.away_lineup)]:
+            starters = [p for p in lineup if p.slot_position != 'BE']
+            bench = [p for p in lineup if p.slot_position == 'BE']
+            
+            start_pts = sum(p.points for p in starters)
+            bench_pts = sum(p.points for p in bench)
+            
+            # Find "Regret": Best Bench vs Worst Starter (Naive calculation)
+            # In a real app, you'd check slot eligibility, but this is a good proxy for "pain"
+            sorted_starters = sorted(starters, key=lambda x: x.points)
+            sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
+            
+            regret_player = "None"
+            lost_pts = 0
+            
+            if sorted_bench and sorted_starters:
+                best_bench = sorted_bench[0]
+                worst_starter = sorted_starters[0]
+                # Only count it as a regret if the bench player actually outscored the starter
+                if best_bench.points > worst_starter.points:
+                    regret_player = best_bench.name
+                    lost_pts = best_bench.points - worst_starter.points
+            
+            # Grade Calculation (Based on lost points)
+            if lost_pts < 2: grade = "A+"
+            elif lost_pts < 5: grade = "A"
+            elif lost_pts < 10: grade = "B"
+            elif lost_pts < 20: grade = "C"
+            elif lost_pts < 30: grade = "D"
+            else: grade = "F"
+
+            audit_data.append({
+                "Team": team.team_name,
+                "Logo": safe_get_logo(team),
+                "Starters": start_pts,
+                "Bench": bench_pts,
+                "Regret": regret_player,
+                "Lost Pts": lost_pts,
+                "Grade": grade,
+                "Efficiency": (start_pts / (start_pts + bench_pts) * 100) if (start_pts + bench_pts) > 0 else 0
+            })
+            
+    return pd.DataFrame(audit_data).sort_values(by="Lost Pts", ascending=False)
+
+@st.cache_data(ttl=3600*24)
+def get_defensive_averages(year):
+    try:
+        df = load_nfl_stats_safe(year)
+        if df.empty: return {}
+        weekly_defs = df.groupby(['opponent_team', 'week']).agg({'passing_yards': 'sum', 'rushing_yards': 'sum'}).reset_index()
+        season_avgs = weekly_defs.groupby('opponent_team').mean(numeric_only=True).reset_index()
+        stats_map = {}
+        for _, row in season_avgs.iterrows():
+            tm = clean_team_abbr(row['opponent_team'])
+            stats_map[tm] = {'Pass': f"Allows {row['passing_yards']:.1f} Pass Yds/Gm", 'Rush': f"Allows {row['rushing_yards']:.1f} Rush Yds/Gm"}
+        return stats_map
+    except: return {}
+
 @st.cache_data(ttl=3600*24)
 def get_dvp_ranks_safe(year):
     try:
@@ -51,35 +116,9 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
-@st.cache_data(ttl=3600*24)
-def get_defensive_averages(year):
-    try:
-        df = load_nfl_stats_safe(year)
-        if df.empty: return {}
-        weekly_defs = df.groupby(['opponent_team', 'week']).agg({'passing_yards': 'sum', 'rushing_yards': 'sum'}).reset_index()
-        season_avgs = weekly_defs.groupby('opponent_team').mean(numeric_only=True).reset_index()
-        stats_map = {}
-        for _, row in season_avgs.iterrows():
-            tm = clean_team_abbr(row['opponent_team'])
-            stats_map[tm] = {'Pass': f"Allows {row['passing_yards']:.1f} Pass Yds/Gm", 'Rush': f"Allows {row['rushing_yards']:.1f} Rush Yds/Gm"}
-        return stats_map
-    except: return {}
-
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    stadiums = {
-        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
-        'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
-        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True),
-        'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
-        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False),
-        'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
-        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True),
-        'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
-        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False),
-        'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
-        'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)
-    }
+    stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
         if is_dome: weather_data[team] = {"Dome": True}; continue
@@ -99,13 +138,11 @@ def get_vegas_props(api_key, _league, week):
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
     weather_map = get_nfl_weather() 
-    
     espn_map = {}
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
             espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
-
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
@@ -119,7 +156,6 @@ def get_vegas_props(api_key, _league, week):
             norm = normalize_name(p.name)
             if norm in espn_map:
                 espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(h_abbr), 'game_site': site})
-    
     try:
         for p in _league.free_agents(size=500):
             norm = normalize_name(p.name)
@@ -127,14 +163,12 @@ def get_vegas_props(api_key, _league, week):
                 tm = clean_team_abbr(p.proTeam)
                 espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": tm}
     except: pass
-
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params = {'apiKey': api_key, 'regions': 'us', 'markets': 'h2h,spreads,totals', 'oddsFormat': 'american'}
     try:
         res = requests.get(url, params=params)
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Error {res.status_code}"]})
         games = res.json()
-        
         game_context = {}
         for g in games:
             spread, total = 0, 0
@@ -145,7 +179,6 @@ def get_vegas_props(api_key, _league, week):
                     if mkt['key'] == 'totals': total = mkt['outcomes'][0].get('point', 0)
             except: pass
             game_context[g['id']] = {'total': total, 'spread': spread}
-
         player_props = {}
         for game in games[:16]:
             g_ctx = game_context.get(game['id'], {'total': 0, 'spread': 0})
@@ -168,7 +201,6 @@ def get_vegas_props(api_key, _league, week):
                                 odds = out.get('price', 0)
                                 player_props[name]['td'] = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
             time.sleep(0.05)
-
         rows = []
         espn_keys = list(espn_map.keys())
         for name, s in player_props.items():
@@ -177,7 +209,6 @@ def get_vegas_props(api_key, _league, week):
             if not match:
                 best = process.extractOne(norm, espn_keys)
                 if best and best[1] > 70: match = espn_map[best[0]]
-            
             if match:
                 score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
                 if score > 1.0:
@@ -185,7 +216,6 @@ def get_vegas_props(api_key, _league, week):
                     p_pos = match['pos']
                     if p_pos == 'QB': v = "🔥 Elite QB1" if score >= 20 else "💎 QB1" if score >= 16 else "🆗 Streamer"
                     else: v = "🔥 Must Start" if score >= 15 else "💎 RB1/WR1" if score >= 12 else "🆗 Flex Play"
-                    
                     hr_txt = "N/A"
                     if not stats_df.empty:
                         p_stats = stats_df[stats_df['norm_name'] == norm]
@@ -211,7 +241,6 @@ def get_vegas_props(api_key, _league, week):
                     elif abs(ctx['spread']) > 9.5: insight_msg = "🗑️ Garbage Time"
                     elif s['rush'] > 80: insight_msg = "🚜 Workhorse"
                     elif s['td'] > 0.45: insight_msg = "🎯 Redzone"
-
                     rows.append({
                         "Player": match['name'], "Position": p_pos, "Team": match['team'],
                         "ESPN ID": match['id'], "Proj Pts": score, "Edge": score - match['espn_proj'],
@@ -245,6 +274,7 @@ def calculate_heavy_analytics(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
+    # (Same awards logic as before, kept short for brevity but assume full content)
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": safe_get_logo(t)} for t in _league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
@@ -289,7 +319,6 @@ def calculate_season_awards(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_draft_analysis(_league):
-    # Fixed safe_get_logo call here
     live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
     total_teams = len(_league.teams)
     cutoff_index = int(total_teams * 0.75) 
@@ -331,9 +360,13 @@ def scan_dark_pool(_league, limit=20):
     for player in free_agents:
         try:
             status = getattr(player, 'injuryStatus', 'ACTIVE')
-            if any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED']): continue
-            if player.projected_total_points > 0:
-                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": player.total_points, "Total Pts": player.total_points, "ID": player.playerId, "Status": str(status)})
+            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
+            if any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED', 'PUP', 'DOUBTFUL']): continue
+            total = player.total_points if player.total_points > 0 else player.projected_total_points
+            weeks = _league.current_week if _league.current_week > 0 else 1
+            avg_pts = total / weeks
+            if avg_pts > 0.5:
+                pool_data.append({"Name": player.name, "Position": player.position, "Team": player.proTeam, "Avg Pts": avg_pts, "Total Pts": total, "ID": player.playerId, "Status": status_str})
         except: continue
     df = pd.DataFrame(pool_data)
     if not df.empty: df = df.sort_values(by="Avg Pts", ascending=False).head(limit)
@@ -359,8 +392,8 @@ def run_monte_carlo_simulation(_league, simulations=1000):
         for name in [t["name"] for t in sorted_teams[:num_playoff_teams]]: results[name] += 1
     final_output = []
     for team in _league.teams:
-        odds = (results[team.team_name] / simulations) * 100
-        reason = "🔒 Locked." if odds > 99 else "🚀 High Prob." if odds > 80 else "⚖️ Bubble." if odds > 40 else "🙏 Miracle." if odds > 5 else "💀 Dead."
+        odds = (results[team.team_name] / simulations) 
+        reason = "🔒 Locked." if odds > 0.99 else "🚀 High Prob." if odds > 0.80 else "⚖️ Bubble." if odds > 0.40 else "🙏 Miracle." if odds > 0.05 else "💀 Dead."
         final_output.append({"Team": team.team_name, "Playoff Odds": odds, "Note": reason})
     return pd.DataFrame(final_output).sort_values(by="Playoff Odds", ascending=False)
 
@@ -487,7 +520,7 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, 
                         "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f}", "Beta Stat": f"aDOT: {adot:.1f}",
+                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
                         "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
                         "Def Stat": def_context
                     })
