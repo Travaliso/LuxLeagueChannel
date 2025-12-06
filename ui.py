@@ -5,7 +5,7 @@ import re
 from fpdf import FPDF
 from contextlib import contextmanager
 
-# --- METRIC DEFINITIONS (Source of Truth) ---
+# --- METRIC DEFINITIONS ---
 METRIC_DEFINITIONS = {
     "Power Score": "<b>Power Score:</b><br>Measures a team's dominance based on points scored per week relative to the league average.",
     "Luck": "<b>Luck Rating:</b><br>The difference between your actual Win % and your 'True Win %' (record if you played every team each week).<br><br><span style='color:#00C9FF'>Positive:</span> Lucky<br><span style='color:#FF4B4B'>Negative:</span> Unlucky",
@@ -60,26 +60,22 @@ def inject_luxury_css():
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
     /* BADGES */
-    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }}
+    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
-    .matchup-badge {{ font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; margin-left: 8px; font-weight: bold; display: inline-block; }}
-    .matchup-good {{ color: #92FE9D; border: 1px solid #92FE9D; background: rgba(146, 254, 157, 0.1); }}
-    .matchup-bad {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
-    .matchup-mid {{ color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }}
-    
-    .weather-box {{ font-size: 0.8rem; color: #a0aaba; margin-top: 5px; padding: 4px; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); }}
-    .weather-warn {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
-
-    .weather-badge {{ font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; margin-left: 6px; font-weight: bold; display: inline-block; border: 1px solid #a0aaba; color: #a0aaba; background: rgba(255,255,255,0.05); }}
-    .weather-neutral {{ color: #a0aaba; border-color: #a0aaba; background: rgba(255,255,255,0.05); }}
-
-    .insight-pill {{ font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; background: rgba(114, 9, 183, 0.2); border: 1px solid #7209b7; color: #f72585; margin-left: 6px; display: inline-block; }}
     .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
+    
+    .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
+    .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
+    .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
+    
+    .weather-neutral {{ color: #a0aaba; border-color: #a0aaba; background: rgba(255,255,255,0.05); }}
+    .weather-warn {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
-
+    .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
+    
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -87,6 +83,7 @@ def inject_luxury_css():
     
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
+    /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; }}
     .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
@@ -105,6 +102,10 @@ def inject_luxury_css():
     .luxury-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
     </style>
     """, unsafe_allow_html=True)
+
+def load_lottieurl(url: str):
+    try: return requests.get(url).json()
+    except: return None
 
 @contextmanager
 def luxury_spinner(text="Processing..."):
@@ -130,8 +131,7 @@ def render_prop_card(col, row):
     pid = row.get('ESPN ID', 0)
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     
-    main_stat = "Rec Yds"
-    line_val = row.get('Rec Yds', 0)
+    main_stat, line_val = "Rec Yds", row.get('Rec Yds', 0)
     if row.get('Pass Yds', 0) > 0: main_stat, line_val = "Pass Yds", row['Pass Yds']
     elif row.get('Rush Yds', 0) > 0: main_stat, line_val = "Rush Yds", row['Rush Yds']
     
@@ -145,7 +145,6 @@ def render_prop_card(col, row):
     if "100%" in str(hit_rate_str): hit_color = "#00C9FF"
     elif "0%" in str(hit_rate_str): hit_color = "#FF4B4B"
     
-    # Badges
     badges_html = f'<div class="meta-badge {badge_class}">{v}</div>'
     
     if "vs #" in str(row.get('Matchup Rank', '')):
@@ -189,17 +188,12 @@ def render_lab_card(col, row):
     elif "CPOE" in row['Metric']: metric_key = "CPOE"
     elif "Efficiency" in row['Beta Stat']: metric_key = "Efficiency"
     elif "Air Yds" in row['Beta Stat']: metric_key = "Air Yards"
-    
     tip_html = get_tooltip_html(metric_key)
 
     html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; align-items:center;"><div style="text-align:center;"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase; display:flex; justify-content:center; align-items:center;">{row['Metric']}{tip_html}</div><div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Metric II</div><div style="font-size:0.9rem; color:#fff;">{row.get('Beta Stat', '-')}</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
-# PDF Helpers
-def clean_for_pdf(text):
-    if not isinstance(text, str): return str(text)
-    return text.encode('latin-1', 'ignore').decode('latin-1')
-
+# PDF Class
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
