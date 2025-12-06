@@ -50,29 +50,16 @@ def inject_luxury_css():
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
     /* BADGES */
-    .meta-badge {{ 
-        display: inline-block; 
-        padding: 4px 10px; 
-        border-radius: 12px; 
-        font-size: 0.75rem; 
-        font-weight: 700; 
-        text-transform: uppercase; 
-        margin-right: 4px;
-        margin-bottom: 4px;
-        border: 1px solid transparent;
-    }}
+    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }}
+    .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
+    .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
+    .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
-    /* Verdict Colors */
-    .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border-color: #FF4B4B; }}
-    .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border-color: #00C9FF; }}
-    .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border-color: #92FE9D; }}
-    
-    /* Matchup Colors */
+    /* METADATA BADGES */
+    .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
-
-    /* Weather & Lab Colors */
     .weather-neutral {{ color: #a0aaba; border-color: #a0aaba; background: rgba(255,255,255,0.05); }}
     .weather-warn {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
@@ -158,6 +145,7 @@ def render_prop_card(col, row):
     if "100%" in str(hit_rate_str): hit_color = "#00C9FF"
     elif "0%" in str(hit_rate_str): hit_color = "#FF4B4B"
     
+    # Badges
     badges_html = f'<div class="meta-badge {badge_class}">{v}</div>'
     
     if "vs #" in str(row.get('Matchup Rank', '')):
@@ -188,11 +176,10 @@ def render_prop_card(col, row):
     html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">{badges_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
-# --- NEW: LAB CARD RENDERER ---
+# --- FLATTENED LAB CARD (FIX) ---
 def render_lab_card(col, row):
     # Styling variables
     v = row['Verdict']
-    # If verdict contains 'ELITE' or 'MONSTER' use flashy colors
     badge_class = "badge-gem" if "ELITE" in v or "MONSTER" in v else "badge-ok" if "WORKHORSE" in v or "SNIPER" in v else "weather-neutral"
     
     pid = row.get('ID', 0)
@@ -201,32 +188,9 @@ def render_lab_card(col, row):
     val_color = "#4cc9f0" # Cyan default
     if "-" in str(row['Value']): val_color = "#FF4B4B" # Negative values
     
-    # HTML Layout similar to Prop Card but for Lab Stats
-    html = f"""
-    <div class="luxury-card" style="border-left: 3px solid {val_color};">
-        <div style="display:flex; justify-content:space-between; align-items:start;">
-            <div style="flex:1;">
-                <div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">
-                    <div class="meta-badge {badge_class}">{v}</div>
-                </div>
-                <div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div>
-                <div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div>
-            </div>
-            <img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;">
-        </div>
-        
-        <div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
-            <div style="text-align:left;">
-                <div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">{row['Metric']}</div>
-                <div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">Context</div>
-                <div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div>
-            </div>
-        </div>
-    </div>
-    """
+    # FLATTENED HTML STRING to prevent code block rendering
+    html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;"><div style="text-align:left;"><div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">{row['Metric']}</div><div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:right;"><div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div></div></div>"""
+    
     with col:
         st.markdown(html, unsafe_allow_html=True)
 
@@ -311,11 +275,11 @@ def get_vegas_props(api_key, _league, week):
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(h_opp), 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(a_abbr), 'game_site': site})
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(a_opp), 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(h_abbr), 'game_site': site})
 
     try:
         for p in _league.free_agents(size=500):
@@ -325,7 +289,6 @@ def get_vegas_props(api_key, _league, week):
                 espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": tm}
     except: pass
 
-    # FETCH VEGAS
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params = {'apiKey': api_key, 'regions': 'us', 'markets': 'h2h,spreads,totals', 'oddsFormat': 'american'}
     try:
@@ -644,7 +607,8 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    for y in [year, year-1]:
+    years_to_try = [year, year - 1]
+    for y in years_to_try:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
