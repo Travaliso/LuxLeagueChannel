@@ -49,19 +49,23 @@ def inject_luxury_css():
     
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
-    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }}
+    /* BADGES (VERDICT) */
+    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
-    .matchup-badge {{ font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; margin-left: 8px; font-weight: bold; display: inline-block; }}
+    /* BADGES (MATCHUP) */
+    .matchup-badge {{ font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; margin-left: 6px; font-weight: bold; display: inline-block; }}
     .matchup-good {{ color: #92FE9D; border: 1px solid #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }}
     
-    .weather-box {{ font-size: 0.8rem; color: #a0aaba; margin-top: 5px; padding: 4px; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); }}
-    .weather-warn {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
+    /* BADGES (WEATHER) */
+    .weather-badge {{ font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; margin-left: 6px; font-weight: bold; display: inline-block; border: 1px solid #a0aaba; color: #a0aaba; background: rgba(255,255,255,0.05); }}
+    .weather-warn {{ border-color: #FF4B4B; color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
 
+    /* GRID */
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -69,8 +73,14 @@ def inject_luxury_css():
     
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
+    /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 200px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }}
+    .tooltip .tooltiptext {{ 
+        visibility: hidden; width: 250px; background-color: #1E1E1E; color: #fff; text-align: left; 
+        border-radius: 6px; padding: 12px; position: absolute; z-index: 1; bottom: 140%; left: 50%; margin-left: -125px; 
+        opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
+    }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
@@ -103,13 +113,7 @@ def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    # Maps all known variants to a standard 2/3 char code
-    mapping = {
-        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 
-        'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL', 'KAN': 'KC',
-        'NWE': 'NE', 'NOS': 'NO', 'TAM': 'TB', 'GNB': 'GB', 'SFO': 'SF', 
-        'LVR': 'LV', 'KCS': 'KC', 'TBB': 'TB', 'JAC': 'JAC', 'LAC': 'LAC'
-    }
+    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
     return mapping.get(abbr, abbr)
 
 @contextmanager
@@ -134,8 +138,7 @@ def render_prop_card(col, row):
     pid = row.get('ESPN ID', 0)
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     
-    main_stat = "Rec Yds"
-    line_val = row.get('Rec Yds', 0)
+    main_stat, line_val = "Rec Yds", row.get('Rec Yds', 0)
     if row.get('Pass Yds', 0) > 0: main_stat, line_val = "Pass Yds", row['Pass Yds']
     elif row.get('Rush Yds', 0) > 0: main_stat, line_val = "Rush Yds", row['Rush Yds']
     
@@ -148,6 +151,7 @@ def render_prop_card(col, row):
     if "100%" in str(hit_rate_str): hit_color = "#00C9FF"
     elif "0%" in str(hit_rate_str): hit_color = "#FF4B4B"
     
+    # Matchup Badge Logic
     matchup_html = ""
     if "vs #" in str(row.get('Matchup Rank', '')):
         try:
@@ -156,26 +160,37 @@ def render_prop_card(col, row):
             matchup_html = f'<div class="matchup-badge {m_class}">{row["Matchup Rank"]}</div>'
         except: pass
 
-    # WEATHER DISPLAY (FORCE)
+    # WEATHER BADGE LOGIC (New)
     weather_html = ""
     w = row.get('Weather', {})
     if w:
         if w.get('Dome'):
-             weather_html = f'<div class="weather-box">🏟️ Dome (Indoors)</div>'
+            weather_html = '<div class="weather-badge">🏟️ Dome</div>'
         else:
-             wind = w.get('Wind', 0)
-             precip = w.get('Precip', 0)
-             temp = w.get('Temp', 70)
-             
-             w_icon = "☀️"
-             w_class = ""
-             if precip > 0.1: w_icon = "🌧️"; w_class = "weather-warn"
-             elif wind > 15: w_icon = "💨"; w_class = "weather-warn"
-             elif temp < 32: w_icon = "❄️"; w_class = "weather-warn"
-             
-             weather_html = f'<div class="weather-box {w_class}">{w_icon} {temp:.0f}°F | {wind}mph Wind</div>'
+            wind = w.get('Wind', 0)
+            precip = w.get('Precip', 0)
+            temp = w.get('Temp', 70)
+            
+            # Determine Icon & Urgency
+            w_icon, w_class = "☀️", ""
+            if precip > 0.1: w_icon, w_class = "🌧️", "weather-warn"
+            elif wind > 15: w_icon, w_class = "💨", "weather-warn"
+            elif temp < 32: w_icon, w_class = "❄️", "weather-warn"
+            
+            weather_html = f'<div class="weather-badge {w_class}">{w_icon} {temp:.0f}°F</div>'
 
-    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; margin-bottom:10px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div>{weather_html}</div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
+    # Tooltip Content
+    tip_html = """
+    <div class="tooltip">ℹ️
+        <span class="tooltiptext">
+            <b>Comparing Vegas vs. ESPN</b><hr style="margin:5px 0; border-color:#444;">
+            <span style="color:#00C9FF;"><b>▲ Positive Edge:</b></span> Vegas projects <b>MORE</b> points than ESPN. Potential sleeper.<br><br>
+            <span style="color:#FF4B4B;"><b>▼ Negative Edge:</b></span> Vegas projects <b>FEWER</b> points. ESPN may be over-projecting.
+        </span>
+    </div>
+    """
+
+    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; flex-wrap:wrap; margin-bottom:10px; gap:5px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}{weather_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span>{tip_html}</div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
@@ -208,34 +223,24 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
-# --- WEATHER ENGINE (HARDCODED COORDS) ---
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    # NFL Stadium Coordinates & Dome Status
-    # THIS IS THE SOURCE OF TRUTH for stadium locations
     stadiums = {
-        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 
-        'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 
-        'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
-        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 
-        'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 
-        'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
-        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 
-        'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 
-        'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
-        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 
-        'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 
-        'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
-        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 
-        'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 
-        'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
+        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
+        'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
+        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True),
+        'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
+        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False),
+        'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
+        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True),
+        'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
+        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False),
+        'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
         'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)
     }
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
-        if is_dome: 
-            weather_data[team] = {"Dome": True}
-            continue
+        if is_dome: weather_data[team] = {"Dome": True}; continue
         try:
             url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph"
             res = requests.get(url)
@@ -257,32 +262,33 @@ def get_vegas_props(api_key, _league, week):
     for team in _league.teams:
         for p in team.roster:
             norm = normalize_name(p.name)
-            # Default to UNK game site
             espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
 
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
-        h_abbr = clean_team_abbr(game.home_team.team_abbrev)
-        a_abbr = clean_team_abbr(game.away_team.team_abbrev)
-        
-        # IMPORTANT: Home team determines the Stadium
-        site = h_abbr 
+        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
+        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
+        # Use Home Team for Weather
+        site = clean_team_abbr(game.home_team.team_abbrev)
         
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': a_abbr, 'game_site': site})
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(h_opp)
+                espn_map[norm]['game_site'] = site
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': h_abbr, 'game_site': site})
+                espn_map[norm]['espn_proj'] = p.projected_points
+                espn_map[norm]['opponent'] = clean_team_abbr(a_opp)
+                espn_map[norm]['game_site'] = site
 
-    # Fallback for FAs (Use proTeam as home stadium guess)
     try:
         for p in _league.free_agents(size=500):
             norm = normalize_name(p.name)
             if norm not in espn_map:
-                # Crude guess: assume they are playing at home just to get SOME weather data
+                # FAs use their proTeam as site approximation for now
                 tm = clean_team_abbr(p.proTeam)
                 espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": tm}
     except: pass
@@ -350,13 +356,12 @@ def get_vegas_props(api_key, _league, week):
                         rank = dvp_map[opp][p_pos]
                         dvp_txt = f"vs #{rank} {p_pos} Def"
                     
+                    # Attach Weather Data
                     w_data = {}
                     site = match.get('game_site', 'UNK')
-                    # Look up site in weather map (handle mapping)
-                    # site is already cleaned in the loop above
                     if site in weather_map: 
                         w_data = weather_map[site]
-                    
+
                     rows.append({
                         "Player": match['name'], "Position": p_pos, "Team": match['team'],
                         "ESPN ID": match['id'], "Proj Pts": score, "Edge": score - match['espn_proj'],
@@ -370,9 +375,8 @@ def get_vegas_props(api_key, _league, week):
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
-# ... (Rest of file remains identical) ...
 # ---------------------------------------------------------
-# OTHER ANALYTICS
+# RESTORED FULL ANALYSIS TOOLS
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
@@ -395,7 +399,6 @@ def calculate_heavy_analytics(_league, current_week):
 
 @st.cache_data(ttl=3600)
 def calculate_season_awards(_league, current_week):
-    # Awards Logic
     player_points = {}
     team_stats = {t.team_name: {"Bench": 0, "Starters": 0, "WaiverPts": 0, "Injuries": 0, "Logo": get_logo(t)} for t in _league.teams}
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
@@ -580,7 +583,8 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    for y in [year, year-1]:
+    years_to_try = [year, year - 1]
+    for y in years_to_try:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
@@ -634,6 +638,9 @@ def analyze_nextgen_metrics_v3(roster, year):
                     insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
     return pd.DataFrame(insights)
 
+# ==============================================================================
+# 4. INTELLIGENCE (AI AGENTS)
+# ==============================================================================
 def get_openai_client(key): return OpenAI(api_key=key) if key else None
 def ai_response(key, prompt, tokens=600):
     client = get_openai_client(key)
