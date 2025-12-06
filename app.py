@@ -273,7 +273,6 @@ elif selected_page == P_LAB:
     
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-        # UPDATED CALL: PASS current_week so Logic can check schedule
         st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
         st.session_state["trigger_lab"] = False; st.rerun()
     
@@ -287,72 +286,11 @@ elif selected_page == P_LAB:
                     vegas_line = "N/A"
                     if "vegas" in st.session_state and not st.session_state["vegas"].empty:
                          v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
-                         if not v_row.empty:
-                             vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
+                         if not v_row.empty: vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
 
                     if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
                          matchup_rank = row.get('Matchup Rank', 'N/A')
-                         # UPDATED CALL: PASS matchup_rank to AI
-                         assessment = intel.get_lab_assessment(
-                             OPENAI_KEY, 
-                             row['Player'], 
-                             row['Team'], 
-                             row['Position'], 
-                             row['Opponent'], 
-                             matchup_rank, 
-                             f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
-                             vegas_line, 
-                             row['ESPN Proj']
-                         )
-                         st.info(assessment)
-        # ... (Inside the P_LAB section of app.py) ...
-
-elif selected_page == P_LAB:
-    st.header("🧬 The Lab")
-    st.caption("Next Gen Stats for the analytically inclined.")
-    
-    # 1. Selection Row
-    c1, c2 = st.columns([3, 1])
-    with c1: 
-        target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
-    with c2:
-         if st.button("🧪 Analyze"):
-             with ui.luxury_spinner("Calibrating..."): 
-                 st.session_state["trigger_lab"] = True
-                 st.rerun()
-    
-    # 2. Logic Execution (Triggered)
-    if st.session_state.get("trigger_lab"):
-        # Find the roster object for the selected team
-        roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
-        
-        # Call Logic Engine (Pass YEAR and current_week for schedule context)
-        st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
-        
-        # Reset trigger
-        st.session_state["trigger_lab"] = False
-        st.rerun()
-    
-    # 3. Render Results
-    if "ngs_data" in st.session_state:
-        if not st.session_state["ngs_data"].empty:
-            cols = st.columns(2)
-            for i, row in st.session_state["ngs_data"].iterrows():
-                with cols[i % 2]:
-                    # Render the Visual Card
-                    ui.render_lab_card(cols[i % 2], row)
-                    
-                    # Prepare Context for AI
-                    vegas_line = "N/A"
-                    if "vegas" in st.session_state and not st.session_state["vegas"].empty:
-                         v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
-                         if not v_row.empty: 
-                             vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
-
-                    # Assistant GM Button
-                    if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
-                         matchup_rank = row.get('Matchup Rank', 'N/A')
-                         def_stat = row.get('Def Stat', 'N/A') # The key new field
+                         def_stat = row.get('Def Stat', 'N/A') # NEW EXTRACTED FIELD
                          
                          assessment = intel.get_lab_assessment(
                              OPENAI_KEY, 
@@ -361,14 +299,13 @@ elif selected_page == P_LAB:
                              row['Position'], 
                              row['Opponent'], 
                              matchup_rank, 
-                             def_stat, 
+                             def_stat, # PASSED CORRECTLY
                              f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
                              vegas_line, 
                              row['ESPN Proj']
                          )
                          st.info(assessment)
-        else: 
-            st.info("No Next Gen data available for this team.")
+        else: st.info("No Next Gen data available.")
 
 elif selected_page == P_FORECAST:
     st.header("🔮 The Crystal Ball")
@@ -479,19 +416,24 @@ elif selected_page == P_PROP:
                 with c4:
                     team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 
-                # --- SORT ROW ---
-                c_sort, c_space = st.columns([1, 3])
+                # --- SORT & INSIGHT ROW ---
+                c_sort, c_insight, c_space = st.columns([1, 1.5, 1.5])
                 with c_sort:
                     sort_order = st.selectbox(
                         "Sort Order", 
-                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)", "🔥 Moneyball Insights"]
+                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"]
                     )
+                with c_insight:
+                     # Filter out empty insights for the dropdown
+                     insight_opts = [x for x in df['Insight'].unique() if x]
+                     insight_filter = st.multiselect("🔥 Moneyball Filter", options=insight_opts)
 
                 # Apply Filters
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
+                if insight_filter: df = df[df['Insight'].isin(insight_filter)]
                 
                 # Apply Sort
                 if "Highest Projection" in sort_order:
