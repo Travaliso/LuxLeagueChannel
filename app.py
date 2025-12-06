@@ -309,32 +309,50 @@ elif selected_page == P_LAB:
 
 elif selected_page == P_LAB:
     st.header("🧬 The Lab")
+    st.caption("Next Gen Stats for the analytically inclined.")
+    
+    # 1. Selection Row
     c1, c2 = st.columns([3, 1])
-    with c1: target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
+    with c1: 
+        target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
     with c2:
          if st.button("🧪 Analyze"):
-             with ui.luxury_spinner("Calibrating..."): st.session_state["trigger_lab"] = True; st.rerun()
+             with ui.luxury_spinner("Calibrating..."): 
+                 st.session_state["trigger_lab"] = True
+                 st.rerun()
     
+    # 2. Logic Execution (Triggered)
     if st.session_state.get("trigger_lab"):
+        # Find the roster object for the selected team
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
+        
+        # Call Logic Engine (Pass YEAR and current_week for schedule context)
         st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
-        st.session_state["trigger_lab"] = False; st.rerun()
+        
+        # Reset trigger
+        st.session_state["trigger_lab"] = False
+        st.rerun()
     
+    # 3. Render Results
     if "ngs_data" in st.session_state:
         if not st.session_state["ngs_data"].empty:
             cols = st.columns(2)
             for i, row in st.session_state["ngs_data"].iterrows():
                 with cols[i % 2]:
+                    # Render the Visual Card
                     ui.render_lab_card(cols[i % 2], row)
                     
+                    # Prepare Context for AI
                     vegas_line = "N/A"
                     if "vegas" in st.session_state and not st.session_state["vegas"].empty:
                          v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
-                         if not v_row.empty: vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
+                         if not v_row.empty: 
+                             vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
 
+                    # Assistant GM Button
                     if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
                          matchup_rank = row.get('Matchup Rank', 'N/A')
-                         def_stat = row.get('Def Stat', 'N/A') # NEW FIELD
+                         def_stat = row.get('Def Stat', 'N/A') # The key new field
                          
                          assessment = intel.get_lab_assessment(
                              OPENAI_KEY, 
@@ -343,13 +361,14 @@ elif selected_page == P_LAB:
                              row['Position'], 
                              row['Opponent'], 
                              matchup_rank, 
-                             def_stat, # PASS TO AI
+                             def_stat, 
                              f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
                              vegas_line, 
                              row['ESPN Proj']
                          )
                          st.info(assessment)
-        else: st.info("No Next Gen data available.")
+        else: 
+            st.info("No Next Gen data available for this team.")
 
 elif selected_page == P_FORECAST:
     st.header("🔮 The Crystal Ball")
