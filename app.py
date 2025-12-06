@@ -279,7 +279,7 @@ elif selected_page == P_LAB:
             cols = st.columns(2)
             for i, row in st.session_state["ngs_data"].iterrows():
                 with cols[i % 2]:
-                    st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #00C9FF; display: flex; align-items: center;"><div style="flex:1;"><h4 style="color:white; margin:0;">{row['Player']}</h4><div style="color:#00C9FF;">{row['Verdict']}</div></div><div style="text-align:right;"><div style="font-size:1.4em; font-weight:bold; color:white;">{row['Value']}</div><div style="color:#92FE9D; font-size:0.8em;">{row['Alpha Stat']}</div></div></div>""", unsafe_allow_html=True)
+                    utils.render_lab_card(cols[i % 2], row)
         else: st.info("No Next Gen data available.")
 
 elif selected_page == P_FORECAST:
