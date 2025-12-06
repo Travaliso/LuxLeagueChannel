@@ -311,11 +311,11 @@ def get_vegas_props(api_key, _league, week):
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': a_abbr, 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(h_opp), 'game_site': site})
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': h_abbr, 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(a_opp), 'game_site': site})
 
     try:
         for p in _league.free_agents(size=500):
@@ -431,7 +431,7 @@ def get_vegas_props(api_key, _league, week):
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
 # ---------------------------------------------------------
-# RESTORED FULL ANALYSIS TOOLS
+# OTHER ANALYTICS
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
@@ -459,16 +459,19 @@ def calculate_season_awards(_league, current_week):
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
+    
     for w in range(1, current_week + 1):
         box = _league.box_scores(week=w)
         for game in box:
             margin = abs(game.home_score - game.away_score)
             winner = game.home_team.team_name if game.home_score > game.away_score else game.away_team.team_name
             loser = game.away_team.team_name if game.home_score > game.away_score else game.home_team.team_name
+            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
+            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
@@ -481,24 +484,27 @@ def calculate_season_awards(_league, current_week):
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
+
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     oracle_list = []
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
         eff = (s["Starters"] / total * 100) if total > 0 else 0
         oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
+    
     oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     toilet = sorted(_league.teams, key=lambda x: x.points_for)[0]
-    podium = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:3]
+    podium_sort = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+    
     return {
-        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium,
+        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium_sort[:3],
         "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
         "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": get_logo(toilet)},
         "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
-        "Best Manager": {"Team": podium[0].team_name, "Points": podium[0].points_for, "Logo": get_logo(podium[0])}
+        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": get_logo(podium_sort[0])}
     }
 
 @st.cache_data(ttl=3600)
@@ -638,8 +644,7 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    years_to_try = [year, year - 1]
-    for y in years_to_try:
+    for y in [year, year-1]:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
