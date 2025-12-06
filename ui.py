@@ -4,9 +4,7 @@ import base64
 from fpdf import FPDF
 from contextlib import contextmanager
 
-# ... (Previous Metric Definitions and CSS - same as before) ...
-# I will output the FULL file to ensure completeness, but the key addition is render_audit_card.
-
+# --- METRIC DEFINITIONS ---
 METRIC_DEFINITIONS = {
     "Power Score": "<b>Power Score:</b><br>Measures a team's dominance based on points scored per week relative to the league average.",
     "Luck": "<b>Luck Rating:</b><br>The difference between your actual Win % and your 'True Win %' (record if you played every team each week).<br><br><span style='color:#00C9FF'>Positive:</span> Lucky<br><span style='color:#FF4B4B'>Negative:</span> Unlucky",
@@ -65,17 +63,7 @@ def inject_luxury_css():
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
-    .meta-badge {{ 
-        display: inline-block; 
-        padding: 4px 10px; 
-        border-radius: 12px; 
-        font-size: 0.75rem; 
-        font-weight: 700; 
-        text-transform: uppercase; 
-        margin-right: 4px; 
-        margin-bottom: 4px; 
-        border: 1px solid transparent; 
-    }}
+    .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
     
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
@@ -86,7 +74,6 @@ def inject_luxury_css():
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
     .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
     
-    /* GRID */
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -95,27 +82,8 @@ def inject_luxury_css():
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
     /* TOOLTIP */
-    .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
-    .tooltip .tooltiptext {{ 
-        visibility: hidden; 
-        width: 220px; 
-        background-color: #1E1E1E; 
-        color: #fff; 
-        text-align: left; 
-        border-radius: 6px; 
-        padding: 10px; 
-        position: absolute; 
-        z-index: 9999; 
-        bottom: 140%; 
-        left: 50%; 
-        margin-left: -110px; 
-        opacity: 0; 
-        transition: opacity 0.3s; 
-        border: 1px solid #D4AF37; 
-        font-size: 0.7rem; 
-        line-height: 1.4;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
-    }}
+    .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; }}
+    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
@@ -220,64 +188,21 @@ def render_lab_card(col, row):
     html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; align-items:center;"><div style="text-align:center;"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase; display:flex; justify-content:center; align-items:center;">{row['Metric']}{tip_html}</div><div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Metric II</div><div style="font-size:0.9rem; color:#fff;">{row.get('Beta Stat', '-')}</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
-# --- NEW: AUDIT CARD RENDERER ---
+# --- NEW: AUDIT CARD RENDERER (FLATTENED) ---
 def render_audit_card(col, row):
-    # Color mapping for grades
     grade_color = "#92FE9D" # Green A
     if "B" in row['Grade']: grade_color = "#4cc9f0" # Blue
     elif "C" in row['Grade']: grade_color = "#F7B801" # Yellow
     elif "D" in row['Grade']: grade_color = "#F18701" # Orange
     elif "F" in row['Grade']: grade_color = "#FF4B4B" # Red
     
-    regret_html = ""
     if row['Lost Pts'] > 0:
-        regret_html = f"""
-        <div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;">
-            <div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div>
-            <div style="color: white; font-weight: bold;">{row['Regret']}</div>
-            <div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div>
-        </div>
-        """
+        regret_html = f"""<div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div><div style="color: white; font-weight: bold;">{row['Regret']}</div><div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div></div>"""
     else:
-        regret_html = f"""
-        <div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;">
-            <div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div>
-            <div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div>
-        </div>
-        """
+        regret_html = f"""<div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div><div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div></div>"""
 
-    html = f"""
-    <div class="luxury-card" style="border-top: 4px solid {grade_color};">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <img src="{row['Logo']}" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">
-                <div>
-                    <div style="font-size:1.1rem; font-weight:900; color:white;">{row['Team']}</div>
-                    <div style="font-size:0.8rem; color:#a0aaba;">Efficiency: {row['Efficiency']:.1f}%</div>
-                </div>
-            </div>
-            <div style="text-align:center;">
-                <div style="font-size:2.5rem; font-weight:900; color:{grade_color}; text-shadow: 0 0 10px {grade_color}40;">{row['Grade']}</div>
-                <div style="font-size:0.7rem; color:{grade_color}; text-transform:uppercase;">Grade</div>
-            </div>
-        </div>
-        {regret_html}
-        <div class="stat-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);">
-            <div class="stat-box">
-                <div class="stat-val" style="color:#fff;">{row['Starters']:.1f}</div>
-                <div class="stat-label">Starter Pts</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-val" style="color:#a0aaba;">{row['Bench']:.1f}</div>
-                <div class="stat-label">Bench Pts</div>
-            </div>
-             <div class="stat-box">
-                <div class="stat-val" style="color:#FF4B4B;">-{row['Lost Pts']:.1f}</div>
-                <div class="stat-label">Lost Potential</div>
-            </div>
-        </div>
-    </div>
-    """
+    html = f"""<div class="luxury-card" style="border-top: 4px solid {grade_color};"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="display:flex; align-items:center; gap:10px;"><img src="{row['Logo']}" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};"><div><div style="font-size:1.1rem; font-weight:900; color:white;">{row['Team']}</div><div style="font-size:0.8rem; color:#a0aaba;">Efficiency: {row['Efficiency']:.1f}%</div></div></div><div style="text-align:center;"><div style="font-size:2.5rem; font-weight:900; color:{grade_color}; text-shadow: 0 0 10px {grade_color}40;">{row['Grade']}</div><div style="font-size:0.7rem; color:{grade_color}; text-transform:uppercase;">Grade</div></div></div>{regret_html}<div class="stat-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);"><div class="stat-box"><div class="stat-val" style="color:#fff;">{row['Starters']:.1f}</div><div class="stat-label">Starter Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#a0aaba;">{row['Bench']:.1f}</div><div class="stat-label">Bench Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#FF4B4B;">-{row['Lost Pts']:.1f}</div><div class="stat-label">Lost Potential</div></div></div></div>"""
+    
     with col:
         st.markdown(html, unsafe_allow_html=True)
 
