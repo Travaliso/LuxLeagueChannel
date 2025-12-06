@@ -32,7 +32,7 @@ def get_ai_scouting_report(key, free_agents_str):
 # --- NEW FUNCTION ---
 def get_lab_assessment(key, player_name, team, position, opponent, metrics, vegas_line, espn_proj):
     prompt = f"""
-    Act as an expert NFL Assistant GM. Provide a strategic assessment for {player_name} ({position}, {team}) this week.
+    Act as an expert NFL Assistant GM. Provide a strategic assessment for {player_name} ({position}, {team}) this week. Account for the opponents stats and performance against the ({postion}) the {player} plays.
     
     Data Context:
     - Opponent: {opponent}
