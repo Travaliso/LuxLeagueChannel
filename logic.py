@@ -155,6 +155,7 @@ def get_vegas_props(api_key, _league, week):
                             name = out['description']
                             if name not in player_props: 
                                 player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0, 'context': g_ctx}
+                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = out.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = out.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = out.get('point', 0)
@@ -427,7 +428,8 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    for y in [year, year-1]:
+    years_to_try = [year, year - 1]
+    for y in years_to_try:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
@@ -445,6 +447,11 @@ def analyze_nextgen_metrics_v3(roster, year):
     insights = []
     for player in roster:
         p_name, pos, pid, p_team = player.name, player.position, getattr(player, 'playerId', None), getattr(player, 'proTeam', 'N/A')
+        
+        # ADDED: Extract ESPN Context
+        opp = getattr(player, 'proOpponent', 'UNK')
+        proj = getattr(player, 'projected_points', 0)
+
         if pos in ['WR', 'TE'] and not df_rec.empty:
             match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -458,7 +465,14 @@ def analyze_nextgen_metrics_v3(roster, year):
                         seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                         if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict,
+                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
+                        "Alpha Stat": f"{sep:.1f} yds Sep",
+                        "Beta Stat": f"YAC: {yac_exp:.1f}",
+                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                    })
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -467,8 +481,16 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     ryoe, box_8 = stats.get('rush_yards_over_expected_per_att', 0), stats.get('percent_attempts_gte_eight_defenders', 0)
+                    eff = stats.get('efficiency', 0)
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Verdict": verdict,
+                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
+                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box",
+                        "Beta Stat": f"Eff: {eff:.2f}",
+                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                    })
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -477,8 +499,16 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe, time_throw = stats.get('completion_percentage_above_expectation', 0), stats.get('avg_time_to_throw', 0)
+                    air_yds = stats.get('avg_intended_air_yards', 0)
                     verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict,
+                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
+                        "Alpha Stat": f"{time_throw:.2f}s Time",
+                        "Beta Stat": f"Air Yds: {air_yds:.1f}",
+                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                    })
     return pd.DataFrame(insights)
 
 # ==============================================================================
@@ -514,3 +544,29 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 def clean_for_pdf(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'ignore').decode('latin-1')
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 201, 255)
+        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
+        self.ln(5)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(0, 114, 255)
+        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
+        self.ln(2)
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.set_text_color(50)
+        self.multi_cell(0, 6, clean_for_pdf(body))
+        self.ln()
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
