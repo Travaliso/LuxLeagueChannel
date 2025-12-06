@@ -98,7 +98,7 @@ st.markdown("---")
 
 if selected_page == P_LEDGER:
     st.header("📜 The Ledger")
-    st.caption("Where the receipts are kept and the scores are settled.")
+    st.caption("Where the receipts are kept and the scores are settled. Track every transaction, waiver wire steal, and questionable drop with forensic precision. If you claimed a kicker in Week 4, we have the paperwork to prove it.")
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
@@ -119,7 +119,7 @@ if selected_page == P_LEDGER:
 
 elif selected_page == P_HIERARCHY:
     st.header("📈 The Hierarchy")
-    st.caption("A ruthless ranking of who is actually good and who is just lucky.")
+    st.caption("A ruthless ranking of who is actually good and who is just getting lucky. We strip away the variance to reveal the true power structure of the league. Don't blame the algorithm if you're stuck in the basement.")
     if "rank_comm" not in st.session_state:
         with ui.luxury_spinner("Analyzing..."): 
             top = df_eff.iloc[0]['Team'] if not df_eff.empty else "Team A"
@@ -132,7 +132,7 @@ elif selected_page == P_HIERARCHY:
 
 elif selected_page == P_AUDIT:
     st.header("🔎 The Audit")
-    st.caption("Forensic analysis of your lineup decisions.")
+    st.caption("Forensic analysis of your lineup decisions, highlighting the points you left on the bench. It’s a painful reminder of the 'perfect lineup' you could have started but didn't. We count the points you wasted so you don't have to.")
     if "audit_data" not in st.session_state:
         st.session_state["audit_data"] = logic.analyze_lineup_efficiency(league, current_week)
     df_audit = st.session_state["audit_data"]
@@ -143,7 +143,7 @@ elif selected_page == P_AUDIT:
 
 elif selected_page == P_HEDGE:
     st.header("💎 The Hedge Fund")
-    st.caption("Advanced metrics for the sophisticated investor.")
+    st.caption("Advanced metrics for the sophisticated investor who treats fantasy like a stock market. Analyze luck, efficiency, and true win probability to find market inefficiencies. It’s not gambling if you call it 'portfolio management'.")
     if "df_advanced" not in st.session_state:
         if st.button("🚀 Analyze Market Data"):
             with ui.luxury_spinner("Compiling Assets..."): st.session_state["df_advanced"] = logic.calculate_heavy_analytics(league, current_week); st.rerun()
@@ -154,7 +154,7 @@ elif selected_page == P_HEDGE:
 
 elif selected_page == P_IPO:
     st.header("📊 The IPO Audit")
-    st.caption("ROI Analysis on Draft Capital vs. Actual Returns.")
+    st.caption("A retrospective on draft capital ROI. See which blue-chip prospects turned into penny stocks and which late-round fliers became unicorns. We expose the draft busts and celebrate the value picks that saved your season.")
     if "draft_roi" not in st.session_state:
         if st.button("📠 Run Audit"):
              with ui.luxury_spinner("Auditing draft capital..."):
@@ -178,7 +178,7 @@ elif selected_page == P_IPO:
 
 elif selected_page == P_LAB:
     st.header("🧬 The Lab")
-    st.caption("Next Gen Stats for the analytically inclined.")
+    st.caption("Next Gen Stats for the analytically inclined. Analyze separation, air yards, and efficiency metrics to find the breakout stars before they break out. This is where we separate the elite talents from the volume-dependent plodders.")
     c1, c2 = st.columns([3, 1])
     with c1: target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
     with c2:
@@ -214,7 +214,7 @@ elif selected_page == P_LAB:
 
 elif selected_page == P_FORECAST:
     st.header("🔮 The Crystal Ball")
-    st.caption("Monte Carlo simulations. 1,000 realities, one winner.")
+    st.caption("Monte Carlo simulations running 1,000 realities to predict your playoff fate. We crunch the numbers to tell you if you're a lock, a bubble team, or dead in the water. Hope is not a strategy, but probability is.")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with ui.luxury_spinner("Simulating..."): st.session_state["playoff_odds"] = logic.run_monte_carlo_simulation(league); st.rerun()
@@ -222,12 +222,12 @@ elif selected_page == P_FORECAST:
 
 elif selected_page == P_MULTI:
     st.header("🌌 The Multiverse")
-    st.caption("Control the timeline. Force wins and see your odds change.")
+    st.caption("Control the timeline. Force specific wins and losses to see how they ripple through the playoff picture. It’s like Doctor Strange looking for the one future where your 4-8 team makes the championship.")
     if "base_odds" not in st.session_state:
         with ui.luxury_spinner("Calculating Baseline..."): st.session_state["base_odds"] = logic.run_monte_carlo_simulation(league)
     box = league.box_scores(week=league.current_week)
     forced = []
-    with st.form("multi_form"):
+    with st.form("multi"):
         c1, c2 = st.columns(2)
         for i, g in enumerate(box):
             with c1 if i % 2 == 0 else c2:
@@ -241,9 +241,9 @@ elif selected_page == P_MULTI:
     if "multi_res" in st.session_state: st.dataframe(st.session_state["multi_res"], use_container_width=True)
 
 elif selected_page == P_NEXT:
-    st.header("🚀 Next Week")
-    st.caption("A look ahead. Set your lines.")
     try:
+        st.header("🚀 Next Week")
+        st.caption("A look ahead at the upcoming slate. Set your lines, check the spreads, and prepare for the matchups that will define your week. The hay is in the barn, but the barn might be on fire.")
         next_week = league.current_week
         box = league.box_scores(week=next_week)
         games = [{"home": g.home_team.team_name, "away": g.away_team.team_name, "spread": f"{abs(g.home_projected-g.away_projected):.1f}"} for g in box]
@@ -259,7 +259,7 @@ elif selected_page == P_NEXT:
 
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
-    st.caption("Vegas knows. Find the edge against your projections.")
+    st.caption("Vegas knows. Find the edge against your projections by comparing them to the sharpest lines in the desert. If the house thinks your RB1 is scoring 12 points and you project 20, someone is wrong—and it’s probably not the house.")
     with st.expander("📘 Legend & Glossary", expanded=False):
         st.markdown("""
         **Key Insights Explained:**
@@ -304,7 +304,7 @@ elif selected_page == P_PROP:
 
 elif selected_page == P_DEAL:
     st.header("🤝 The Dealmaker")
-    st.caption("Trade analyzer. Fleece your league mates with data.")
+    st.caption("Trade analyzer. Fleece your league mates with data-backed proposals they can't refuse. We evaluate the fairness of the swap so you can win the trade and the championship.")
     c1, c2 = st.columns(2)
     with c1: t1 = st.selectbox("Team A", [t.team_name for t in league.teams], index=0)
     with c2: t2 = st.selectbox("Team B", [t.team_name for t in league.teams], index=1)
@@ -318,7 +318,7 @@ elif selected_page == P_DEAL:
 
 elif selected_page == P_DARK:
     st.header("🕵️ The Dark Pool")
-    st.caption("The Waiver Wire. Hidden gems and desperate adds.")
+    st.caption("The Waiver Wire. Hidden gems and desperate adds for the manager in need. Scour the free agent pool for the next breakout star before your league mates wake up.")
     if st.button("🔭 Scan Wire"):
          with ui.luxury_spinner("Scouting..."):
              df = logic.scan_dark_pool(league)
@@ -333,12 +333,8 @@ elif selected_page == P_DARK:
 
 elif selected_page == P_TROPHY:
     st.header("🏆 Trophy Room")
-    st.caption("Glory and shame. The hall of records.")
-    
-    # Hard-coded FALLBACK variable so we don't need to import it from ui or logic 
-    # (though ui.get_logo uses it internally, this is for the onerror script)
+    st.caption("Glory and shame. The hall of records where we immortalize the season's best and worst performances. From the 'Sniper' on the waiver wire to the 'Toilet' bowl contender, everyone gets a trophy.")
     FALLBACK_HELMET = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
-
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Awards"):
             with ui.luxury_spinner("Engraving..."):
@@ -350,17 +346,14 @@ elif selected_page == P_TROPHY:
         aw = st.session_state["awards"]
         if "season_comm" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.markdown("<h2 style='text-align: center;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
-        
         pod = aw.get("Podium", [])
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         if len(pod) > 1:
-            # ADDED ONERROR HANDLER TO IMAGE TAGS
-            with c_silv: st.markdown(f"""<div class="podium-step silver"><img src="{utils.get_logo(pod[1])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:80px; border-radius:50%; border:3px solid #C0C0C0; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[1].team_name}</div><div style="color:#C0C0C0;">{pod[1].wins}-{pod[1].losses}</div><div class="rank-num">2</div></div>""", unsafe_allow_html=True)
+            with c_silv: st.markdown(f"""<div class="podium-step silver"><img src="{ui.get_logo(pod[1])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:80px; border-radius:50%; border:3px solid #C0C0C0; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[1].team_name}</div><div style="color:#C0C0C0;">{pod[1].wins}-{pod[1].losses}</div><div class="rank-num">2</div></div>""", unsafe_allow_html=True)
         if len(pod) > 0:
-            with c_gold: st.markdown(f"""<div class="podium-step gold"><img src="{utils.get_logo(pod[0])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:100px; border-radius:50%; border:4px solid #FFD700; display:block; margin:0 auto; box-shadow:0 0 20px rgba(255,215,0,0.6);"><div style="color:white; font-weight:900; font-size:1.4rem; margin-top:15px;">{pod[0].team_name}</div><div style="color:#FFD700;">{pod[0].wins}-{pod[0].losses}</div><div class="rank-num">1</div></div>""", unsafe_allow_html=True)
+            with c_gold: st.markdown(f"""<div class="podium-step gold"><img src="{ui.get_logo(pod[0])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:100px; border-radius:50%; border:4px solid #FFD700; display:block; margin:0 auto; box-shadow:0 0 20px rgba(255,215,0,0.6);"><div style="color:white; font-weight:900; font-size:1.4rem; margin-top:15px;">{pod[0].team_name}</div><div style="color:#FFD700;">{pod[0].wins}-{pod[0].losses}</div><div class="rank-num">1</div></div>""", unsafe_allow_html=True)
         if len(pod) > 2:
-            with c_brnz: st.markdown(f"""<div class="podium-step bronze"><img src="{utils.get_logo(pod[2])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:70px; border-radius:50%; border:3px solid #CD7F32; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[2].team_name}</div><div style="color:#CD7F32;">{pod[2].wins}-{pod[2].losses}</div><div class="rank-num">3</div></div>""", unsafe_allow_html=True)
-        
+            with c_brnz: st.markdown(f"""<div class="podium-step bronze"><img src="{ui.get_logo(pod[2])}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:70px; border-radius:50%; border:3px solid #CD7F32; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[2].team_name}</div><div style="color:#CD7F32;">{pod[2].wins}-{pod[2].losses}</div><div class="rank-num">3</div></div>""", unsafe_allow_html=True)
         st.markdown("---")
         def gen_nar(type, team, val):
             if type == "Oracle": return f"Ultimate strategist. {team} hit **{val:.1f}% efficiency**."
@@ -370,10 +363,8 @@ elif selected_page == P_TROPHY:
             if type == "Toilet": return f"Offense stalled. Only **{val:.1f} pts** scored."
             if type == "Blowout": return f"Historic beatdown. Lost by **{val:.1f} pts**."
             return ""
-
         c1, c2, c3, c4 = st.columns(4)
         ora = aw['Oracle']
-        # Added ONERROR to all award cards
         with c1: st.markdown(f"""<div class="luxury-card award-card"><img src="{ora['Logo']}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Oracle</h4><div style="font-weight:bold; color:white;">{ora['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{ora['Eff']:.1f}% Eff</div><div class="award-blurb">{gen_nar("Oracle", ora['Team'], ora['Eff'])}</div></div>""", unsafe_allow_html=True)
         sni = aw['Sniper']
         with c2: st.markdown(f"""<div class="luxury-card award-card"><img src="{sni['Logo']}" onerror="this.onerror=null; this.src='{FALLBACK_HELMET}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Sniper</h4><div style="font-weight:bold; color:white;">{sni['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{sni['Pts']:.1f} Pts</div><div class="award-blurb">{gen_nar("Sniper", sni['Team'], sni['Pts'])}</div></div>""", unsafe_allow_html=True)
@@ -390,7 +381,7 @@ elif selected_page == P_TROPHY:
 
 elif selected_page == P_VAULT:
     st.header("⏳ The Dynasty Vault")
-    st.caption("Dynasty history. The ghosts of seasons past.")
+    st.caption("Dynasty history. The ghosts of seasons past. A repository of league history to settle arguments about who truly owned the league in previous years.")
     if "dynasty_lead" not in st.session_state:
         if st.button("🔓 Unlock Vault"):
             with ui.luxury_spinner("Time Traveling..."):
