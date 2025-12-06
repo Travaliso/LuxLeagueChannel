@@ -391,19 +391,24 @@ elif selected_page == P_PROP:
                 with c4:
                     team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 
-                # --- SORT ROW ---
-                c_sort, c_space = st.columns([1, 3])
+                # --- SORT & INSIGHT ROW ---
+                c_sort, c_insight, c_space = st.columns([1, 1.5, 1.5])
                 with c_sort:
                     sort_order = st.selectbox(
                         "Sort Order", 
-                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)", "🔥 Moneyball Insights"]
+                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"]
                     )
+                with c_insight:
+                     # Filter out empty insights for the dropdown
+                     insight_opts = [x for x in df['Insight'].unique() if x]
+                     insight_filter = st.multiselect("🔥 Moneyball Filter", options=insight_opts)
 
                 # Apply Filters
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
+                if insight_filter: df = df[df['Insight'].isin(insight_filter)]
                 
                 # Apply Sort
                 if "Highest Projection" in sort_order:
@@ -412,8 +417,6 @@ elif selected_page == P_PROP:
                     df = df.sort_values(by="Edge", ascending=False) # Positive Edge First
                 elif "Worst Edge" in sort_order:
                     df = df.sort_values(by="Edge", ascending=True)  # Negative Edge First
-                elif "Moneyball" in sort_order:
-                    df = df.sort_values(by="Insight", ascending=False) # Insights First
 
                 # Render Cards
                 if df.empty:
