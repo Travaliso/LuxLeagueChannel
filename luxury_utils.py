@@ -3,15 +3,15 @@ from espn_api.football import League
 import pandas as pd
 import numpy as np
 import requests
-import nfl_data_py as nfl
-from thefuzz import process
-import re
-import time
 import base64
-from contextlib import contextmanager
-from openai import OpenAI
-from datetime import datetime
 from fpdf import FPDF
+from thefuzz import process
+from contextlib import contextmanager
+import nfl_data_py as nfl
+from openai import OpenAI
+import time
+import re
+from datetime import datetime
 
 # ==============================================================================
 # 1. CSS & STYLING
@@ -50,7 +50,7 @@ def inject_luxury_css():
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
     /* BADGES */
-    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
+    .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
@@ -59,13 +59,12 @@ def inject_luxury_css():
     .matchup-good {{ color: #92FE9D; border: 1px solid #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border: 1px solid #a0aaba; background: rgba(160, 170, 186, 0.1); }}
-
-    /* WEATHER & INSIGHT BOXES */
-    .info-row {{ display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }}
-    .weather-box {{ font-size: 0.75rem; color: #a0aaba; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }}
-    .weather-warn {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     
-    .insight-pill {{ font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; background: rgba(114, 9, 183, 0.2); border: 1px solid #7209b7; color: #b5179e; }}
+    /* INSIGHT PILL (New) */
+    .insight-pill {{ font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; background: rgba(114, 9, 183, 0.2); border: 1px solid #7209b7; color: #f72585; margin-left: 6px; display: inline-block; }}
+
+    .weather-box {{ font-size: 0.8rem; color: #a0aaba; margin-top: 5px; padding: 4px; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); }}
+    .weather-warn {{ color: #FF4B4B; border: 1px solid #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
@@ -73,13 +72,20 @@ def inject_luxury_css():
     .stat-label {{ font-size: 0.65rem; color: #a0aaba; text-transform: uppercase; }}
     
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
+    
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 200px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }}
+    .tooltip .tooltiptext {{ visibility: hidden; width: 220px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
     header[data-testid="stHeader"] {{ background-color: transparent; }}
     
+    .award-card {{ border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }}
+    .shame-card {{ background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }}
+    .studio-box {{ border-left: 4px solid #7209b7; }}
+    .podium-step {{ border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }}
+    .rank-num {{ font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }}
+
     @keyframes shine {{ to {{ background-position: 200% center; }} }}
     .luxury-loader-text {{ font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 3s linear infinite; }}
     .luxury-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
@@ -151,26 +157,26 @@ def render_prop_card(col, row):
     # WEATHER
     weather_html = ""
     w = row.get('Weather', {})
-    if w and isinstance(w, dict):
+    if w:
         if w.get('Dome'):
-             weather_html = f'<div class="weather-box">🏟️ Dome</div>'
+            weather_html = '<div class="weather-badge">🏟️ Dome</div>'
         else:
-             wind = w.get('Wind', 0)
-             precip = w.get('Precip', 0)
-             temp = w.get('Temp', 70)
-             w_icon, w_class = "☀️", ""
-             if precip > 0.1: w_icon, w_class = "🌧️", "weather-warn"
-             elif wind > 15: w_icon, w_class = "💨", "weather-warn"
-             elif temp < 32: w_icon, w_class = "❄️", "weather-warn"
-             weather_html = f'<div class="weather-box {w_class}">{w_icon} {temp:.0f}°F</div>'
-    
-    # INSIGHT PILL (NEW)
+            wind = w.get('Wind', 0)
+            precip = w.get('Precip', 0)
+            temp = w.get('Temp', 70)
+            w_icon, w_class = "☀️", ""
+            if precip > 0.1: w_icon, w_class = "🌧️", "weather-warn"
+            elif wind > 15: w_icon, w_class = "💨", "weather-warn"
+            elif temp < 32: w_icon, w_class = "❄️", "weather-warn"
+            weather_html = f'<div class="weather-badge {w_class}">{w_icon} {temp:.0f}°F</div>'
+
+    # INSIGHT PILL
     insight_html = ""
     insight = row.get('Insight', '')
     if insight:
         insight_html = f'<div class="insight-pill">{insight}</div>'
 
-    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; flex-wrap:wrap; margin-bottom:8px; gap:4px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div><div class="info-row">{weather_html}{insight_html}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
+    html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; align-items:center; flex-wrap:wrap; margin-bottom:8px; gap:4px;"><div class="prop-badge {badge_class}">{v}</div>{matchup_html}{weather_html}{insight_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
@@ -203,21 +209,10 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
+# --- WEATHER ENGINE ---
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    stadiums = {
-        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False),
-        'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
-        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True),
-        'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
-        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False),
-        'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
-        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True),
-        'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
-        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False),
-        'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
-        'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)
-    }
+    stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
         if is_dome: weather_data[team] = {"Dome": True}; continue
@@ -246,29 +241,28 @@ def get_vegas_props(api_key, _league, week):
 
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
-        h_opp = game.away_team.team_abbrev if hasattr(game.away_team, 'team_abbrev') else "UNK"
-        a_opp = game.home_team.team_abbrev if hasattr(game.home_team, 'team_abbrev') else "UNK"
-        site = clean_team_abbr(game.home_team.team_abbrev) # Home Team is Site
+        h_abbr = clean_team_abbr(game.home_team.team_abbrev)
+        a_abbr = clean_team_abbr(game.away_team.team_abbrev)
+        site = h_abbr # Home Team is Site
         
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(h_opp), 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': a_abbr, 'game_site': site})
         for p in game.away_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
-                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': clean_team_abbr(a_opp), 'game_site': site})
+                espn_map[norm].update({'espn_proj': p.projected_points, 'opponent': h_abbr, 'game_site': site})
 
     try:
         for p in _league.free_agents(size=500):
             norm = normalize_name(p.name)
             if norm not in espn_map:
-                # Guess site based on proTeam (not perfect but ensures data)
                 tm = clean_team_abbr(p.proTeam)
                 espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": "Free Agent", "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": getattr(p, 'projected_points', 0), "game_site": tm}
     except: pass
 
-    # ADDED: SPREADS & TOTALS
+    # FETCH VEGAS
     url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds'
     params = {'apiKey': api_key, 'regions': 'us', 'markets': 'h2h,spreads,totals', 'oddsFormat': 'american'}
     try:
@@ -276,36 +270,21 @@ def get_vegas_props(api_key, _league, week):
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Error {res.status_code}"]})
         games = res.json()
         
-        # GAME CONTEXT MAP (Spread/Total per team)
+        # --- GAME CONTEXT MAP (FOR INSIGHTS) ---
         game_context = {}
         for g in games:
-            # Extract Spread/Total
-            spread = 0
-            total = 0
-            home_team = "UNK"
-            away_team = "UNK"
-            # (Simplification: Mapping API team names to codes is hard without a dictionary, 
-            # but we can often get it from the first bookmaker)
+            spread, total = 0, 0
             try:
-                # Using first available bookmaker for general lines
                 bm = g['bookmakers'][0]
                 for mkt in bm['markets']:
-                    if mkt['key'] == 'spreads':
-                        spread = mkt['outcomes'][0].get('point', 0) # Just grab one side for magnitude check
-                    if mkt['key'] == 'totals':
-                        total = mkt['outcomes'][0].get('point', 0)
-                # Map names - this part is tricky without a full map, skipping exact team mapping for brevity 
-                # relying on individual player props instead
+                    if mkt['key'] == 'spreads': spread = mkt['outcomes'][0].get('point', 0)
+                    if mkt['key'] == 'totals': total = mkt['outcomes'][0].get('point', 0)
             except: pass
-            
-            # We will just attach the total to the game ID for lookup if needed later
             game_context[g['id']] = {'total': total, 'spread': spread}
 
         player_props = {}
         for game in games[:16]:
-            # Check Game Context (Barn Burner?)
             g_ctx = game_context.get(game['id'], {'total': 0, 'spread': 0})
-            is_high_total = g_ctx['total'] > 50
             
             g_url = f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game['id']}/odds"
             g_params = {'apiKey': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american'}
@@ -319,11 +298,9 @@ def get_vegas_props(api_key, _league, week):
                             name = out['description']
                             if name not in player_props: 
                                 player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0, 'context': g_ctx}
-                            
-                            val = out.get('point', 0)
-                            if key == 'player_pass_yds': player_props[name]['pass'] = val
-                            elif key == 'player_rush_yds': player_props[name]['rush'] = val
-                            elif key == 'player_reception_yds': player_props[name]['rec'] = val
+                            if key == 'player_pass_yds': player_props[name]['pass'] = out.get('point', 0)
+                            elif key == 'player_rush_yds': player_props[name]['rush'] = out.get('point', 0)
+                            elif key == 'player_reception_yds': player_props[name]['rec'] = out.get('point', 0)
                             elif key == 'player_anytime_td':
                                 odds = out.get('price', 0)
                                 player_props[name]['td'] = 100/(odds+100) if odds > 0 else abs(odds)/(abs(odds)+100)
@@ -336,7 +313,7 @@ def get_vegas_props(api_key, _league, week):
             match = espn_map.get(norm)
             if not match:
                 best = process.extractOne(norm, espn_keys)
-                if best and best[1] > 80: match = espn_map[best[0]]
+                if best and best[1] > 70: match = espn_map[best[0]]
             
             if match:
                 score = (s['pass']*0.04) + (s['rush']*0.1) + (s['rec']*0.1) + (s['td']*6)
@@ -371,8 +348,7 @@ def get_vegas_props(api_key, _league, week):
                     # INSIGHT LOGIC
                     insight_msg = ""
                     ctx = s.get('context', {'total':0, 'spread':0})
-                    
-                    if ctx['total'] > 50: insight_msg = "🔥 Barn Burner (>50pts)"
+                    if ctx['total'] > 48: insight_msg = "🔥 Barn Burner (>48pts)"
                     elif abs(ctx['spread']) > 9.5: insight_msg = "🗑️ Garbage Time Potential"
                     elif s['rush'] > 80: insight_msg = "🚜 Workhorse Role"
                     elif s['td'] > 0.45: insight_msg = "🎯 Redzone Radar"
@@ -381,7 +357,7 @@ def get_vegas_props(api_key, _league, week):
                         "Player": match['name'], "Position": p_pos, "Team": match['team'],
                         "ESPN ID": match['id'], "Proj Pts": score, "Edge": score - match['espn_proj'],
                         "Verdict": v, "Hit Rate": hr_txt, "Matchup Rank": dvp_txt,
-                        "Weather": w_data, "Insight": insight_msg, # NEW FIELD
+                        "Weather": w_data, "Insight": insight_msg,
                         "Pass Yds": s['pass'], "Rush Yds": s['rush'], "Rec Yds": s['rec'], "TD %": s['td']
                     })
         
@@ -419,6 +395,7 @@ def calculate_season_awards(_league, current_week):
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
+    
     for w in range(1, current_week + 1):
         box = _league.box_scores(week=w)
         for game in box:
