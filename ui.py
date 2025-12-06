@@ -5,7 +5,6 @@ from fpdf import FPDF
 from contextlib import contextmanager
 
 # --- CONSTANTS ---
-# The "Grey Helmet" fallback
 FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
 
 # --- METRIC DEFINITIONS ---
@@ -25,10 +24,28 @@ def get_tooltip_html(key):
     if not text: return ""
     return f'<div class="tooltip">ℹ️<span class="tooltiptext">{text}</span></div>'
 
+# --- ROBUST LOGO CHECKER ---
 def get_logo(team):
-    # Returns the logo URL if valid, otherwise the fallback constant
-    try: return team.logo_url if team.logo_url and str(team.logo_url).strip() != "" else FALLBACK_LOGO
-    except: return FALLBACK_LOGO
+    try:
+        url = team.logo_url
+        # 1. Check if URL exists and is a string
+        if not url or not isinstance(url, str) or len(url) < 10:
+            return FALLBACK_LOGO
+        
+        # 2. Force HTTPS
+        if url.startswith("http://"):
+            url = url.replace("http://", "https://")
+            
+        # 3. Check for valid extension (basic check)
+        valid_exts = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+        if not any(ext in url.lower() for ext in valid_exts):
+             # Some custom logos don't have extensions, so we might skip this check if needed
+             # But usually, a valid logo has one. Let's be safe.
+             return FALLBACK_LOGO
+             
+        return url
+    except:
+        return FALLBACK_LOGO
 
 def inject_luxury_css():
     bg_style = """
@@ -86,6 +103,7 @@ def inject_luxury_css():
     
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
+    /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
     .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
@@ -121,11 +139,15 @@ def render_team_card(col, team_data, rank):
     power_tip = get_tooltip_html("Power Score")
     luck_tip = get_tooltip_html("Luck")
     
-    # ONERROR HANDLER ADDED
-    logo_html = f'<img src="{team_data.get("Logo", FALLBACK_LOGO)}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid #00C9FF; margin-right:10px;">'
+    # Updated to use team_data['Logo'] which comes from logic.py, but fallback check is good here too
+    logo_url = team_data.get('Logo')
+    if not logo_url or "http" not in str(logo_url): 
+        logo_url = FALLBACK_LOGO
+        
+    logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid #00C9FF; margin-right:10px;">'
     
     with col:
-        st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;"><div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div><div style="flex:1;"><div style="display:flex; align-items:center;">{logo_html}<div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div></div><div style="font-size:0.8rem; color:#a0aaba; margin-top:5px;">Power Score: <span style="color:#00C9FF;">{team_data['Power Score']}</span>{power_tip}</div></div><div style="text-align:right;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div><div style="font-size:0.7rem; color:#a0aaba; display:flex; justify-content:flex-end; align-items:center;">Luck: {team_data['Luck Rating']:.1f}{luck_tip}</div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;"><div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div><div style="flex:1;"><div style="display:flex; align-items:center;">{logo_html}<div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div></div><div style="font-size:0.8rem; color:#a0aaba; margin-top:5px;">Power Score: <span style="color:#00C9FF; margin-left:4px;">{team_data['Power Score']}</span>{power_tip}</div></div><div style="text-align:right;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div><div style="font-size:0.7rem; color:#a0aaba; display:flex; justify-content:flex-end; align-items:center;">Luck: {team_data['Luck Rating']:.1f}{luck_tip}</div></div></div>""", unsafe_allow_html=True)
 
 def render_prop_card(col, row):
     v = row['Verdict']
@@ -149,6 +171,7 @@ def render_prop_card(col, row):
     elif "0%" in str(hit_rate_str): hit_color = "#FF4B4B"
     
     badges_html = f'<div class="meta-badge {badge_class}">{v}</div>'
+    
     if "vs #" in str(row.get('Matchup Rank', '')):
         try:
             rank = int(re.search(r'#(\d+)', row['Matchup Rank']).group(1))
@@ -158,9 +181,12 @@ def render_prop_card(col, row):
 
     w = row.get('Weather', {})
     if w and isinstance(w, dict):
-        if w.get('Dome'): badges_html += f'<div class="meta-badge weather-neutral">🏟️ Dome</div>'
+        if w.get('Dome'):
+             badges_html += f'<div class="meta-badge weather-neutral">🏟️ Dome</div>'
         else:
-             wind, precip, temp = w.get('Wind', 0), w.get('Precip', 0), w.get('Temp', 70)
+             wind = w.get('Wind', 0)
+             precip = w.get('Precip', 0)
+             temp = w.get('Temp', 70)
              w_icon, w_class = "☀️", "weather-neutral"
              if precip > 0.1: w_icon, w_class = "🌧️", "weather-warn"
              elif wind > 15: w_icon, w_class = "💨", "weather-warn"
@@ -168,7 +194,8 @@ def render_prop_card(col, row):
              badges_html += f'<div class="meta-badge {w_class}">{w_icon} {temp:.0f}°F</div>'
 
     insight = row.get('Insight', '')
-    if insight: badges_html += f'<div class="meta-badge insight-purple">{insight}</div>'
+    if insight:
+        badges_html += f'<div class="meta-badge insight-purple">{insight}</div>'
 
     html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">{badges_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color}; display:flex; justify-content:center; align-items:center;"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span>{edge_tip}</div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
@@ -180,6 +207,7 @@ def render_lab_card(col, row):
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     val_color = "#4cc9f0"
     if "-" in str(row['Value']): val_color = "#FF4B4B"
+    
     metric_key = "WOPR"
     if "RYOE" in row['Metric']: metric_key = "RYOE"
     elif "CPOE" in row['Metric']: metric_key = "CPOE"
@@ -199,13 +227,13 @@ def render_audit_card(col, row):
     
     regret_html = f"""<div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div><div style="color: white; font-weight: bold;">{row['Regret']}</div><div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div></div>""" if row['Lost Pts'] > 0 else f"""<div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div><div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div></div>"""
 
-    # Added ONERROR handler here too
-    logo_html = f'<img src="{row.get("Logo", FALLBACK_LOGO)}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
+    logo_url = row.get("Logo")
+    if not logo_url or "http" not in str(logo_url): logo_url = FALLBACK_LOGO
+    logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
 
     html = f"""<div class="luxury-card" style="border-top: 4px solid {grade_color};"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="display:flex; align-items:center; gap:10px;">{logo_html}<div><div style="font-size:1.1rem; font-weight:900; color:white;">{row['Team']}</div><div style="font-size:0.8rem; color:#a0aaba;">Efficiency: {row['Efficiency']:.1f}%</div></div></div><div style="text-align:center;"><div style="font-size:2.5rem; font-weight:900; color:{grade_color}; text-shadow: 0 0 10px {grade_color}40;">{row['Grade']}</div><div style="font-size:0.7rem; color:{grade_color}; text-transform:uppercase;">Grade</div></div></div>{regret_html}<div class="stat-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);"><div class="stat-box"><div class="stat-val" style="color:#fff;">{row['Starters']:.1f}</div><div class="stat-label">Starter Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#a0aaba;">{row['Bench']:.1f}</div><div class="stat-label">Bench Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#FF4B4B;">-{row['Lost Pts']:.1f}</div><div class="stat-label">Lost Potential</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
-# ... (PDF Class and other helpers remain the same)
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
