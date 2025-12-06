@@ -35,7 +35,7 @@ def load_nfl_stats_safe(year):
         except: continue
     return pd.DataFrame()
 
-# --- THE AUDIT (FIXED: Added _league to prevent hashing error) ---
+# --- THE AUDIT (STRICT GRADING) ---
 @st.cache_data(ttl=3600)
 def analyze_lineup_efficiency(_league, week):
     box = _league.box_scores(week=week)
@@ -49,7 +49,7 @@ def analyze_lineup_efficiency(_league, week):
             start_pts = sum(p.points for p in starters)
             bench_pts = sum(p.points for p in bench)
             
-            # Simple Regret: Best Bench > Worst Starter
+            # Find "Regret": Best Bench vs Worst Starter
             sorted_starters = sorted(starters, key=lambda x: x.points)
             sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
             
@@ -59,17 +59,18 @@ def analyze_lineup_efficiency(_league, week):
             if sorted_bench and sorted_starters:
                 best_bench = sorted_bench[0]
                 worst_starter = sorted_starters[0]
+                # Only count regret if bench actually outscored starter
                 if best_bench.points > worst_starter.points:
                     regret_player = best_bench.name
                     lost_pts = best_bench.points - worst_starter.points
             
-            # Grading Scale
-            if lost_pts < 2: grade = "A+"
-            elif lost_pts < 5: grade = "A"
-            elif lost_pts < 10: grade = "B"
-            elif lost_pts < 20: grade = "C"
-            elif lost_pts < 30: grade = "D"
-            else: grade = "F"
+            # STRICT GRADING SCALE
+            if lost_pts <= 0: grade = "A+"      # Perfect
+            elif lost_pts < 5: grade = "A"      # Excellent
+            elif lost_pts < 10: grade = "B"     # Solid
+            elif lost_pts < 15: grade = "C"     # Mediocre
+            elif lost_pts < 25: grade = "D"     # Poor
+            else: grade = "F"                   # Disaster
 
             total_pts = start_pts + bench_pts
             eff = (start_pts / total_pts * 100) if total_pts > 0 else 0
@@ -144,7 +145,6 @@ def get_vegas_props(api_key, _league, week):
         for p in team.roster:
             norm = normalize_name(p.name)
             espn_map[norm] = {"name": p.name, "id": p.playerId, "pos": p.position, "team": team.team_name, "proTeam": p.proTeam, "opponent": "UNK", "espn_proj": 0, "game_site": "UNK"}
-
     box_scores = _league.box_scores(week=week)
     for game in box_scores:
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
@@ -304,7 +304,12 @@ def calculate_season_awards(_league, current_week):
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
-    oracle = sorted([{"Team": t, "Eff": (s["Starters"]/(s["Starters"]+s["Bench"])*100) if (s["Starters"]+s["Bench"])>0 else 0, "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Eff'], reverse=True)[0]
+    oracle_list = []
+    for t, s in team_stats.items():
+        total = s["Starters"] + s["Bench"]
+        eff = (s["Starters"] / total * 100) if total > 0 else 0
+        oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
+    oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
@@ -521,7 +526,7 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, 
                         "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f}", "Beta Stat": f"aDOT: {adot:.1f}",
+                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
                         "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
                         "Def Stat": def_context
                     })
