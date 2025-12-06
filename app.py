@@ -36,6 +36,7 @@ except Exception as e:
 st.sidebar.title("🥂 The Concierge")
 current_week = league.current_week
 if current_week == 0: current_week = 1
+
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
