@@ -8,7 +8,8 @@ from thefuzz import process
 import re
 import time
 
-# --- CONSTANT FALLBACK ---
+# --- CONSTANTS ---
+# Same Grey Helmet as UI
 FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
 
 # --- CONNECTION ---
@@ -17,11 +18,25 @@ def get_league(league_id, year, espn_s2, swid):
     return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
 
 def safe_get_logo(team):
-    try: return team.logo_url if team.logo_url and str(team.logo_url).strip() != "" else FALLBACK_LOGO
-    except: return FALLBACK_LOGO
-
-# ... (Rest of logic.py remains exactly as it was in the previous valid version)
-# ... (Ensure you keep all the analytic functions: calculate_heavy_analytics, analyze_lineup_efficiency, etc.)
+    # Robust logo checker (Mirrors UI logic)
+    try: 
+        url = team.logo_url
+        # 1. Check if URL exists and is a string
+        if not url or not isinstance(url, str) or len(url) < 10:
+            return FALLBACK_LOGO
+        
+        # 2. Force HTTPS
+        if url.startswith("http://"):
+            url = url.replace("http://", "https://")
+            
+        # 3. Check for valid extension
+        valid_exts = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
+        if not any(ext in url.lower() for ext in valid_exts):
+             return FALLBACK_LOGO
+             
+        return url
+    except: 
+        return FALLBACK_LOGO
 
 def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
@@ -41,50 +56,7 @@ def load_nfl_stats_safe(year):
         except: continue
     return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
-def analyze_lineup_efficiency(_league, week):
-    box = _league.box_scores(week=week)
-    audit_data = []
-    
-    for game in box:
-        for team, lineup in [(game.home_team, game.home_lineup), (game.away_team, game.away_lineup)]:
-            starters = [p for p in lineup if p.slot_position != 'BE']
-            bench = [p for p in lineup if p.slot_position == 'BE']
-            start_pts = sum(p.points for p in starters)
-            bench_pts = sum(p.points for p in bench)
-            sorted_starters = sorted(starters, key=lambda x: x.points)
-            sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
-            regret_player = "None"
-            lost_pts = 0
-            if sorted_bench and sorted_starters:
-                best_bench = sorted_bench[0]
-                worst_starter = sorted_starters[0]
-                if best_bench.points > worst_starter.points:
-                    regret_player = best_bench.name
-                    lost_pts = best_bench.points - worst_starter.points
-            
-            if lost_pts <= 0: grade = "A+"
-            elif lost_pts < 5: grade = "A"
-            elif lost_pts < 10: grade = "B"
-            elif lost_pts < 15: grade = "C"
-            elif lost_pts < 25: grade = "D"
-            else: grade = "F"
-
-            total_pts = start_pts + bench_pts
-            eff = (start_pts / total_pts * 100) if total_pts > 0 else 0
-
-            audit_data.append({
-                "Team": team.team_name,
-                "Logo": safe_get_logo(team),
-                "Starters": start_pts,
-                "Bench": bench_pts,
-                "Regret": regret_player,
-                "Lost Pts": lost_pts,
-                "Grade": grade,
-                "Efficiency": eff
-            })
-    return pd.DataFrame(audit_data).sort_values(by="Lost Pts", ascending=False)
-
+# --- NEW: DEFENSIVE YARDAGE STATS ---
 @st.cache_data(ttl=3600*24)
 def get_defensive_averages(year):
     try:
@@ -115,6 +87,7 @@ def get_dvp_ranks_safe(year):
         return dvp_map
     except: return {}
 
+# --- WEATHER ENGINE ---
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
     stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
@@ -315,6 +288,48 @@ def calculate_season_awards(_league, current_week):
         "Best Manager": {"Team": podium[0].team_name, "Points": podium[0].points_for, "Logo": safe_get_logo(podium[0])}
     }
 
+# --- THE AUDIT (STRICT GRADING) ---
+@st.cache_data(ttl=3600)
+def analyze_lineup_efficiency(_league, week):
+    box = _league.box_scores(week=week)
+    audit_data = []
+    
+    for game in box:
+        for team, lineup in [(game.home_team, game.home_lineup), (game.away_team, game.away_lineup)]:
+            starters = [p for p in lineup if p.slot_position != 'BE']
+            bench = [p for p in lineup if p.slot_position == 'BE']
+            start_pts = sum(p.points for p in starters)
+            bench_pts = sum(p.points for p in bench)
+            sorted_starters = sorted(starters, key=lambda x: x.points)
+            sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
+            regret_player = "None"
+            lost_pts = 0
+            if sorted_bench and sorted_starters:
+                best_bench = sorted_bench[0]
+                worst_starter = sorted_starters[0]
+                if best_bench.points > worst_starter.points:
+                    regret_player = best_bench.name
+                    lost_pts = best_bench.points - worst_starter.points
+            if lost_pts <= 0: grade = "A+"
+            elif lost_pts < 5: grade = "A"
+            elif lost_pts < 10: grade = "B"
+            elif lost_pts < 15: grade = "C"
+            elif lost_pts < 25: grade = "D"
+            else: grade = "F"
+            total_pts = start_pts + bench_pts
+            eff = (start_pts / total_pts * 100) if total_pts > 0 else 0
+            audit_data.append({
+                "Team": team.team_name,
+                "Logo": safe_get_logo(team),
+                "Starters": start_pts,
+                "Bench": bench_pts,
+                "Regret": regret_player,
+                "Lost Pts": lost_pts,
+                "Grade": grade,
+                "Efficiency": eff
+            })
+    return pd.DataFrame(audit_data).sort_values(by="Lost Pts", ascending=False)
+
 @st.cache_data(ttl=3600)
 def calculate_draft_analysis(_league):
     live_standings = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
@@ -468,7 +483,6 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
     df_rec, df_rush, df_pass, df_seas = load_nextgen_data_v3(year)
     dvp_map = get_dvp_ranks_safe(year)
     def_stats_map = get_defensive_averages(year)
-    
     try:
         sched = nfl.import_schedules([year])
         current_games = sched[sched['week'] == current_week]
@@ -482,20 +496,16 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
 
     if df_rec is None or df_rec.empty: return pd.DataFrame()
     insights = []
-    
     for player in roster:
         p_name = player.name
         pos = player.position
         pid = getattr(player, 'playerId', None)
         p_pro_team = clean_team_abbr(getattr(player, 'proTeam', 'UNK'))
-        
         opp = opp_map.get(p_pro_team, "BYE")
         proj = getattr(player, 'projected_points', 0)
-        
         matchup_rank_val = "N/A"
         if opp in dvp_map and pos in dvp_map[opp]:
             matchup_rank_val = f"#{dvp_map[opp][pos]}"
-            
         def_context = "N/A"
         if opp in def_stats_map:
             if pos == 'RB': def_context = def_stats_map[opp]['Rush']
@@ -515,13 +525,7 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                         seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                         if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, 
-                        "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
-                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
-                        "Def Stat": def_context
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}", "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj, "Def Stat": def_context})
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -533,13 +537,7 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                     box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
                     eff = stats.get('efficiency', 0)
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos,
-                        "Verdict": verdict, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{box_8:.0f}% 8-Man", "Beta Stat": f"Eff: {eff:.2f}",
-                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
-                        "Def Stat": def_context
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, "Verdict": verdict, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man", "Beta Stat": f"Eff: {eff:.2f}", "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj, "Def Stat": def_context})
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -551,11 +549,5 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
                     time_throw = stats.get('avg_time_to_throw', 0)
                     air_yds = stats.get('avg_intended_air_yards', 0)
                     verdict = "🎯 SNIPER" if cpoe > 5.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, 
-                        "Verdict": verdict, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time", "Beta Stat": f"Air: {air_yds:.1f}",
-                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj,
-                        "Def Stat": def_context
-                    })
+                    insights.append({"Player": p_name, "ID": pid, "Team": p_pro_team, "Position": pos, "Verdict": verdict, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Beta Stat": f"Air: {air_yds:.1f}", "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj, "Def Stat": def_context})
     return pd.DataFrame(insights)
