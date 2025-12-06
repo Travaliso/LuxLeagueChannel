@@ -34,9 +34,8 @@ except Exception as e:
 # 3. SIDEBAR NAVIGATION
 # ==============================================================================
 st.sidebar.title("🥂 The Concierge")
-current_week = league.current_week
+current_week = league.current_week - 1
 if current_week == 0: current_week = 1
-
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
@@ -136,8 +135,6 @@ for game in box_scores:
     h_p = sum(p['Score'] for p in h_r) + sum(p['Score'] for p in h_br)
     a_p = sum(p['Score'] for p in a_r) + sum(p['Score'] for p in a_br)
     efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_r), "Bench": sum(p['Score'] for p in h_br)})
-    
-    # --- FIX: Changed 'a_b' to 'a_br' here ---
     efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_br)})
 
 # --- SAFE DATAFRAME CREATION ---
@@ -370,33 +367,56 @@ elif selected_page == P_PROP:
 
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
+        # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
             with utils.luxury_spinner("Calling Vegas..."): 
+                # PASS SELECTED WEEK to get accurate weekly projections
                 st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league, selected_week)
         
         df = st.session_state["vegas"]
+        
         if df is not None and not df.empty:
-            if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
+            if "Status" in df.columns: 
+                st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
+                # --- FILTER ROW ---
                 c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-                with c1: search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
-                with c2: pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
-                with c3: verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
-                with c4: team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
+                with c1:
+                    search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
+                with c2:
+                    pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
+                with c3:
+                    verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
+                with c4:
+                    team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 
-                c_sort, _ = st.columns([1, 3])
-                with c_sort: sort_order = st.selectbox("Sort Order", ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"])
+                # --- SORT ROW ---
+                c_sort, c_space = st.columns([1, 3])
+                with c_sort:
+                    sort_order = st.selectbox(
+                        "Sort Order", 
+                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)", "🔥 Moneyball Insights"]
+                    )
 
+                # Apply Filters
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
                 
-                if "Highest Projection" in sort_order: df = df.sort_values(by="Proj Pts", ascending=False)
-                elif "Best Edge" in sort_order: df = df.sort_values(by="Edge", ascending=False)
-                elif "Worst Edge" in sort_order: df = df.sort_values(by="Edge", ascending=True)
+                # Apply Sort
+                if "Highest Projection" in sort_order:
+                    df = df.sort_values(by="Proj Pts", ascending=False)
+                elif "Best Edge" in sort_order:
+                    df = df.sort_values(by="Edge", ascending=False) # Positive Edge First
+                elif "Worst Edge" in sort_order:
+                    df = df.sort_values(by="Edge", ascending=True)  # Negative Edge First
+                elif "Moneyball" in sort_order:
+                    df = df.sort_values(by="Insight", ascending=False) # Insights First
 
-                if df.empty: st.info("No players match your search.")
+                # Render Cards
+                if df.empty:
+                    st.info("No players match your search.")
                 else:
                     cols = st.columns(3)
                     for i, row in df.reset_index(drop=True).iterrows():
