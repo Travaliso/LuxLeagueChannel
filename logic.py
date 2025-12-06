@@ -8,17 +8,20 @@ from thefuzz import process
 import re
 import time
 
+# --- CONSTANT FALLBACK ---
+FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
+
 # --- CONNECTION ---
 @st.cache_resource
 def get_league(league_id, year, espn_s2, swid):
     return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
 
 def safe_get_logo(team):
-    # Same fallback as UI
-    fallback = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
-    try: 
-        return team.logo_url if team.logo_url and str(team.logo_url).strip() != "" else fallback
-    except: return fallback
+    try: return team.logo_url if team.logo_url and str(team.logo_url).strip() != "" else FALLBACK_LOGO
+    except: return FALLBACK_LOGO
+
+# ... (Rest of logic.py remains exactly as it was in the previous valid version)
+# ... (Ensure you keep all the analytic functions: calculate_heavy_analytics, analyze_lineup_efficiency, etc.)
 
 def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
@@ -38,7 +41,6 @@ def load_nfl_stats_safe(year):
         except: continue
     return pd.DataFrame()
 
-# --- THE AUDIT (STRICT GRADING) ---
 @st.cache_data(ttl=3600)
 def analyze_lineup_efficiency(_league, week):
     box = _league.box_scores(week=week)
@@ -48,32 +50,25 @@ def analyze_lineup_efficiency(_league, week):
         for team, lineup in [(game.home_team, game.home_lineup), (game.away_team, game.away_lineup)]:
             starters = [p for p in lineup if p.slot_position != 'BE']
             bench = [p for p in lineup if p.slot_position == 'BE']
-            
             start_pts = sum(p.points for p in starters)
             bench_pts = sum(p.points for p in bench)
-            
-            # Find "Regret": Best Bench vs Worst Starter
             sorted_starters = sorted(starters, key=lambda x: x.points)
             sorted_bench = sorted(bench, key=lambda x: x.points, reverse=True)
-            
             regret_player = "None"
             lost_pts = 0
-            
             if sorted_bench and sorted_starters:
                 best_bench = sorted_bench[0]
                 worst_starter = sorted_starters[0]
-                # Only count regret if bench actually outscored starter
                 if best_bench.points > worst_starter.points:
                     regret_player = best_bench.name
                     lost_pts = best_bench.points - worst_starter.points
             
-            # STRICT GRADING SCALE
-            if lost_pts <= 0: grade = "A+"      # Perfect
-            elif lost_pts < 5: grade = "A"      # Excellent
-            elif lost_pts < 10: grade = "B"     # Solid
-            elif lost_pts < 15: grade = "C"     # Mediocre
-            elif lost_pts < 25: grade = "D"     # Poor
-            else: grade = "F"                   # Disaster
+            if lost_pts <= 0: grade = "A+"
+            elif lost_pts < 5: grade = "A"
+            elif lost_pts < 10: grade = "B"
+            elif lost_pts < 15: grade = "C"
+            elif lost_pts < 25: grade = "D"
+            else: grade = "F"
 
             total_pts = start_pts + bench_pts
             eff = (start_pts / total_pts * 100) if total_pts > 0 else 0
@@ -88,7 +83,6 @@ def analyze_lineup_efficiency(_league, week):
                 "Grade": grade,
                 "Efficiency": eff
             })
-            
     return pd.DataFrame(audit_data).sort_values(by="Lost Pts", ascending=False)
 
 @st.cache_data(ttl=3600*24)
@@ -307,12 +301,7 @@ def calculate_season_awards(_league, current_week):
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
-    oracle_list = []
-    for t, s in team_stats.items():
-        total = s["Starters"] + s["Bench"]
-        eff = (s["Starters"] / total * 100) if total > 0 else 0
-        oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
-    oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
+    oracle = sorted([{"Team": t, "Eff": (s["Starters"]/(s["Starters"]+s["Bench"])*100) if (s["Starters"]+s["Bench"])>0 else 0, "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
