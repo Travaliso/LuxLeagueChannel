@@ -10,7 +10,6 @@ def ai_response(key, prompt, tokens=600):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except Exception as e: return f"⚠️ AI Error: {str(e)}"
 
-# ... (Other functions remain the same) ...
 def get_weekly_recap(key, selected_week, top_team):
     return ai_response(key, f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_team}. Style: Wall Street Report.", 800)
 
@@ -30,23 +29,22 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 def get_ai_scouting_report(key, free_agents_str):
     return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
 
-
-# --- UPDATED: NON-SPECULATIVE GM ---
+# --- UPDATED FUNCTION WITH 10 ARGUMENTS ---
 def get_lab_assessment(key, player_name, team, position, opponent, matchup_rank, defensive_stat, metrics, vegas_line, espn_proj):
     prompt = f"""
     Act as a decisive, factual NFL General Manager. Analyze {player_name} ({position}, {team}).
     
-    HARD DATA (USE THIS):
+    HARD DATA:
     - Opponent: {opponent}
     - Matchup Rank: {matchup_rank} (1=Softest, 32=Hardest).
-    - Defensive Vulnerability: {defensive_stat} (e.g. Allows 150 Rush Yds/Gm).
+    - Defensive Stats: {defensive_stat}
     - Player Metrics: {metrics}
     - Vegas Projection: {vegas_line}
     - ESPN Projection: {espn_proj}
     
     INSTRUCTIONS:
-    1. Verdict: (START / SIT / HOLD).
-    2. The Read: 2-3 sentences. Cite the 'Defensive Vulnerability' explicitly. Compare it to the player's metrics.
+    1. Verdict: One word (START / SIT / HOLD).
+    2. The Read: 2-3 sentences. Cite the 'Defensive Stats' explicitly. Compare it to the player's metrics.
        Example: "The {opponent} defense gives up {defensive_stat}, which aligns perfectly with {player_name}'s high efficiency."
     3. X-Factor: One key stat to watch.
     """
