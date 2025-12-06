@@ -34,7 +34,7 @@ except Exception as e:
 # 3. SIDEBAR NAVIGATION
 # ==============================================================================
 st.sidebar.title("🥂 The Concierge")
-current_week = league.current_week
+current_week = league.current_week - 1
 if current_week == 0: current_week = 1
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
@@ -137,7 +137,7 @@ for game in box_scores:
     efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_r), "Bench": sum(p['Score'] for p in h_br)})
     efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_br)})
 
-# --- SAFE DATAFRAME CREATION (The Fix) ---
+# --- SAFE DATAFRAME CREATION ---
 if efficiency_data:
     df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
 else:
@@ -188,7 +188,6 @@ if selected_page == P_LEDGER:
         with c1 if i % 2 == 0 else c2:
             st.markdown(f"""<div class="luxury-card" style="padding: 15px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; width: 40%;"><img src="{m['Home Logo']}" width="50" style="border-radius: 50%; border: 2px solid #00C9FF;"><div style="font-weight: bold; color: white;">{m['Home']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Home Score']}</div></div><div style="color: #a0aaba; font-size: 10px;">VS</div><div style="text-align: center; width: 40%;"><img src="{m['Away Logo']}" width="50" style="border-radius: 50%; border: 2px solid #0072ff;"><div style="font-weight: bold; color: white;">{m['Away']}</div><div style="font-size: 20px; color: #00C9FF;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
             with st.expander(f"📉 View Lineups"):
-                # Simplified Lineup Display
                 if m['Home Roster']:
                     df_m = pd.DataFrame(m['Home Roster'])
                     st.dataframe(df_m, use_container_width=True, hide_index=True)
@@ -354,10 +353,9 @@ elif selected_page == P_PROP:
     st.caption("Vegas knows. Find the edge against your projections.")
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
-        # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
-        if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
+        # FIX: Added 'Weather' to stale check to force refresh
+        if "vegas" not in st.session_state or "Weather" not in st.session_state["vegas"].columns:
             with utils.luxury_spinner("Calling Vegas..."): 
-                # PASS SELECTED WEEK to get accurate weekly projections
                 st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league, selected_week)
         
         df = st.session_state["vegas"]
