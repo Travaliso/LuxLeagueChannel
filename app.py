@@ -34,8 +34,11 @@ except Exception as e:
 # 3. SIDEBAR NAVIGATION
 # ==============================================================================
 st.sidebar.title("🥂 The Concierge")
-current_week = league.current_week - 1
+
+# FIX: Removed "- 1" to match Main Branch (Show Active Week, not Past Week)
+current_week = league.current_week 
 if current_week == 0: current_week = 1
+
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
@@ -395,7 +398,7 @@ elif selected_page == P_PROP:
                 with c_sort:
                     sort_order = st.selectbox(
                         "Sort Order", 
-                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)", "🔥 Moneyball Insights"]
+                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)"]
                     )
 
                 # Apply Filters
@@ -411,8 +414,6 @@ elif selected_page == P_PROP:
                     df = df.sort_values(by="Edge", ascending=False) # Positive Edge First
                 elif "Worst Edge" in sort_order:
                     df = df.sort_values(by="Edge", ascending=True)  # Negative Edge First
-                elif "Moneyball" in sort_order:
-                    df = df.sort_values(by="Insight", ascending=False) # Insights First
 
                 # Render Cards
                 if df.empty:
