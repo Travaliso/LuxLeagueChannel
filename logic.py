@@ -14,8 +14,11 @@ def get_league(league_id, year, espn_s2, swid):
     return League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
 
 def safe_get_logo(team):
-    try: return team.logo_url if team.logo_url else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
-    except: return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
+    # Same fallback as UI
+    fallback = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
+    try: 
+        return team.logo_url if team.logo_url and str(team.logo_url).strip() != "" else fallback
+    except: return fallback
 
 def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
