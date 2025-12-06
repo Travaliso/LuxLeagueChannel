@@ -57,6 +57,7 @@ box_scores = st.session_state['box_scores']
 matchup_data, efficiency_data, all_active_players, bench_highlights = [], [], [], []
 
 for game in box_scores:
+    home, away = game.home_team, game.away_team
     def get_roster_data(lineup, team_name):
         starters, bench = [], []
         for p in lineup:
@@ -97,6 +98,7 @@ st.markdown("---")
 
 if selected_page == P_LEDGER:
     st.header("📜 The Ledger")
+    st.caption("Where the receipts are kept and the scores are settled. Track every transaction, waiver wire steal, and questionable drop with forensic precision. If you claimed a kicker in Week 4, we have the paperwork to prove it.")
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
@@ -111,6 +113,7 @@ if selected_page == P_LEDGER:
 
 elif selected_page == P_HIERARCHY:
     st.header("📈 The Hierarchy")
+    st.caption("A ruthless ranking of who is actually good and who is just getting lucky. We strip away the variance to reveal the true power structure of the league. Don't blame the algorithm if you're stuck in the basement.")
     if "rank_comm" not in st.session_state:
         with ui.luxury_spinner("Analyzing..."): 
             top = df_eff.iloc[0]['Team'] if not df_eff.empty else "Team A"
@@ -123,6 +126,7 @@ elif selected_page == P_HIERARCHY:
 
 elif selected_page == P_AUDIT:
     st.header("🔎 The Audit")
+    st.caption("Forensic analysis of your lineup decisions, highlighting the points you left on the bench. It’s a painful reminder of the 'perfect lineup' you could have started but didn't. We count the points you wasted so you don't have to.")
     fig = go.Figure()
     if not df_eff.empty:
         fig.add_trace(go.Bar(x=df_eff["Team"], y=df_eff["Starters"], name='Starters', marker_color='#00C9FF'))
@@ -133,15 +137,18 @@ elif selected_page == P_AUDIT:
 
 elif selected_page == P_HEDGE:
     st.header("💎 The Hedge Fund")
+    st.caption("Advanced metrics for the sophisticated investor who treats fantasy like a stock market. Analyze luck, efficiency, and true win probability to find market inefficiencies. It’s not gambling if you call it 'portfolio management'.")
     if "df_advanced" not in st.session_state:
         if st.button("🚀 Analyze Market Data"):
             with ui.luxury_spinner("Compiling Assets..."): st.session_state["df_advanced"] = logic.calculate_heavy_analytics(league, current_week); st.rerun()
     else:
-        fig = px.scatter(st.session_state["df_advanced"], x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#7209b7", "#4361ee", "#4cc9f0"])
+        fig = px.scatter(st.session_state["df_advanced"], x="Power Score", y="Wins", text="Team", size="Points For", color="Luck Rating", color_continuous_scale=["#7209b7", "#4361ee", "#4cc9f0"], title="Luck Matrix", height=600)
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
 
 elif selected_page == P_IPO:
     st.header("📊 The IPO Audit")
+    st.caption("A retrospective on draft capital ROI. See which blue-chip prospects turned into penny stocks and which late-round fliers became unicorns. We expose the draft busts and celebrate the value picks that saved your season.")
     if "draft_roi" not in st.session_state:
         if st.button("📠 Run Audit"):
              with ui.luxury_spinner("Auditing draft capital..."):
@@ -165,62 +172,43 @@ elif selected_page == P_IPO:
 
 elif selected_page == P_LAB:
     st.header("🧬 The Lab")
+    st.caption("Next Gen Stats for the analytically inclined. Analyze separation, air yards, and efficiency metrics to find the breakout stars before they break out. This is where we separate the elite talents from the volume-dependent plodders.")
     c1, c2 = st.columns([3, 1])
     with c1: target_team = st.selectbox("Select Test Subject:", [t.team_name for t in league.teams])
     with c2:
          if st.button("🧪 Analyze"):
              with ui.luxury_spinner("Calibrating..."): st.session_state["trigger_lab"] = True; st.rerun()
-    
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
         st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
         st.session_state["trigger_lab"] = False; st.rerun()
-    
     if "ngs_data" in st.session_state:
         if not st.session_state["ngs_data"].empty:
-            # Build Roster Context for AI (Group by Position)
             df_ngs = st.session_state["ngs_data"]
-            
             cols = st.columns(2)
             for i, row in df_ngs.iterrows():
                 with cols[i % 2]:
                     ui.render_lab_card(cols[i % 2], row)
-                    
                     vegas_line = "N/A"
                     if "vegas" in st.session_state and not st.session_state["vegas"].empty:
                          v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
                          if not v_row.empty: vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
-
                     if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
                          matchup_rank = row.get('Matchup Rank', 'N/A')
                          def_stat = row.get('Def Stat', 'N/A')
-                         
-                         # BUILD ROSTER CONTEXT (Filter for teammates at same pos)
                          teammates = df_ngs[df_ngs['Position'] == row['Position']]
                          context_list = []
                          for _, tm in teammates.iterrows():
                              if tm['Player'] != row['Player']:
                                  context_list.append(f"{tm['Player']} (Opp: {tm['Opponent']} {tm.get('Matchup Rank')}, Proj: {tm.get('ESPN Proj')})")
                          roster_context = "; ".join(context_list) if context_list else "No other options on roster."
-
-                         assessment = intel.get_lab_assessment(
-                             OPENAI_KEY, 
-                             row['Player'], 
-                             row['Team'], 
-                             row['Position'], 
-                             row['Opponent'], 
-                             matchup_rank, 
-                             def_stat, 
-                             f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
-                             vegas_line, 
-                             row['ESPN Proj'],
-                             roster_context # NEW ARGUMENT
-                         )
+                         assessment = intel.get_lab_assessment(OPENAI_KEY, row['Player'], row['Team'], row['Position'], row['Opponent'], matchup_rank, def_stat, f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", vegas_line, row['ESPN Proj'], roster_context)
                          st.info(assessment)
         else: st.info("No Next Gen data available.")
 
 elif selected_page == P_FORECAST:
     st.header("🔮 The Crystal Ball")
+    st.caption("Monte Carlo simulations running 1,000 realities to predict your playoff fate. We crunch the numbers to tell you if you're a lock, a bubble team, or dead in the water. Hope is not a strategy, but probability is.")
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with ui.luxury_spinner("Simulating..."): st.session_state["playoff_odds"] = logic.run_monte_carlo_simulation(league); st.rerun()
@@ -228,6 +216,7 @@ elif selected_page == P_FORECAST:
 
 elif selected_page == P_MULTI:
     st.header("🌌 The Multiverse")
+    st.caption("Control the timeline. Force specific wins and losses to see how they ripple through the playoff picture. It’s like Doctor Strange looking for the one future where your 4-8 team makes the championship.")
     if "base_odds" not in st.session_state:
         with ui.luxury_spinner("Calculating Baseline..."): st.session_state["base_odds"] = logic.run_monte_carlo_simulation(league)
     box = league.box_scores(week=league.current_week)
@@ -248,6 +237,7 @@ elif selected_page == P_MULTI:
 elif selected_page == P_NEXT:
     try:
         st.header("🚀 Next Week")
+        st.caption("A look ahead at the upcoming slate. Set your lines, check the spreads, and prepare for the matchups that will define your week. The hay is in the barn, but the barn might be on fire.")
         next_week = league.current_week
         box = league.box_scores(week=next_week)
         games = [{"home": g.home_team.team_name, "away": g.away_team.team_name, "spread": f"{abs(g.home_projected-g.away_projected):.1f}"} for g in box]
@@ -262,17 +252,18 @@ elif selected_page == P_NEXT:
 
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
+    st.caption("Vegas knows. Find the edge against your projections by comparing them to the sharpest lines in the desert. If the house thinks your RB1 is scoring 12 points and you project 20, someone is wrong—and it’s probably not the house.")
     with st.expander("📘 Legend & Glossary", expanded=False):
         st.markdown("""
-        - **🔥 Barn Burner:** High Vegas Total (>48 pts).
-        - **🗑️ Garbage Time:** Spread > 9.5 pts. Trailing QBs/WRs may feast late.
+        **Key Insights Explained:**
+        - **🔥 Barn Burner:** High Vegas Total (>48 pts). Start your fringe players in this shootout.
+        - **🗑️ Garbage Time:** Spread > 9.5 pts. Trailing QBs/WRs may feast on soft defenses late.
         - **🚜 Workhorse:** Rushing Prop > 80 yds. High floor volume play.
         - **🎯 Redzone Radar:** TD Probability > 45%. Good bet for a score.
-        - **vs #32 Def:** Matchup Rank (1=Best, 32=Worst).
-        - **Edge:** Vegas Implied - ESPN Projection. Blue is positive edge.
+        - **vs #32 Def:** Matchup Rank. #1 is Best (Allows Most Points), #32 is Worst (Lockdown Defense).
+        - **Edge:** The difference between Vegas implied points and ESPN projection. Blue is positive edge.
         - **Weather:** ☀️ Clear, 🌧️ Rain (Sloppy), 💨 Wind (Passing Downgrade), ❄️ Snow.
         """)
-
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
@@ -287,21 +278,17 @@ elif selected_page == P_PROP:
                 with c2: pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
                 with c3: verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
                 with c4: team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
-                
                 c_sort, c_insight, _ = st.columns([1, 1.5, 1.5])
                 with c_sort: sort_order = st.selectbox("Sort Order", ["Highest Projection", "💎 Best Edge", "🚩 Worst Edge"])
                 with c_insight: insight_filter = st.multiselect("🔥 Moneyball Filter", options=[x for x in df['Insight'].unique() if x])
-
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
                 if insight_filter: df = df[df['Insight'].isin(insight_filter)]
-                
                 if "Highest" in sort_order: df = df.sort_values(by="Proj Pts", ascending=False)
                 elif "Best Edge" in sort_order: df = df.sort_values(by="Edge", ascending=False)
                 elif "Worst Edge" in sort_order: df = df.sort_values(by="Edge", ascending=True)
-
                 if df.empty: st.info("No players match your search.")
                 else:
                     cols = st.columns(3)
@@ -309,15 +296,22 @@ elif selected_page == P_PROP:
         else: st.info("No data available.")
 
 elif selected_page == P_DEAL:
+    st.header("🤝 The Dealmaker")
+    st.caption("Trade analyzer. Fleece your league mates with data-backed proposals they can't refuse. We evaluate the fairness of the swap so you can win the trade and the championship.")
     c1, c2 = st.columns(2)
     with c1: t1 = st.selectbox("Team A", [t.team_name for t in league.teams], index=0)
     with c2: t2 = st.selectbox("Team B", [t.team_name for t in league.teams], index=1)
     if st.button("🤖 Analyze"):
-        ta = next(t for t in league.teams if t.team_name == t1)
-        tb = next(t for t in league.teams if t.team_name == t2)
-        st.markdown(intel.get_ai_trade_proposal(OPENAI_KEY, t1, t2, str(ta.roster), str(tb.roster)))
+        with ui.luxury_spinner("Processing..."):
+            ta = next(t for t in league.teams if t.team_name == t1)
+            tb = next(t for t in league.teams if t.team_name == t2)
+            ra = [f"{p.name} ({p.position})" for p in ta.roster]
+            rb = [f"{p.name} ({p.position})" for p in tb.roster]
+            st.markdown(f'<div class="luxury-card studio-box"><h3>Proposal</h3>{intel.get_ai_trade_proposal(OPENAI_KEY, t1, t2, ra, rb)}</div>', unsafe_allow_html=True)
 
 elif selected_page == P_DARK:
+    st.header("🕵️ The Dark Pool")
+    st.caption("The Waiver Wire. Hidden gems and desperate adds for the manager in need. Scour the free agent pool for the next breakout star before your league mates wake up.")
     if st.button("🔭 Scan Wire"):
          with ui.luxury_spinner("Scouting..."):
              df = logic.scan_dark_pool(league)
@@ -331,6 +325,8 @@ elif selected_page == P_DARK:
         st.dataframe(st.session_state["dark_pool_data"], use_container_width=True)
 
 elif selected_page == P_TROPHY:
+    st.header("🏆 Trophy Room")
+    st.caption("Glory and shame. The hall of records where we immortalize the season's best and worst performances. From the 'Sniper' on the waiver wire to the 'Toilet' bowl contender, everyone gets a trophy.")
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Awards"):
             with ui.luxury_spinner("Engraving..."):
@@ -341,6 +337,8 @@ elif selected_page == P_TROPHY:
     else: st.json(st.session_state["awards"])
 
 elif selected_page == P_VAULT:
+    st.header("⏳ The Dynasty Vault")
+    st.caption("Dynasty history. The ghosts of seasons past. A repository of league history to settle arguments about who truly owned the league in previous years.")
     if "dynasty_lead" not in st.session_state:
         if st.button("🔓 Unlock Vault"):
             with ui.luxury_spinner("Time Traveling..."):
