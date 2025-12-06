@@ -55,16 +55,28 @@ def inject_luxury_css():
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
-    /* METADATA BADGES */
-    .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
+    .meta-badge {{ 
+        display: inline-block; 
+        padding: 4px 10px; 
+        border-radius: 12px; 
+        font-size: 0.75rem; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        margin-right: 4px; 
+        margin-bottom: 4px; 
+        border: 1px solid transparent; 
+    }}
+    
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
+    
     .weather-neutral {{ color: #a0aaba; border-color: #a0aaba; background: rgba(255,255,255,0.05); }}
     .weather-warn {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
     .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
     
+    /* GRID */
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -72,8 +84,28 @@ def inject_luxury_css():
     
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
     
-    .tooltip {{ position: relative; display: inline-block; cursor: pointer; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 220px; background-color: #1E1E1E; color: #fff; text-align: center; border-radius: 6px; padding: 10px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }}
+    /* TOOLTIP */
+    .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 5px; }}
+    .tooltip .tooltiptext {{ 
+        visibility: hidden; 
+        width: 240px; 
+        background-color: #1E1E1E; 
+        color: #fff; 
+        text-align: left; 
+        border-radius: 6px; 
+        padding: 10px; 
+        position: absolute; 
+        z-index: 100; 
+        bottom: 125%; 
+        left: 50%; 
+        margin-left: -120px; 
+        opacity: 0; 
+        transition: opacity 0.3s; 
+        border: 1px solid #D4AF37; 
+        font-size: 0.75rem; 
+        line-height: 1.4;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+    }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
@@ -84,7 +116,7 @@ def inject_luxury_css():
     .studio-box {{ border-left: 4px solid #7209b7; }}
     .podium-step {{ border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }}
     .rank-num {{ font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }}
-
+    
     @keyframes shine {{ to {{ background-position: 200% center; }} }}
     .luxury-loader-text {{ font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 3s linear infinite; }}
     .luxury-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
@@ -145,20 +177,19 @@ def render_prop_card(col, row):
     if "100%" in str(hit_rate_str): hit_color = "#00C9FF"
     elif "0%" in str(hit_rate_str): hit_color = "#FF4B4B"
     
-    # Badges
-    badges_html = f'<div class="meta-badge {badge_class}">{v}</div>'
-    
+    matchup_html = ""
     if "vs #" in str(row.get('Matchup Rank', '')):
         try:
             rank = int(re.search(r'#(\d+)', row['Matchup Rank']).group(1))
             m_class = "matchup-good" if rank <= 8 else "matchup-bad" if rank >= 24 else "matchup-mid"
-            badges_html += f'<div class="meta-badge {m_class}">{row["Matchup Rank"]}</div>'
+            matchup_html = f'<div class="meta-badge {m_class}">{row["Matchup Rank"]}</div>'
         except: pass
 
+    weather_html = ""
     w = row.get('Weather', {})
     if w and isinstance(w, dict):
         if w.get('Dome'):
-             badges_html += f'<div class="meta-badge weather-neutral">🏟️ Dome</div>'
+             weather_html = f'<div class="meta-badge weather-neutral">🏟️ Dome</div>'
         else:
              wind = w.get('Wind', 0)
              precip = w.get('Precip', 0)
@@ -167,18 +198,17 @@ def render_prop_card(col, row):
              if precip > 0.1: w_icon, w_class = "🌧️", "weather-warn"
              elif wind > 15: w_icon, w_class = "💨", "weather-warn"
              elif temp < 32: w_icon, w_class = "❄️", "weather-warn"
-             badges_html += f'<div class="meta-badge {w_class}">{w_icon} {temp:.0f}°F</div>'
+             weather_html = f'<div class="meta-badge {w_class}">{w_icon} {temp:.0f}°F</div>'
 
     insight = row.get('Insight', '')
     if insight:
-        badges_html += f'<div class="meta-badge insight-purple">{insight}</div>'
+        weather_html += f'<div class="meta-badge insight-purple">{insight}</div>'
 
     html = f"""<div class="luxury-card"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;">{badges_html}</div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:5px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Position', 'FLEX')} | {row.get('Team', 'FA')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {edge_color}; object-fit:cover; background:#000;"></div><div style="margin-top:10px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid {edge_color}; color:{edge_color};"><span style="margin-right:5px;">{edge_arrow} {abs(edge_val):.1f} pts vs ESPN</span><div class="tooltip">ℹ️<span class="tooltiptext"><b>The Edge:</b><br>Blue = Vegas Higher<br>Red = Vegas Lower</span></div></div><div class="stat-grid"><div class="stat-box"><div class="stat-val" style="color:#D4AF37;">{row['Proj Pts']:.1f}</div><div class="stat-label">Vegas Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#fff;">{line_val:.0f}</div><div class="stat-label">{main_stat} Line</div></div><div class="stat-box"><div class="stat-val" style="color:{hit_color};">{hit_rate_str}</div><div class="stat-label">L5 Hit Rate</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
 
-# --- FLATTENED LAB CARD (FIX) ---
+# --- LAB CARD RENDERER (ENHANCED) ---
 def render_lab_card(col, row):
-    # Styling variables
     v = row['Verdict']
     badge_class = "badge-gem" if "ELITE" in v or "MONSTER" in v else "badge-ok" if "WORKHORSE" in v or "SNIPER" in v else "weather-neutral"
     
@@ -188,11 +218,18 @@ def render_lab_card(col, row):
     val_color = "#4cc9f0" # Cyan default
     if "-" in str(row['Value']): val_color = "#FF4B4B" # Negative values
     
-    # FLATTENED HTML STRING to prevent code block rendering
-    html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;"><div style="text-align:left;"><div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">{row['Metric']}</div><div style="font-size:1.5rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:right;"><div style="font-size:0.7rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div></div></div>"""
+    # Tooltip content logic
+    metric_def = "No definition available."
+    m = row['Metric']
+    if "WOPR" in m: metric_def = "<b>WOPR (Weighted Opportunity Rating):</b><br>Combines Target Share & Air Yards Share. The best predictor of future fantasy points for WRs."
+    elif "RYOE" in m: metric_def = "<b>RYOE (Rush Yards Over Expected):</b><br>Yards gained compared to what an average RB would get in the same situation. Measures pure talent."
+    elif "CPOE" in m: metric_def = "<b>CPOE (Completion % Over Expected):</b><br>Accuracy metric that accounts for difficulty of throws."
+    elif "Efficiency" in m: metric_def = "<b>Efficiency (North/South):</b><br>Total distance traveled per yard gained. Lower is better (less dancing)."
+    elif "Air Yards" in m: metric_def = "<b>Avg Air Yards:</b><br>Average depth of target. High = Deep threat / Aggressive."
+
+    html = f"""<div class="luxury-card" style="border-left: 3px solid {val_color};"><div style="display:flex; justify-content:space-between; align-items:start;"><div style="flex:1;"><div style="display:flex; flex-wrap:wrap; margin-bottom:8px;"><div class="meta-badge {badge_class}">{v}</div></div><div style="font-size:1.3rem; font-weight:900; color:white; line-height:1.2; margin-bottom:2px;">{row['Player']}</div><div style="color:#a0aaba; font-size:0.8rem;">{row.get('Team', '')} | {row.get('Position', '')}</div></div><img src="{headshot}" style="width:70px; height:70px; border-radius:50%; border:2px solid {val_color}; object-fit:cover; background:#000;"></div><div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; align-items:center;"><div style="text-align:center;"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">{row['Metric']} <div class="tooltip">ℹ️<span class="tooltiptext">{metric_def}</span></div></div><div style="font-size:1.2rem; font-weight:900; color:{val_color};">{row['Value']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Context</div><div style="font-size:0.9rem; color:#fff;">{row['Alpha Stat']}</div></div><div style="text-align:center; border-left:1px solid rgba(255,255,255,0.1);"><div style="font-size:0.65rem; color:#a0aaba; text-transform:uppercase;">Metric II</div><div style="font-size:0.9rem; color:#fff;">{row.get('Beta Stat', '-')}</div></div></div></div>"""
     
-    with col:
-        st.markdown(html, unsafe_allow_html=True)
+    with col: st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
 # 3. ANALYTICS CORE
@@ -270,7 +307,7 @@ def get_vegas_props(api_key, _league, week):
     for game in box_scores:
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
         a_abbr = clean_team_abbr(game.away_team.team_abbrev)
-        site = h_abbr # Home Team is Site
+        site = h_abbr 
         
         for p in game.home_lineup:
             norm = normalize_name(p.name)
@@ -296,7 +333,6 @@ def get_vegas_props(api_key, _league, week):
         if res.status_code != 200: return pd.DataFrame({"Status": [f"API Error {res.status_code}"]})
         games = res.json()
         
-        # --- GAME CONTEXT ---
         game_context = {}
         for g in games:
             spread, total = 0, 0
@@ -311,7 +347,6 @@ def get_vegas_props(api_key, _league, week):
         player_props = {}
         for game in games[:16]:
             g_ctx = game_context.get(game['id'], {'total': 0, 'spread': 0})
-            
             g_url = f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{game['id']}/odds"
             g_params = {'apiKey': api_key, 'regions': 'us', 'markets': 'player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td', 'oddsFormat': 'american'}
             g_res = requests.get(g_url, params=g_params)
@@ -324,7 +359,6 @@ def get_vegas_props(api_key, _league, week):
                             name = out['description']
                             if name not in player_props: 
                                 player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0, 'context': g_ctx}
-                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = out.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = out.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = out.get('point', 0)
@@ -372,7 +406,6 @@ def get_vegas_props(api_key, _league, week):
                     site = match.get('game_site', 'UNK')
                     if site in weather_map: w_data = weather_map[site]
 
-                    # INSIGHT LOGIC
                     insight_msg = ""
                     ctx = s.get('context', {'total':0, 'spread':0})
                     if ctx['total'] > 48: insight_msg = "🔥 Barn Burner"
@@ -422,19 +455,16 @@ def calculate_season_awards(_league, current_week):
     single_game_high = {"Team": "", "Score": 0, "Week": 0}
     biggest_blowout = {"Winner": "", "Loser": "", "Margin": 0, "Week": 0}
     heartbreaker = {"Winner": "", "Loser": "", "Margin": 999, "Week": 0}
-    
     for w in range(1, current_week + 1):
         box = _league.box_scores(week=w)
         for game in box:
             margin = abs(game.home_score - game.away_score)
             winner = game.home_team.team_name if game.home_score > game.away_score else game.away_team.team_name
             loser = game.away_team.team_name if game.home_score > game.away_score else game.home_team.team_name
-            
             if margin > biggest_blowout["Margin"]: biggest_blowout = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if margin < heartbreaker["Margin"]: heartbreaker = {"Winner": winner, "Loser": loser, "Margin": margin, "Week": w}
             if game.home_score > single_game_high["Score"]: single_game_high = {"Team": game.home_team.team_name, "Score": game.home_score, "Week": w}
             if game.away_score > single_game_high["Score"]: single_game_high = {"Team": game.away_team.team_name, "Score": game.away_score, "Week": w}
-            
             def process(lineup, team_name):
                 for p in lineup:
                     if p.playerId not in player_points: player_points[p.playerId] = {"Name": p.name, "Points": 0, "Owner": team_name, "ID": p.playerId}
@@ -447,27 +477,24 @@ def calculate_season_awards(_league, current_week):
                     if acq == 'ADD': team_stats[team_name]["WaiverPts"] += p.points
             process(game.home_lineup, game.home_team.team_name)
             process(game.away_lineup, game.away_team.team_name)
-
     sorted_players = sorted(player_points.values(), key=lambda x: x['Points'], reverse=True)
     oracle_list = []
     for t, s in team_stats.items():
         total = s["Starters"] + s["Bench"]
         eff = (s["Starters"] / total * 100) if total > 0 else 0
         oracle_list.append({"Team": t, "Eff": eff, "Logo": s["Logo"]})
-    
     oracle = sorted(oracle_list, key=lambda x: x['Eff'], reverse=True)[0]
     sniper = sorted([{"Team": t, "Pts": s["WaiverPts"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     purple = sorted([{"Team": t, "Count": s["Injuries"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Count'], reverse=True)[0]
     hoarder = sorted([{"Team": t, "Pts": s["Bench"], "Logo": s["Logo"]} for t, s in team_stats.items()], key=lambda x: x['Pts'], reverse=True)[0]
     toilet = sorted(_league.teams, key=lambda x: x.points_for)[0]
-    podium_sort = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
-    
+    podium = sorted(_league.teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:3]
     return {
-        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium_sort[:3],
+        "MVP": sorted_players[0] if sorted_players else None, "Podium": podium,
         "Oracle": oracle, "Sniper": sniper, "Purple": purple, "Hoarder": hoarder,
         "Toilet": {"Team": toilet.team_name, "Pts": toilet.points_for, "Logo": get_logo(toilet)},
         "Blowout": biggest_blowout, "Heartbreaker": heartbreaker, "Single": single_game_high,
-        "Best Manager": {"Team": podium_sort[0].team_name, "Points": podium_sort[0].points_for, "Logo": get_logo(podium_sort[0])}
+        "Best Manager": {"Team": podium[0].team_name, "Points": podium[0].points_for, "Logo": get_logo(podium[0])}
     }
 
 @st.cache_data(ttl=3600)
@@ -634,12 +661,25 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep, yac_exp = stats.get('avg_separation', 0), stats.get('avg_yac_above_expectation', 0)
+                    
+                    # NEW: Fetch aDOT & Catch Rate
+                    adot = stats.get('avg_intended_air_yards', 0)
+                    catch_pct = stats.get('catch_percentage', 0)
+                    
                     wopr = 0
                     if not df_seas.empty:
                         seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                         if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
+                    
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "WOPR", "Value": f"{wopr:.2f}", "Alpha Stat": f"{sep:.1f} yds Sep", "Verdict": verdict})
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict,
+                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
+                        "Alpha Stat": f"Sep: {sep:.1f} yds",
+                        "Beta Stat": f"aDOT: {adot:.1f}" # NEW COLUMN
+                    })
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -648,8 +688,19 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     ryoe, box_8 = stats.get('rush_yards_over_expected_per_att', 0), stats.get('percent_attempts_gte_eight_defenders', 0)
+                    
+                    # NEW: Fetch Efficiency (North/South)
+                    eff = stats.get('efficiency', 0)
+                    
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Verdict": verdict})
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Verdict": verdict,
+                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
+                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box",
+                        "Beta Stat": f"Eff: {eff:.2f}" # NEW COLUMN
+                    })
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
             if match_result and match_result[1] > 80:
@@ -658,8 +709,19 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     cpoe, time_throw = stats.get('completion_percentage_above_expectation', 0), stats.get('avg_time_to_throw', 0)
+                    
+                    # NEW: Air Yards
+                    air_yds = stats.get('avg_intended_air_yards', 0)
+
                     verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
-                    insights.append({"Player": p_name, "ID": pid, "Team": p_team, "Position": pos, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", "Alpha Stat": f"{time_throw:.2f}s Time", "Verdict": verdict})
+                    
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict,
+                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
+                        "Alpha Stat": f"{time_throw:.2f}s Time",
+                        "Beta Stat": f"Air Yds: {air_yds:.1f}" # NEW COLUMN
+                    })
     return pd.DataFrame(insights)
 
 # ==============================================================================
