@@ -514,29 +514,3 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 def clean_for_pdf(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'ignore').decode('latin-1')
-
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 15)
-        self.set_text_color(0, 201, 255)
-        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
-        self.ln(5)
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-    def chapter_title(self, title):
-        self.set_font('Arial', 'B', 12)
-        self.set_text_color(0, 114, 255)
-        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
-        self.ln(2)
-    def chapter_body(self, body):
-        self.set_font('Arial', '', 10)
-        self.set_text_color(50)
-        self.multi_cell(0, 6, clean_for_pdf(body))
-        self.ln()
-
-def create_download_link(val, filename):
-    b64 = base64.b64encode(val)
-    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
