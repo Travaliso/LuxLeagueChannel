@@ -16,7 +16,12 @@ def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
+    mapping = {
+        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 
+        'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL', 'KAN': 'KC',
+        'NWE': 'NE', 'NOS': 'NO', 'TAM': 'TB', 'GNB': 'GB', 'SFO': 'SF', 
+        'LVR': 'LV', 'KCS': 'KC', 'TBB': 'TB', 'JAC': 'JAC', 'LAC': 'LAC'
+    }
     return mapping.get(abbr, abbr)
 
 @st.cache_data(ttl=3600*24)
@@ -37,7 +42,9 @@ def get_dvp_ranks_safe(year):
         if df.empty: return {}
         df = df[df['position'].isin(['QB', 'RB', 'WR', 'TE'])]
         dvp = df.groupby(['opponent_team', 'position'])['fantasy_points_ppr'].sum().reset_index()
+        # Rank 1 = Most Points Allowed (Best Matchup for Offense)
         dvp['rank'] = dvp.groupby('position')['fantasy_points_ppr'].rank(ascending=False)
+        
         dvp_map = {}
         for _, row in dvp.iterrows():
             team = clean_team_abbr(row['opponent_team'])
@@ -48,6 +55,7 @@ def get_dvp_ranks_safe(year):
 
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
+    # (Weather logic remains the same - condensed for brevity)
     stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
@@ -64,6 +72,7 @@ def get_nfl_weather():
 
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league, week):
+    # (Same logic as before, ensuring it uses clean_team_abbr and apiKey)
     current_year = _league.year
     stats_df = load_nfl_stats_safe(current_year) 
     dvp_map = get_dvp_ranks_safe(current_year)
@@ -197,6 +206,104 @@ def get_vegas_props(api_key, _league, week):
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
 
+@st.cache_data(ttl=3600 * 12) 
+def load_nextgen_data_v3(year):
+    for y in [year, year-1]:
+        try:
+            df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
+            if not df_rec.empty:
+                df_rush = nfl.import_ngs_data(stat_type='rushing', years=[y])
+                df_pass = nfl.import_ngs_data(stat_type='passing', years=[y])
+                try: df_seas = nfl.import_seasonal_data([y])
+                except: df_seas = pd.DataFrame()
+                return df_rec, df_rush, df_pass, df_seas
+        except: continue
+    return None, None, None, None
+
+# --- UPDATED LAB ANALYSIS ---
+def analyze_nextgen_metrics_v3(roster, year):
+    df_rec, df_rush, df_pass, df_seas = load_nextgen_data_v3(year)
+    dvp_map = get_dvp_ranks_safe(year) # NEW: Load Matchup Ranks
+    
+    if df_rec is None or df_rec.empty: return pd.DataFrame()
+    insights = []
+    
+    for player in roster:
+        p_name = player.name
+        pos = player.position
+        pid = getattr(player, 'playerId', None)
+        p_team = getattr(player, 'proTeam', 'N/A')
+        
+        # Get Opponent and Rank
+        opp = clean_team_abbr(getattr(player, 'proOpponent', 'UNK'))
+        proj = getattr(player, 'projected_points', 0)
+        
+        matchup_rank_val = "N/A"
+        if opp in dvp_map and pos in dvp_map[opp]:
+            matchup_rank_val = f"#{dvp_map[opp][pos]}" # e.g. "#32"
+            
+        # Build Row Data
+        if pos in ['WR', 'TE'] and not df_rec.empty:
+            match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
+                player_stats = df_rec[df_rec['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    sep = stats.get('avg_separation', 0)
+                    yac_exp = stats.get('avg_yac_above_expectation', 0)
+                    adot = stats.get('avg_intended_air_yards', 0)
+                    wopr = 0
+                    if not df_seas.empty:
+                        seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
+                        if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
+                    verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
+                        "Alpha Stat": f"Sep: {sep:.1f}", "Beta Stat": f"aDOT: {adot:.1f}",
+                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj
+                    })
+
+        elif pos == 'RB' and not df_rush.empty:
+            match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
+                player_stats = df_rush[df_rush['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    ryoe = stats.get('rush_yards_over_expected_per_att', 0)
+                    box_8 = stats.get('percent_attempts_gte_eight_defenders', 0)
+                    eff = stats.get('efficiency', 0)
+                    verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
+                        "Verdict": verdict, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
+                        "Alpha Stat": f"{box_8:.0f}% 8-Man", "Beta Stat": f"Eff: {eff:.2f}",
+                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj
+                    })
+        
+        elif pos == 'QB' and not df_pass.empty:
+            match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
+            if match_result and match_result[1] > 80:
+                match_name = match_result[0]
+                player_stats = df_pass[df_pass['player_display_name'] == match_name]
+                if not player_stats.empty:
+                    stats = player_stats.mean(numeric_only=True)
+                    cpoe = stats.get('completion_percentage_above_expectation', 0)
+                    time_throw = stats.get('avg_time_to_throw', 0)
+                    air_yds = stats.get('avg_intended_air_yards', 0)
+                    verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
+                    insights.append({
+                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
+                        "Verdict": verdict, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
+                        "Alpha Stat": f"{time_throw:.2f}s Time", "Beta Stat": f"Air: {air_yds:.1f}",
+                        "Opponent": opp, "Matchup Rank": matchup_rank_val, "ESPN Proj": proj
+                    })
+                    
+    return pd.DataFrame(insights)
+
+# (Other standard functions like heavy analytics, awards, etc. remain the same)
 @st.cache_data(ttl=3600)
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
@@ -399,84 +506,3 @@ def process_dynasty_leaderboard(df_history):
     leaderboard["Win %"] = leaderboard["Wins"] / (leaderboard["Wins"] + leaderboard["Losses"]) * 100
     leaderboard = leaderboard.rename(columns={"Year": "Seasons"})
     return leaderboard.sort_values(by="Wins", ascending=False)
-
-@st.cache_data(ttl=3600 * 12) 
-def load_nextgen_data_v3(year):
-    for y in [year, year-1]:
-        try:
-            df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
-            if not df_rec.empty:
-                df_rush = nfl.import_ngs_data(stat_type='rushing', years=[y])
-                df_pass = nfl.import_ngs_data(stat_type='passing', years=[y])
-                try: df_seas = nfl.import_seasonal_data([y])
-                except: df_seas = pd.DataFrame()
-                return df_rec, df_rush, df_pass, df_seas
-        except: continue
-    return None, None, None, None
-
-def analyze_nextgen_metrics_v3(roster, year):
-    df_rec, df_rush, df_pass, df_seas = load_nextgen_data_v3(year)
-    if df_rec is None or df_rec.empty: return pd.DataFrame()
-    insights = []
-    for player in roster:
-        p_name, pos, pid, p_team = player.name, player.position, getattr(player, 'playerId', None), getattr(player, 'proTeam', 'N/A')
-        
-        # Extract ESPN Context
-        opp = getattr(player, 'proOpponent', 'UNK')
-        proj = getattr(player, 'projected_points', 0)
-
-        if pos in ['WR', 'TE'] and not df_rec.empty:
-            match_result = process.extractOne(p_name, df_rec['player_display_name'].unique())
-            if match_result and match_result[1] > 80:
-                match_name = match_result[0]
-                player_stats = df_rec[df_rec['player_display_name'] == match_name]
-                if not player_stats.empty:
-                    stats = player_stats.mean(numeric_only=True)
-                    sep, yac_exp = stats.get('avg_separation', 0), stats.get('avg_yac_above_expectation', 0)
-                    
-                    adot = stats.get('avg_intended_air_yards', 0)
-                    wopr = 0
-                    if not df_seas.empty:
-                        seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
-                        if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
-                    
-                    verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
-                        "Opponent": opp, "ESPN Proj": proj
-                    })
-        elif pos == 'RB' and not df_rush.empty:
-            match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
-            if match_result and match_result[1] > 80:
-                match_name = match_result[0]
-                player_stats = df_rush[df_rush['player_display_name'] == match_name]
-                if not player_stats.empty:
-                    stats = player_stats.mean(numeric_only=True)
-                    ryoe, box_8 = stats.get('rush_yards_over_expected_per_att', 0), stats.get('percent_attempts_gte_eight_defenders', 0)
-                    eff = stats.get('efficiency', 0)
-                    verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Verdict": verdict, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Beta Stat": f"Eff: {eff:.2f}",
-                        "Opponent": opp, "ESPN Proj": proj
-                    })
-        elif pos == 'QB' and not df_pass.empty:
-            match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
-            if match_result and match_result[1] > 80:
-                match_name = match_result[0]
-                player_stats = df_pass[df_pass['player_display_name'] == match_name]
-                if not player_stats.empty:
-                    stats = player_stats.mean(numeric_only=True)
-                    cpoe, time_throw = stats.get('completion_percentage_above_expectation', 0), stats.get('avg_time_to_throw', 0)
-                    air_yds = stats.get('avg_intended_air_yards', 0)
-                    verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
-                    insights.append({
-                        "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time", "Beta Stat": f"Air Yds: {air_yds:.1f}",
-                        "Opponent": opp, "ESPN Proj": proj
-                    })
-    return pd.DataFrame(insights)
