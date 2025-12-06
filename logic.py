@@ -16,12 +16,7 @@ def normalize_name(name):
     return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
 
 def clean_team_abbr(abbr):
-    mapping = {
-        'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 
-        'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL', 'KAN': 'KC',
-        'NWE': 'NE', 'NOS': 'NO', 'TAM': 'TB', 'GNB': 'GB', 'SFO': 'SF', 
-        'LVR': 'LV', 'KCS': 'KC', 'TBB': 'TB', 'JAC': 'JAC', 'LAC': 'LAC'
-    }
+    mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL'}
     return mapping.get(abbr, abbr)
 
 @st.cache_data(ttl=3600*24)
@@ -53,29 +48,10 @@ def get_dvp_ranks_safe(year):
 
 @st.cache_data(ttl=3600*12)
 def get_nfl_weather():
-    stadiums = {
-        'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 
-        'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 
-        'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False),
-        'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 
-        'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 
-        'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False),
-        'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 
-        'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 
-        'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True),
-        'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 
-        'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 
-        'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False),
-        'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 
-        'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 
-        'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False),
-        'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)
-    }
+    stadiums = {'ARI': (33.5276, -112.2626, True), 'ATL': (33.7554, -84.4010, True), 'BAL': (39.2780, -76.6227, False), 'BUF': (42.7738, -78.7870, False), 'CAR': (35.2258, -80.8528, False), 'CHI': (41.8623, -87.6167, False), 'CIN': (39.0955, -84.5161, False), 'CLE': (41.5061, -81.6995, False), 'DAL': (32.7473, -97.0945, True), 'DEN': (39.7439, -105.0201, False), 'DET': (42.3400, -83.0456, True), 'GB': (44.5013, -88.0622, False), 'HOU': (29.6847, -95.4107, True), 'IND': (39.7601, -86.1639, True), 'JAC': (30.3240, -81.6375, False), 'KC': (39.0489, -94.4839, False), 'LV': (36.0909, -115.1833, True), 'LAC': (33.9535, -118.3390, True), 'LA': (33.9535, -118.3390, True), 'MIA': (25.9580, -80.2389, False), 'MIN': (44.9735, -93.2575, True), 'NE': (42.0909, -71.2643, False), 'NO': (29.9511, -90.0812, True), 'NYG': (40.8135, -74.0745, False), 'NYJ': (40.8135, -74.0745, False), 'PHI': (39.9008, -75.1675, False), 'PIT': (40.4468, -80.0158, False), 'SEA': (47.5952, -122.3316, False), 'SF': (37.4030, -121.9700, False), 'TB': (27.9759, -82.5033, False), 'TEN': (36.1665, -86.7713, False), 'WAS': (38.9076, -76.8645, False)}
     weather_data = {}
     for team, (lat, lon, is_dome) in stadiums.items():
-        if is_dome: 
-            weather_data[team] = {"Dome": True}
-            continue
+        if is_dome: weather_data[team] = {"Dome": True}; continue
         try:
             url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph"
             res = requests.get(url)
@@ -104,7 +80,6 @@ def get_vegas_props(api_key, _league, week):
         h_abbr = clean_team_abbr(game.home_team.team_abbrev)
         a_abbr = clean_team_abbr(game.away_team.team_abbrev)
         site = h_abbr 
-        
         for p in game.home_lineup:
             norm = normalize_name(p.name)
             if norm in espn_map:
@@ -155,7 +130,6 @@ def get_vegas_props(api_key, _league, week):
                             name = out['description']
                             if name not in player_props: 
                                 player_props[name] = {'pass':0, 'rush':0, 'rec':0, 'td':0, 'context': g_ctx}
-                            
                             if key == 'player_pass_yds': player_props[name]['pass'] = out.get('point', 0)
                             elif key == 'player_rush_yds': player_props[name]['rush'] = out.get('point', 0)
                             elif key == 'player_reception_yds': player_props[name]['rec'] = out.get('point', 0)
@@ -428,8 +402,7 @@ def process_dynasty_leaderboard(df_history):
 
 @st.cache_data(ttl=3600 * 12) 
 def load_nextgen_data_v3(year):
-    years_to_try = [year, year - 1]
-    for y in years_to_try:
+    for y in [year, year-1]:
         try:
             df_rec = nfl.import_ngs_data(stat_type='receiving', years=[y])
             if not df_rec.empty:
@@ -448,7 +421,7 @@ def analyze_nextgen_metrics_v3(roster, year):
     for player in roster:
         p_name, pos, pid, p_team = player.name, player.position, getattr(player, 'playerId', None), getattr(player, 'proTeam', 'N/A')
         
-        # ADDED: Extract ESPN Context
+        # Extract ESPN Context
         opp = getattr(player, 'proOpponent', 'UNK')
         proj = getattr(player, 'projected_points', 0)
 
@@ -460,18 +433,19 @@ def analyze_nextgen_metrics_v3(roster, year):
                 if not player_stats.empty:
                     stats = player_stats.mean(numeric_only=True)
                     sep, yac_exp = stats.get('avg_separation', 0), stats.get('avg_yac_above_expectation', 0)
+                    
+                    adot = stats.get('avg_intended_air_yards', 0)
                     wopr = 0
                     if not df_seas.empty:
                         seas_match = process.extractOne(p_name, df_seas['player_name'].unique())
                         if seas_match and seas_match[1] > 90: wopr = df_seas[df_seas['player_name'] == seas_match[0]].iloc[0].get('wopr', 0)
+                    
                     verdict = "💎 ELITE" if wopr > 0.7 else "⚡ SEPARATOR" if sep > 3.5 else "🚀 YAC MONSTER" if yac_exp > 2.0 else "HOLD"
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict,
-                        "Metric": "WOPR", "Value": f"{wopr:.2f}", 
-                        "Alpha Stat": f"{sep:.1f} yds Sep",
-                        "Beta Stat": f"YAC: {yac_exp:.1f}",
-                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                        "Verdict": verdict, "Metric": "WOPR", "Value": f"{wopr:.2f}", 
+                        "Alpha Stat": f"Sep: {sep:.1f} yds", "Beta Stat": f"aDOT: {adot:.1f}",
+                        "Opponent": opp, "ESPN Proj": proj
                     })
         elif pos == 'RB' and not df_rush.empty:
             match_result = process.extractOne(p_name, df_rush['player_display_name'].unique())
@@ -485,11 +459,9 @@ def analyze_nextgen_metrics_v3(roster, year):
                     verdict = "💎 ELITE" if ryoe > 1.0 else "💪 WORKHORSE" if box_8 > 30 else "🚫 PLODDER" if ryoe < -0.5 else "HOLD"
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos,
-                        "Verdict": verdict,
-                        "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
-                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box",
-                        "Beta Stat": f"Eff: {eff:.2f}",
-                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                        "Verdict": verdict, "Metric": "RYOE / Att", "Value": f"{ryoe:+.2f}", 
+                        "Alpha Stat": f"{box_8:.0f}% 8-Man Box", "Beta Stat": f"Eff: {eff:.2f}",
+                        "Opponent": opp, "ESPN Proj": proj
                     })
         elif pos == 'QB' and not df_pass.empty:
             match_result = process.extractOne(p_name, df_pass['player_display_name'].unique())
@@ -503,70 +475,8 @@ def analyze_nextgen_metrics_v3(roster, year):
                     verdict = "🎯 SNIPER" if cpoe > 5.0 else "⏳ HOLDER" if time_throw > 3.0 else "📉 SHAKY" if cpoe < -2.0 else "HOLD"
                     insights.append({
                         "Player": p_name, "ID": pid, "Team": p_team, "Position": pos, 
-                        "Verdict": verdict,
-                        "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
-                        "Alpha Stat": f"{time_throw:.2f}s Time",
-                        "Beta Stat": f"Air Yds: {air_yds:.1f}",
-                        "Opponent": opp, "ESPN Proj": proj # ADDED
+                        "Verdict": verdict, "Metric": "CPOE", "Value": f"{cpoe:+.1f}%", 
+                        "Alpha Stat": f"{time_throw:.2f}s Time", "Beta Stat": f"Air Yds: {air_yds:.1f}",
+                        "Opponent": opp, "ESPN Proj": proj
                     })
     return pd.DataFrame(insights)
-
-# ==============================================================================
-# 4. INTELLIGENCE (AI AGENTS)
-# ==============================================================================
-def get_openai_client(key): return OpenAI(api_key=key) if key else None
-def ai_response(key, prompt, tokens=600):
-    client = get_openai_client(key)
-    if not client: return "⚠️ Analyst Offline."
-    try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
-    except: return "Analyst Offline."
-
-def get_ai_scouting_report(key, free_agents_str):
-    return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
-
-def get_weekly_recap(key, selected_week, top_team):
-    return ai_response(key, f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_team}. Style: Wall Street Report.", 800)
-
-def get_rankings_commentary(key, top_team, bottom_team):
-    return ai_response(key, f"Write a 5-8 sentence commentary on Power Rankings. Praise {top_team} and mock {bottom_team}. Style: Stephen A. Smith.", 600)
-
-def get_next_week_preview(key, games_list):
-    matchups_str = ", ".join([f"{g['home']} vs {g['away']} (Spread: {g['spread']})" for g in games_list])
-    return ai_response(key, f"Act as a Vegas Sports Bookie. Provide a detailed preview of next week's matchups: {matchups_str}. Pick 'Lock of the Week' and 'Upset Alert'.", 800)
-
-def get_season_retrospective(key, mvp, best_mgr):
-    return ai_response(key, f"Write a 'State of the Union' address for the league. MVP: {mvp}. Best Manager: {best_mgr}. Style: Presidential.", 1000)
-
-def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
-    return ai_response(key, f"Act as Trade Broker. Propose a fair trade between Team A ({team_a}): {roster_a} and Team B ({team_b}): {roster_b}. Explain why.", 600)
-
-# PDF Helpers
-def clean_for_pdf(text):
-    if not isinstance(text, str): return str(text)
-    return text.encode('latin-1', 'ignore').decode('latin-1')
-
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 15)
-        self.set_text_color(0, 201, 255)
-        self.cell(0, 10, clean_for_pdf('LUXURY LEAGUE PROTOCOL // WEEKLY BRIEFING'), 0, 1, 'C')
-        self.ln(5)
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-    def chapter_title(self, title):
-        self.set_font('Arial', 'B', 12)
-        self.set_text_color(0, 114, 255)
-        self.cell(0, 10, clean_for_pdf(title), 0, 1, 'L')
-        self.ln(2)
-    def chapter_body(self, body):
-        self.set_font('Arial', '', 10)
-        self.set_text_color(50)
-        self.multi_cell(0, 6, clean_for_pdf(body))
-        self.ln()
-
-def create_download_link(val, filename):
-    b64 = base64.b64encode(val)
-    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
