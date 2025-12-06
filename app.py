@@ -34,8 +34,9 @@ except Exception as e:
 # 3. SIDEBAR NAVIGATION
 # ==============================================================================
 st.sidebar.title("🥂 The Concierge")
-current_week = league.current_week - 1
+current_week = league.current_week
 if current_week == 0: current_week = 1
+
 selected_week = st.sidebar.slider("Select Week", 1, current_week, current_week)
 st.sidebar.markdown("---")
 
@@ -98,10 +99,7 @@ for game in box_scores:
     def get_roster_data(lineup, team_name):
         starters, bench = [], []
         for p in lineup:
-            # Collect basic info
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
-            
-            # Check status for "Active" list (Weekly Elite)
             status = getattr(p, 'injuryStatus', 'ACTIVE')
             status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
             is_injured = any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
@@ -112,7 +110,6 @@ for game in box_scores:
                     bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
             else:
                 starters.append(info)
-                # Add to Elite List candidates if not injured
                 if not is_injured: 
                     all_active_players.append({
                         "Name": p.name, 
@@ -125,17 +122,15 @@ for game in box_scores:
     h_r, h_br = get_roster_data(game.home_lineup, home.team_name)
     a_r, a_br = get_roster_data(game.away_lineup, away.team_name)
     
-    # Matchup Data (Ledger)
     matchup_data.append({
         "Home": home.team_name, "Home Score": game.home_score, "Home Logo": utils.get_logo(home), "Home Roster": h_r,
         "Away": away.team_name, "Away Score": game.away_score, "Away Logo": utils.get_logo(away), "Away Roster": a_r
     })
     
-    # Efficiency Data (Hierarchy)
     h_p = sum(p['Score'] for p in h_r) + sum(p['Score'] for p in h_br)
     a_p = sum(p['Score'] for p in a_r) + sum(p['Score'] for p in a_br)
     efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_r), "Bench": sum(p['Score'] for p in h_br)})
-    efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_br)})
+    efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_b)})
 
 # --- SAFE DATAFRAME CREATION ---
 if efficiency_data:
@@ -177,7 +172,6 @@ if selected_page == P_LEDGER:
     st.caption("Where the receipts are kept and the scores are settled.")
     if "recap" not in st.session_state:
         with utils.luxury_spinner("Analyst is reviewing portfolios..."): 
-            # Ensure we have data before asking AI
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
             st.session_state["recap"] = utils.get_weekly_recap(OPENAI_KEY, selected_week, top_team)
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
@@ -351,11 +345,25 @@ elif selected_page == P_NEXT:
 elif selected_page == P_PROP:
     st.header("📊 The Prop Desk")
     st.caption("Vegas knows. Find the edge against your projections.")
+    
+    # --- NEW LEGEND ---
+    with st.expander("📘 Legend & Glossary", expanded=False):
+        st.markdown("""
+        **Key Insights Explained:**
+        - **🔥 Barn Burner:** High Vegas Total (>48 pts). Start your fringe players in this shootout.
+        - **🗑️ Garbage Time:** Spread > 9.5 pts. Trailing QBs/WRs may feast on soft defenses late.
+        - **🚜 Workhorse:** Rushing Prop > 80 yds. High floor volume play.
+        - **🎯 Redzone Radar:** TD Probability > 45%. Good bet for a score.
+        - **vs #32 Def:** Matchup Rank. #1 is Best (Allows Most Points), #32 is Worst (Lockdown Defense).
+        - **Edge:** The difference between Vegas implied points and ESPN projection. Blue is positive edge.
+        """)
+        
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
-        # FIX: Added 'Weather' to stale check to force refresh
-        if "vegas" not in st.session_state or "Weather" not in st.session_state["vegas"].columns:
+        # SELF-HEALING CACHE CHECK: If old data (missing "Edge") is found, re-fetch.
+        if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
             with utils.luxury_spinner("Calling Vegas..."): 
+                # PASS SELECTED WEEK to get accurate weekly projections
                 st.session_state["vegas"] = utils.get_vegas_props(ODDS_API_KEY, league, selected_week)
         
         df = st.session_state["vegas"]
@@ -490,6 +498,7 @@ elif selected_page == P_TROPHY:
 
 elif selected_page == P_VAULT:
     st.header("⏳ The Dynasty Vault")
+    st.caption("Dynasty history. The ghosts of seasons past.")
     if "dynasty_lead" not in st.session_state:
         if st.button("🔓 Unlock Vault"):
             with utils.luxury_spinner("Time Traveling..."):
