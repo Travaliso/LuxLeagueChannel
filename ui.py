@@ -1,11 +1,9 @@
+
 import streamlit as st
 import requests
 import base64
 from fpdf import FPDF
 from contextlib import contextmanager
-
-# --- CONSTANTS ---
-FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
 
 # --- METRIC DEFINITIONS ---
 METRIC_DEFINITIONS = {
@@ -24,33 +22,12 @@ def get_tooltip_html(key):
     if not text: return ""
     return f'<div class="tooltip">ℹ️<span class="tooltiptext">{text}</span></div>'
 
-# --- ROBUST LOGO CHECKER ---
 def get_logo(team):
-    try:
-        url = team.logo_url
-        # 1. Basic validation
-        if not url or not isinstance(url, str) or len(url) < 10: 
-            return FALLBACK_LOGO
-        
-        # 2. NUCLEAR FIX: Block "Mystique" URLs (ESPN's private image server)
-        # These URLs are what cause the broken image icon because they block external apps.
-        if "mystique" in url.lower():
-            return FALLBACK_LOGO
-        
-        # 3. Force HTTPS
-        if url.startswith("http://"): 
-            url = url.replace("http://", "https://")
-            
-        # 4. Check for valid extension
-        valid_exts = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
-        if not any(ext in url.lower() for ext in valid_exts): 
-            return FALLBACK_LOGO
-             
-        return url
-    except:
-        return FALLBACK_LOGO
+    try: return team.logo_url if team.logo_url else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
+    except: return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
 
 def inject_luxury_css():
+    # Check for local background image
     bg_style = """
         background-color: #060b26; 
         background-image: 
@@ -80,23 +57,11 @@ def inject_luxury_css():
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
-    /* --- UI CLEANUP --- */
-    /* Hide the top-right 'Deploy' and Three Dots menu */
+    /* HIDE STREAMLIT UI ELEMENTS */
     #MainMenu {{ visibility: hidden; }}
-    [data-testid="stToolbar"] {{ visibility: hidden !important; display: none !important; }}
     footer {{ visibility: hidden; }}
-    
-    /* RESTORE HEADER for Mobile Nav Button */
-    header[data-testid="stHeader"] {{
-        background-color: transparent !important;
-        visibility: visible !important; 
-    }}
-
-    /* Specific fix for the top-left sidebar toggle button */
-    [data-testid="collapsedControl"] {{ 
-        visibility: visible !important; 
-        display: block !important; 
-    }}
+    header {{ visibility: hidden; }}
+    [data-testid="stToolbar"] {{ visibility: hidden !important; display: none !important; }}
     
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
@@ -127,10 +92,11 @@ def inject_luxury_css():
     
     /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 9999; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
+    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
+    header[data-testid="stHeader"] {{ background-color: transparent; }}
     
     .award-card {{ border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }}
     .shame-card {{ background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }}
@@ -160,11 +126,13 @@ def render_team_card(col, team_data, rank):
     power_tip = get_tooltip_html("Power Score")
     luck_tip = get_tooltip_html("Luck")
     
+    # Use generic fallback constant from ui.py directly if needed or trust the passed data
+    FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
     logo_url = team_data.get('Logo')
-    if not logo_url or "http" not in str(logo_url) or "mystique" in str(logo_url): 
+    if not logo_url or "http" not in str(logo_url): 
         logo_url = FALLBACK_LOGO
         
-    logo_html = f'<img src="{logo_url}" style="width:50px; height:50px; border-radius:50%; border:2px solid #00C9FF; margin-right:10px;">'
+    logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid #00C9FF; margin-right:10px;">'
     
     with col:
         st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #D4AF37; display:flex; align-items:center;"><div style="font-size:2.5rem; font-weight:900; color:rgba(255,255,255,0.1); margin-right:15px; width:40px;">{rank}</div><div style="flex:1;"><div style="display:flex; align-items:center;">{logo_html}<div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Team']}</div></div><div style="font-size:0.8rem; color:#a0aaba; margin-top:5px;">Power Score: <span style="color:#00C9FF; margin-left:4px;">{team_data['Power Score']}</span>{power_tip}</div></div><div style="text-align:right;"><div style="font-size:1.2rem; font-weight:bold; color:white;">{team_data['Wins']}W</div><div style="font-size:0.7rem; color:#a0aaba; display:flex; justify-content:flex-end; align-items:center;">Luck: {team_data['Luck Rating']:.1f}{luck_tip}</div></div></div>""", unsafe_allow_html=True)
@@ -247,11 +215,10 @@ def render_audit_card(col, row):
     
     regret_html = f"""<div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div><div style="color: white; font-weight: bold;">{row['Regret']}</div><div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div></div>""" if row['Lost Pts'] > 0 else f"""<div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div><div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div></div>"""
 
+    FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
     logo_url = row.get("Logo")
-    if not logo_url or "http" not in str(logo_url) or "mystique" in str(logo_url): 
-        logo_url = FALLBACK_LOGO
-        
-    logo_html = f'<img src="{logo_url}" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
+    if not logo_url or "http" not in str(logo_url): logo_url = FALLBACK_LOGO
+    logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
 
     html = f"""<div class="luxury-card" style="border-top: 4px solid {grade_color};"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="display:flex; align-items:center; gap:10px;">{logo_html}<div><div style="font-size:1.1rem; font-weight:900; color:white;">{row['Team']}</div><div style="font-size:0.8rem; color:#a0aaba;">Efficiency: {row['Efficiency']:.1f}%</div></div></div><div style="text-align:center;"><div style="font-size:2.5rem; font-weight:900; color:{grade_color}; text-shadow: 0 0 10px {grade_color}40;">{row['Grade']}</div><div style="font-size:0.7rem; color:{grade_color}; text-transform:uppercase;">Grade</div></div></div>{regret_html}<div class="stat-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);"><div class="stat-box"><div class="stat-val" style="color:#fff;">{row['Starters']:.1f}</div><div class="stat-label">Starter Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#a0aaba;">{row['Bench']:.1f}</div><div class="stat-label">Bench Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#FF4B4B;">-{row['Lost Pts']:.1f}</div><div class="stat-label">Lost Potential</div></div></div></div>"""
     with col: st.markdown(html, unsafe_allow_html=True)
