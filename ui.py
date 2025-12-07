@@ -4,9 +4,6 @@ import base64
 from fpdf import FPDF
 from contextlib import contextmanager
 
-# --- CONSTANTS ---
-FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
-
 # --- METRIC DEFINITIONS ---
 METRIC_DEFINITIONS = {
     "Power Score": "<b>Power Score:</b><br>Measures a team's dominance based on points scored per week relative to the league average.",
@@ -24,30 +21,12 @@ def get_tooltip_html(key):
     if not text: return ""
     return f'<div class="tooltip">ℹ️<span class="tooltiptext">{text}</span></div>'
 
-# --- ROBUST LOGO CHECKER ---
 def get_logo(team):
-    try:
-        url = team.logo_url
-        # 1. Check if URL exists and is a string
-        if not url or not isinstance(url, str) or len(url) < 10:
-            return FALLBACK_LOGO
-        
-        # 2. Force HTTPS
-        if url.startswith("http://"):
-            url = url.replace("http://", "https://")
-            
-        # 3. Check for valid extension (basic check)
-        valid_exts = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
-        if not any(ext in url.lower() for ext in valid_exts):
-             # Some custom logos don't have extensions, so we might skip this check if needed
-             # But usually, a valid logo has one. Let's be safe.
-             return FALLBACK_LOGO
-             
-        return url
-    except:
-        return FALLBACK_LOGO
+    try: return team.logo_url if team.logo_url else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
+    except: return "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png"
 
 def inject_luxury_css():
+    # Check for local background image
     bg_style = """
         background-color: #060b26; 
         background-image: 
@@ -77,6 +56,12 @@ def inject_luxury_css():
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
+    /* HIDE STREAMLIT UI ELEMENTS */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    header {{ visibility: hidden; }}
+    [data-testid="stToolbar"] {{ visibility: hidden !important; display: none !important; }}
+    
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
     /* BADGES */
@@ -96,6 +81,7 @@ def inject_luxury_css():
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
     .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
     
+    /* GRID */
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -105,7 +91,7 @@ def inject_luxury_css():
     
     /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
+    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
     [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
@@ -139,7 +125,8 @@ def render_team_card(col, team_data, rank):
     power_tip = get_tooltip_html("Power Score")
     luck_tip = get_tooltip_html("Luck")
     
-    # Updated to use team_data['Logo'] which comes from logic.py, but fallback check is good here too
+    # Use generic fallback constant from ui.py directly if needed or trust the passed data
+    FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
     logo_url = team_data.get('Logo')
     if not logo_url or "http" not in str(logo_url): 
         logo_url = FALLBACK_LOGO
@@ -227,6 +214,7 @@ def render_audit_card(col, row):
     
     regret_html = f"""<div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div><div style="color: white; font-weight: bold;">{row['Regret']}</div><div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div></div>""" if row['Lost Pts'] > 0 else f"""<div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div><div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div></div>"""
 
+    FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
     logo_url = row.get("Logo")
     if not logo_url or "http" not in str(logo_url): logo_url = FALLBACK_LOGO
     logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
