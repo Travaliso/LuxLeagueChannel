@@ -8,8 +8,9 @@ def ai_response(key, prompt, tokens=600):
     client = get_openai_client(key)
     if not client: return "⚠️ Analyst Offline."
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
-    except: return "Analyst Offline."
+    except Exception as e: return f"⚠️ AI Error: {str(e)}"
 
+# ... (Keep other functions like get_weekly_recap, etc. same as before) ...
 def get_weekly_recap(key, selected_week, top_team):
     return ai_response(key, f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_team}. Style: Wall Street Report.", 800)
 
@@ -28,3 +29,25 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 
 def get_ai_scouting_report(key, free_agents_str):
     return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
+
+
+# --- UPDATED: ROSTER-AWARE ASSISTANT ---
+def get_lab_assessment(key, player_name, team, position, opponent, matchup_rank, defensive_stat, metrics, vegas_line, espn_proj, roster_context):
+    prompt = f"""
+    Act as a decisive Fantasy Football GM. I need to know if I should start {player_name} ({position}, {team}).
+    
+    PLAYER PROFILE:
+    - Opponent: {opponent} ({matchup_rank}, {defensive_stat})
+    - Metrics: {metrics}
+    - Projections: Vegas {vegas_line} | ESPN {espn_proj}
+    
+    MY ROSTER OPTIONS AT {position}:
+    {roster_context}
+    
+    INSTRUCTIONS:
+    1. Verdict: START, SIT, or PIVOT (to a specific teammate).
+    2. The Read: Compare {player_name} directly against the other options in 'My Roster'. If a teammate has a significantly better matchup or metric, recommend them instead. 
+       Example: "While {player_name} faces a tough #32 defense, your bench option [Teammate] has a smash spot against #1. Start [Teammate]."
+    3. X-Factor: One key stat/factor deciding this specific choice.
+    """
+    return ai_response(key, prompt, 600)
