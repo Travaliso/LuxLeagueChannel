@@ -87,7 +87,7 @@ def inject_luxury_css():
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
     .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
-    
+    ._terminalButton_rix23_138{{._terminalButton_rix23_138: visibility: hidden;}}
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
