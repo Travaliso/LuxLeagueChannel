@@ -36,6 +36,7 @@ try:
     SWID = get_key("swid")
     ESPN_S2 = get_key("espn_s2")
     OPENAI_KEY = get_key("openai_key")
+    openai_key = get_key("openai_key")
     ODDS_API_KEY = get_key("odds_api_key")
     YEAR = 2025
     league = logic.get_league(LEAGUE_ID, YEAR, ESPN_S2, SWID)
