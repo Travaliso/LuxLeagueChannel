@@ -10,7 +10,6 @@ def ai_response(key, prompt, tokens=600):
     try: return client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=tokens).choices[0].message.content
     except Exception as e: return f"⚠️ AI Error: {str(e)}"
 
-# ... (Keep other functions like get_weekly_recap, etc. same as before) ...
 def get_weekly_recap(key, selected_week, top_team):
     return ai_response(key, f"Write a DETAILED, 5-10 sentence fantasy recap for Week {selected_week}. Highlight Powerhouse: {top_team}. Style: Wall Street Report.", 800)
 
@@ -30,8 +29,7 @@ def get_ai_trade_proposal(key, team_a, team_b, roster_a, roster_b):
 def get_ai_scouting_report(key, free_agents_str):
     return ai_response(key, f"You are an elite NFL Talent Scout. Analyze these healthy free agents: {free_agents_str}. Identify 3 'Must Add' players. Style: Scouting Notebook.", 500)
 
-
-# --- UPDATED: ROSTER-AWARE ASSISTANT ---
+# --- UPDATED ASSISTANT GM (ROSTER AWARE) ---
 def get_lab_assessment(key, player_name, team, position, opponent, matchup_rank, defensive_stat, metrics, vegas_line, espn_proj, roster_context):
     prompt = f"""
     Act as a decisive Fantasy Football GM. I need to know if I should start {player_name} ({position}, {team}).
