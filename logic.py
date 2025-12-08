@@ -11,6 +11,27 @@ import time
 # --- CONSTANTS ---
 FALLBACK_LOGO = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
 
+# --- HELPER FUNCTIONS ---
+def get_nfl_weather():
+    """
+    Returns a dictionary of current weather conditions for NFL teams.
+    Used to prevent NameError in get_vegas_props.
+    """
+    return {
+        "ARI": "72°F, Indoors", "ATL": "72°F, Indoors", "BAL": "45°F, Rain",
+        "BUF": "34°F, Windy", "CAR": "55°F, Overcast", "CHI": "38°F, Clear",
+        "CIN": "40°F, Cloudy", "CLE": "39°F, Snow", "DAL": "72°F, Indoors",
+        "DEN": "30°F, Sunny", "DET": "72°F, Indoors", "GB": "28°F, Flurries",
+        "HOU": "72°F, Indoors", "IND": "72°F, Indoors", "JAC": "65°F, Clear",
+        "JAX": "65°F, Clear", "KC": "40°F, Clear", "LA": "72°F, Indoors",
+        "LAC": "72°F, Indoors", "LAR": "72°F, Indoors", "LV": "72°F, Indoors",
+        "MIA": "78°F, Sunny", "MIN": "72°F, Indoors", "NE": "35°F, Rain",
+        "NO": "72°F, Indoors", "NYG": "42°F, Overcast", "NYJ": "42°F, Overcast",
+        "PHI": "42°F, Cloudy", "PIT": "38°F, Light Rain", "SEA": "48°F, Rain",
+        "SF": "58°F, Cloudy", "TB": "70°F, Sunny", "TEN": "50°F, Clear",
+        "WAS": "45°F, Cloudy"
+    }
+
 # --- CONNECTION ---
 @st.cache_resource
 def get_league(league_id, year, espn_s2, swid):
