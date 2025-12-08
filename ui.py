@@ -70,7 +70,7 @@ def inject_luxury_css():
     /* --- NAVIGATION & MENU CONTROLS --- */
     
     /* 1. Hide the Standard Footer ("Made with Streamlit") */
-    footer {{ visibility: hidden; }}
+    ._terminalButton_rix23_138 {{ visibility: hidden; }}
     
     /* 2. Hide the Top Right "Hamburger" Menu (Three Dots) */
     #MainMenu {{ visibility: hidden; }}
