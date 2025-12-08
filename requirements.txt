@@ -9,3 +9,4 @@ requests
 fpdf
 thefuzz
 nfl_data_py
+streamlit-option-menu
