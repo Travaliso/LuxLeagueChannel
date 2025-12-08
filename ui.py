@@ -68,108 +68,99 @@ def inject_luxury_css():
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
-    /* --- SIDEBAR CUSTOMIZATION --- */
-    section[data-testid="stSidebar"], 
-    div[data-testid="stSidebarNav"],
-    [data-testid="stSidebar"] > div {{
+    /* --- 1. SIDEBAR BACKGROUND FIX --- */
+    [data-testid="stSidebar"], section[data-testid="stSidebar"] {{
         background-color: #060b26 !important;
         border-right: 1px solid rgba(255, 255, 255, 0.08);
     }}
     
-    /* Remove excess padding at top of sidebar */
-    section[data-testid="stSidebar"] .block-container {{
+    /* Remove padding at top */
+    section[data-testid="stSidebar"] > div:first-child {{
         padding-top: 2rem !important;
     }}
 
-    /* --- EURO STEP: FULL WIDTH LIST ITEMS --- */
-    /* 1. Hide the standard radio circles */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {{
-        display: none !important;
-    }}
+    /* --- 2. RADIO BUTTONS AS NAVIGATION LIST --- */
     
-    /* 2. Style the label container to span full width */
-    div[data-testid="stRadio"] label {{
-        background-color: transparent;
-        /* Pull the button to the edges of the sidebar (Negative Margins) */
-        margin-left: -1.5rem !important;
-        margin-right: -1.5rem !important;
-        padding-left: 1.5rem !important; /* Push text back in */
-        padding-right: 1rem !important;
-        padding-top: 12px !important;
-        padding-bottom: 12px !important;
-        
-        width: calc(100% + 3rem) !important; /* Compensate for negative margins */
-        border-radius: 0px !important; /* Flush edges */
-        
-        transition: all 0.2s ease;
-        margin-bottom: 0px;
-        border: none;
-        cursor: pointer;
-        display: flex;
-    }}
-    
-    /* 3. Hover Effect - Subtle light overlay */
-    div[data-testid="stRadio"] label:hover {{
-        background-color: rgba(255, 255, 255, 0.05) !important;
-    }}
-    
-    /* 4. Selected State - Deep Purple + Gold Border */
-    div[data-testid="stRadio"] label:has(input:checked) {{
-        background-color: rgba(114, 9, 183, 0.2) !important;
-        border-left: 4px solid #D4AF37 !important;
-        color: white !important;
-    }}
-    
-    /* 5. Typography */
-    div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p {{
-        font-size: 15px !important;
-        font-family: 'Lato', sans-serif !important;
-        font-weight: 500;
-        margin: 0;
+    /* Target the container of the radio group */
+    div[role="radiogroup"] {{
+        gap: 0px !important; /* Remove gap between items */
     }}
 
-    /* --- HIDE DEFAULT STREAMLIT UI --- */
+    /* Hide the actual radio circle */
+    div[role="radiogroup"] label > div:first-child {{
+        display: none !important;
+    }}
+
+    /* Style the Label (The Clickable Area) */
+    div[role="radiogroup"] label {{
+        background: transparent !important; /* Kill the grey */
+        padding: 12px 20px !important;
+        margin-left: -20px !important; /* Pull to left edge */
+        margin-right: -20px !important; /* Pull to right edge */
+        width: calc(100% + 40px) !important; /* Compensate width */
+        border-radius: 0px !important;
+        border: none !important;
+        transition: background-color 0.2s ease, border 0.2s ease;
+        display: flex !important;
+        align-items: center !important;
+    }}
+
+    /* HOVER STATE */
+    div[role="radiogroup"] label:hover {{
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }}
+
+    /* ACTIVE (SELECTED) STATE */
+    div[role="radiogroup"] label:has(input:checked) {{
+        background-color: rgba(114, 9, 183, 0.25) !important;
+        border-left: 4px solid #D4AF37 !important;
+    }}
+    
+    /* ACTIVE STATE TEXT COLOR */
+    div[role="radiogroup"] label:has(input:checked) p {{
+        color: white !important;
+        font-weight: 700 !important;
+    }}
+
+    /* TEXT STYLING */
+    div[role="radiogroup"] label p {{
+        font-size: 15px !important;
+        font-family: 'Lato', sans-serif !important;
+        color: #a0aaba !important; /* Default inactive color */
+        margin: 0 !important;
+    }}
+
+    /* --- UI HIDING --- */
     footer {{ visibility: hidden; }}
     #MainMenu {{ visibility: hidden; }}
     .stAppDeployButton {{ display: none; }}
     div:has(> a[href*="streamlit.io"]) {{ visibility: hidden; display: none; }}
     [data-testid="stSidebarNav"] {{ display: none !important; }}
-    
-    /* Ensure Header & Mobile Toggle are visible */
-    header[data-testid="stHeader"] {{ background: transparent; }}
     [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; color: white !important; }}
+    header[data-testid="stHeader"] {{ background: transparent; }}
 
     /* --- COMPONENTS --- */
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
-    
-    /* BADGES */
     .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
     .badge-gem {{ background: rgba(0, 201, 255, 0.2); color: #00C9FF; border: 1px solid #00C9FF; }}
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
-    
     .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
-    
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
-    
     .weather-neutral {{ color: #a0aaba; border-color: #a0aaba; background: rgba(255,255,255,0.05); }}
     .weather-warn {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
     .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
-    
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
     .stat-label {{ font-size: 0.65rem; color: #a0aaba; text-transform: uppercase; }}
-    
     .edge-box {{ margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; font-size: 0.8rem; }}
-    
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
     .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
-    
     .award-card {{ border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }}
     .shame-card {{ background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }}
     .studio-box {{ border-left: 4px solid #7209b7; }}
