@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-from streamlit_option_menu import option_menu
 import ui
 import logic
 import intelligence as intel
@@ -47,7 +46,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. SIDEBAR NAVIGATION (LUXURY UPGRADE)
+# 3. SIDEBAR NAVIGATION (LUXURY CSS RADIO)
 # ==============================================================================
 with st.sidebar:
     # 1. LUXURY HEADER
@@ -63,42 +62,22 @@ with st.sidebar:
     if current_week == 0: current_week = 1
     selected_week = st.slider("Select Week", 1, current_week, current_week)
     
-    # 3. NAVIGATION MENU
-    selected_page = option_menu(
-        menu_title=None, # Hidden title
-        options=[
-            "The Ledger", "The Hierarchy", "The Audit", "The Hedge Fund", 
-            "The IPO Audit", "The Lab", "The Forecast", "The Multiverse", 
-            "Next Week", "The Prop Desk", "The Dealmaker", "The Dark Pool", 
-            "Trophy Room", "The Vault"
+    st.markdown("---")
+
+    # 3. NAVIGATION MENU (Native Radio -> Styled as List)
+    # Note: Emoji icons added here for visual flair since we aren't using option_menu
+    selected_page_raw = st.radio(
+        "Navigation",
+        [
+            "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", 
+            "📊 The IPO Audit", "🧬 The Lab", "🔮 The Forecast", "🌌 The Multiverse", 
+            "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", 
+            "🏆 Trophy Room", "⏳ The Vault"
         ],
-        icons=[
-            'journal-richtext', 'ladder', 'search', 'graph-up', 
-            'pie-chart', 'cpu', 'magic', 'diagram-3', 
-            'calendar-event', 'cash-coin', 'arrow-left-right', 'eye-slash', 
-            'trophy', 'archive'
-        ],
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": "#00C9FF", "font-size": "16px"}, 
-            "nav-link": {
-                "font-size": "15px", 
-                "text-align": "left", 
-                "margin": "6px 0px",  # Vertical spacing
-                "padding": "12px 15px", # Larger click area
-                "color": "#e0e0e0",
-                "font-family": "'Lato', sans-serif",
-                "--hover-color": "rgba(255, 255, 255, 0.05)"
-            },
-            "nav-link-selected": {
-                "background-color": "rgba(114, 9, 183, 0.3)", 
-                "border-left": "4px solid #D4AF37",
-                "color": "#fff",
-                "font-weight": "bold"
-            },
-        }
+        label_visibility="collapsed"
     )
+    # Strip emoji for logic checks
+    selected_page = selected_page_raw.split(" ", 1)[1] if " " in selected_page_raw else selected_page_raw
     
     st.markdown("---")
 
@@ -141,67 +120,42 @@ for game in box_scores:
     def get_roster_data(lineup, team_name):
         starters, bench = [], []
         for p in lineup:
-            # Collect basic info
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
-            
-            # Check status for "Active" list
             status = getattr(p, 'injuryStatus', 'ACTIVE')
-            status_str = str(status).upper().replace("_", " ") if status else "ACTIVE"
-            is_injured = any(k in status_str for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
-            
+            is_injured = any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
             if p.slot_position == 'BE':
                 bench.append(info)
                 if p.points > 15: 
                     bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
             else:
                 starters.append(info)
-                # Add to Elite List candidates if not injured
                 if not is_injured: 
                     all_active_players.append({
-                        "Name": p.name, 
-                        "Points": p.points, 
-                        "Team": team_name, 
-                        "ID": p.playerId
+                        "Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId
                     })
         return starters, bench
 
     h_r, h_br = get_roster_data(game.home_lineup, home.team_name)
     a_r, a_br = get_roster_data(game.away_lineup, away.team_name)
-    
-    # Matchup Data (Ledger)
-    matchup_data.append({
-        "Home": home.team_name, "Home Score": game.home_score, "Home Logo": ui.get_logo(home), "Home Roster": h_r,
-        "Away": away.team_name, "Away Score": game.away_score, "Away Logo": ui.get_logo(away), "Away Roster": a_r
-    })
-    
-    # Efficiency Data (Hierarchy)
+    matchup_data.append({"Home": home.team_name, "Home Score": game.home_score, "Home Logo": ui.get_logo(home), "Home Roster": h_r, "Away": away.team_name, "Away Score": game.away_score, "Away Logo": ui.get_logo(away), "Away Roster": a_r})
     h_p = sum(p['Score'] for p in h_r) + sum(p['Score'] for p in h_br)
     a_p = sum(p['Score'] for p in a_r) + sum(p['Score'] for p in a_br)
     efficiency_data.append({"Team": home.team_name, "Total Potential": h_p, "Starters": sum(p['Score'] for p in h_r), "Bench": sum(p['Score'] for p in h_br)})
     efficiency_data.append({"Team": away.team_name, "Total Potential": a_p, "Starters": sum(p['Score'] for p in a_r), "Bench": sum(p['Score'] for p in a_br)})
 
-# --- SAFE DATAFRAME CREATION ---
-if efficiency_data:
-    df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
-else:
-    df_eff = pd.DataFrame(columns=["Team", "Total Potential", "Starters", "Bench"])
+if efficiency_data: df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
+else: df_eff = pd.DataFrame(columns=["Team", "Total Potential", "Starters", "Bench"])
 
-if all_active_players:
-    df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
-else:
-    df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
+if all_active_players: df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
+else: df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
 
-if bench_highlights:
-    df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
-else:
-    df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
+if bench_highlights: df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
+else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
 
 # ==============================================================================
 # 5. DASHBOARD UI ROUTER
 # ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-
-# --- HERO ROW ---
 st.markdown("### 🌟 Weekly Elite")
 h1, h2, h3 = st.columns(3)
 if not df_players.empty:
@@ -209,116 +163,64 @@ if not df_players.empty:
     if len(top_3) >= 1: ui.render_hero_card(h1, top_3.iloc[0])
     if len(top_3) >= 2: ui.render_hero_card(h2, top_3.iloc[1])
     if len(top_3) >= 3: ui.render_hero_card(h3, top_3.iloc[2])
-else:
-    st.info("No player data available for this week yet.")
+else: st.info("No player data available for this week yet.")
 st.markdown("---")
 
 # --- PAGE ROUTING ---
 
 if selected_page == "The Ledger":
     st.header("📜 The Ledger")
-    st.caption("Where the receipts are kept and the scores are settled. Track every transaction, waiver wire steal, and questionable drop with forensic precision.")
-    
+    st.caption("Where the receipts are kept and the scores are settled.")
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
             st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team)
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    
     st.markdown("#### Weekly Transactions")
-    
-    # MOBILE VIEW TOGGLE
     mobile_view = st.toggle("📱 Mobile View (List)", value=False)
-    
     for m in matchup_data:
-        st.markdown(f"""
-        <div class="luxury-card" style="padding: 20px; border-left: 5px solid #7209b7; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="text-align: center; flex: 1;">
-                    <img src="{m['Home Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #00C9FF; padding: 2px;">
-                    <div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Home']}</div>
-                    <div style="font-size: 2rem; color: #00C9FF; font-weight: bold;">{m['Home Score']}</div>
-                </div>
-                <div style="flex: 0.5; text-align: center;">
-                    <div style="font-size: 2rem; color: #555; font-weight: 900; opacity: 0.5;">VS</div>
-                </div>
-                <div style="text-align: center; flex: 1;">
-                    <img src="{m['Away Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #FF4B4B; padding: 2px;">
-                    <div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Away']}</div>
-                    <div style="font-size: 2rem; color: #FF4B4B; font-weight: bold;">{m['Away Score']}</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown(f"""<div class="luxury-card" style="padding: 20px; border-left: 5px solid #7209b7; margin-bottom: 20px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; flex: 1;"><img src="{m['Home Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #00C9FF; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Home']}</div><div style="font-size: 2rem; color: #00C9FF; font-weight: bold;">{m['Home Score']}</div></div><div style="flex: 0.5; text-align: center;"><div style="font-size: 2rem; color: #555; font-weight: 900; opacity: 0.5;">VS</div></div><div style="text-align: center; flex: 1;"><img src="{m['Away Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #FF4B4B; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Away']}</div><div style="font-size: 2rem; color: #FF4B4B; font-weight: bold;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
         with st.expander(f"📋 View Roster Details: {m['Home']} vs {m['Away']}"):
             if m['Home Roster']:
                 if mobile_view:
-                    # MOBILE LIST VIEW
                     c_home, c_away = st.columns(2)
                     with c_home:
                         st.markdown(f"**{m['Home']}**")
-                        for p in m['Home Roster']:
-                            st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
+                        for p in m['Home Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
                     with c_away:
                         st.markdown(f"**{m['Away']}**")
-                        for p in m['Away Roster']:
-                            st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
+                        for p in m['Away Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
                 else:
-                    # DESKTOP DATAFRAME VIEW
                     max_len = max(len(m['Home Roster']), len(m['Away Roster']))
                     h_names = [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster']))
                     h_pts = [p['Score'] for p in m['Home Roster']] + [0.0] * (max_len - len(m['Home Roster']))
                     a_pts = [p['Score'] for p in m['Away Roster']] + [0.0] * (max_len - len(m['Away Roster']))
                     a_names = [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster']))
-                    
-                    df_match = pd.DataFrame({
-                        f"{m['Home']} Player": h_names,
-                        f"{m['Home']} Pts": h_pts,
-                        f"{m['Away']} Pts": a_pts,
-                        f"{m['Away']} Player": a_names
-                    })
-                    st.dataframe(
-                        df_match, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"),
-                            f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")
-                        }
-                    )
+                    df_match = pd.DataFrame({f"{m['Home']} Player": h_names, f"{m['Home']} Pts": h_pts, f"{m['Away']} Pts": a_pts, f"{m['Away']} Player": a_names})
+                    st.dataframe(df_match, use_container_width=True, hide_index=True, column_config={f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"), f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")})
 
 elif selected_page == "The Hierarchy":
     st.header("📈 The Hierarchy")
-    st.caption("A ruthless ranking of who is actually good and who is just getting lucky.")
+    st.caption("A ruthless ranking of who is actually good.")
     if "rank_comm" not in st.session_state:
         with ui.luxury_spinner("Analyzing..."): 
             top = df_eff.iloc[0]['Team'] if not df_eff.empty else "Team A"
             bot = df_eff.iloc[-1]['Team'] if not df_eff.empty else "Team B"
             st.session_state["rank_comm"] = intel.get_rankings_commentary(OPENAI_KEY, top, bot)
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ Pundit\'s Take</h3>{st.session_state["rank_comm"]}</div>', unsafe_allow_html=True)
-    if "df_advanced" not in st.session_state:
-        st.session_state["df_advanced"] = logic.calculate_heavy_analytics(league, current_week)
-    
+    if "df_advanced" not in st.session_state: st.session_state["df_advanced"] = logic.calculate_heavy_analytics(league, current_week)
     cols = st.columns(3)
-    for i, row in st.session_state["df_advanced"].reset_index(drop=True).iterrows():
-        ui.render_team_card(cols[i % 3], row, i+1)
+    for i, row in st.session_state["df_advanced"].reset_index(drop=True).iterrows(): ui.render_team_card(cols[i % 3], row, i+1)
 
 elif selected_page == "The Audit":
     st.header("🔎 The Audit")
-    st.caption("Forensic analysis of your lineup decisions, highlighting the points you left on the bench.")
-    
-    if "audit_data" not in st.session_state:
-        st.session_state["audit_data"] = logic.analyze_lineup_efficiency(league, current_week)
-    
+    st.caption("Forensic analysis of your lineup decisions.")
+    if "audit_data" not in st.session_state: st.session_state["audit_data"] = logic.analyze_lineup_efficiency(league, current_week)
     df_audit = st.session_state["audit_data"]
-    
     if not df_audit.empty:
         cols = st.columns(3)
-        for i, row in df_audit.reset_index(drop=True).iterrows():
-            ui.render_audit_card(cols[i % 3], row)
-    else:
-        st.info("No audit data available.")
+        for i, row in df_audit.reset_index(drop=True).iterrows(): ui.render_audit_card(cols[i % 3], row)
+    else: st.info("No audit data available.")
 
 elif selected_page == "The Hedge Fund":
     st.header("💎 The Hedge Fund")
@@ -338,9 +240,7 @@ elif selected_page == "The IPO Audit":
         if st.button("📠 Run Audit"):
              with ui.luxury_spinner("Auditing draft capital..."):
                  df_roi, prescient = logic.calculate_draft_analysis(league)
-                 st.session_state["draft_roi"] = df_roi
-                 st.session_state["prescient"] = prescient
-                 st.rerun()
+                 st.session_state["draft_roi"] = df_roi; st.session_state["prescient"] = prescient; st.rerun()
     else:
         df_roi, prescient = st.session_state["draft_roi"], st.session_state["prescient"]
         st.markdown(f"""<div class="luxury-card" style="border-left: 4px solid #92FE9D; background: linear-gradient(90deg, rgba(146, 254, 157, 0.1), rgba(17, 25, 40, 0.8)); display: flex; align-items: center;"><div style="flex: 1; text-align: center;"><img src="{prescient['Logo']}" style="width: 90px; border-radius: 50%; border: 3px solid #92FE9D;"></div><div style="flex: 3; padding-left: 20px;"><h3 style="color: #92FE9D; margin: 0;">The Prescient One</h3><div style="font-size: 1.8rem; font-weight: 900; color: white;">{prescient['Team']}</div><div style="color: #a0aaba; font-size: 1.1rem;">Generated <b>{prescient['Points']:.0f} points</b> from waivers while securing <b>{prescient['Wins']} Wins</b>.</div></div></div>""", unsafe_allow_html=True)
@@ -365,12 +265,10 @@ elif selected_page == "The Lab":
     with c2:
          if st.button("🧪 Analyze"):
              with ui.luxury_spinner("Calibrating..."): st.session_state["trigger_lab"] = True; st.rerun()
-    
     if st.session_state.get("trigger_lab"):
         roster_obj = next(t for t in league.teams if t.team_name == target_team).roster
         st.session_state["ngs_data"] = logic.analyze_nextgen_metrics_v3(roster_obj, YEAR, current_week)
         st.session_state["trigger_lab"] = False; st.rerun()
-    
     if "ngs_data" in st.session_state:
         if not st.session_state["ngs_data"].empty:
             df_ngs = st.session_state["ngs_data"]
@@ -378,36 +276,20 @@ elif selected_page == "The Lab":
             for i, row in df_ngs.iterrows():
                 with cols[i % 2]:
                     ui.render_lab_card(cols[i % 2], row)
-                    
                     vegas_line = "N/A"
                     if "vegas" in st.session_state and not st.session_state["vegas"].empty:
                          v_row = st.session_state["vegas"][st.session_state["vegas"]["Player"] == row["Player"]]
                          if not v_row.empty: vegas_line = f"{v_row.iloc[0]['Proj Pts']:.1f} Pts"
-
                     if st.button(f"🧠 Assistant GM", key=f"lab_{row['ID']}"):
                          matchup_rank = row.get('Matchup Rank', 'N/A')
                          def_stat = row.get('Def Stat', 'N/A')
-                         
                          teammates = df_ngs[df_ngs['Position'] == row['Position']]
                          context_list = []
                          for _, tm in teammates.iterrows():
                              if tm['Player'] != row['Player']:
                                  context_list.append(f"{tm['Player']} (Opp: {tm['Opponent']} {tm.get('Matchup Rank')}, Proj: {tm.get('ESPN Proj')})")
                          roster_context = "; ".join(context_list) if context_list else "No other options on roster."
-
-                         assessment = intel.get_lab_assessment(
-                             OPENAI_KEY, 
-                             row['Player'], 
-                             row['Team'], 
-                             row['Position'], 
-                             row['Opponent'], 
-                             matchup_rank, 
-                             def_stat, 
-                             f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", 
-                             vegas_line, 
-                             row['ESPN Proj'],
-                             roster_context
-                         )
+                         assessment = intel.get_lab_assessment(OPENAI_KEY, row['Player'], row['Team'], row['Position'], row['Opponent'], matchup_rank, def_stat, f"{row['Metric']}: {row['Value']} ({row['Alpha Stat']})", vegas_line, row['ESPN Proj'], roster_context)
                          st.info(assessment)
         else: st.info("No Next Gen data available.")
 
@@ -417,12 +299,11 @@ elif selected_page == "The Forecast":
     if "playoff_odds" not in st.session_state:
         if st.button("🎲 Run Simulation"):
             with ui.luxury_spinner("Simulating..."): st.session_state["playoff_odds"] = logic.run_monte_carlo_simulation(league); st.rerun()
-    else:
-        st.dataframe(st.session_state["playoff_odds"], use_container_width=True, hide_index=True, column_config={"Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1.0)})
+    else: st.dataframe(st.session_state["playoff_odds"], use_container_width=True, hide_index=True, column_config={"Playoff Odds": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1.0)})
 
 elif selected_page == "The Multiverse":
     st.header("🌌 The Multiverse")
-    st.caption("Control the timeline. Force specific wins and losses to see how they ripple through the playoff picture.")
+    st.caption("Control the timeline.")
     if "base_odds" not in st.session_state:
         with ui.luxury_spinner("Calculating Baseline..."): st.session_state["base_odds"] = logic.run_monte_carlo_simulation(league)
     box = league.box_scores(week=league.current_week)
@@ -433,22 +314,11 @@ elif selected_page == "The Multiverse":
             home_n = g.home_team.team_name
             away_n = g.away_team.team_name
             choice = st.radio(f"{home_n} vs {away_n}", ["Simulate", f"{home_n} Wins", f"{away_n} Wins"], key=f"g{i}", horizontal=True)
-            if "Simulate" not in choice:
-                forced.append(home_n if home_n in choice else away_n)
+            if "Simulate" not in choice: forced.append(home_n if home_n in choice else away_n)
         if st.form_submit_button("🚀 Run Simulation"):
             res = logic.run_multiverse_simulation(league, forced)
             st.session_state["multi_res"] = res; st.rerun()
-    if "multi_res" in st.session_state:
-        st.dataframe(
-            st.session_state["multi_res"], 
-            use_container_width=True, 
-            hide_index=True, 
-            column_config={
-                "New Odds": st.column_config.ProgressColumn("New Odds", min_value=0, max_value=1.0, format="%.1f%%"),
-                "Base": st.column_config.NumberColumn(format="%.1f%%"),
-                "Impact": st.column_config.NumberColumn(format="%+.1f%%")
-            }
-        )
+    if "multi_res" in st.session_state: st.dataframe(st.session_state["multi_res"], use_container_width=True, hide_index=True, column_config={"New Odds": st.column_config.ProgressColumn("New Odds", min_value=0, max_value=1.0, format="%.1f%%"), "Base": st.column_config.NumberColumn(format="%.1f%%"), "Impact": st.column_config.NumberColumn(format="%+.1f%%")})
 
 elif selected_page == "Next Week":
     try:
@@ -469,74 +339,41 @@ elif selected_page == "Next Week":
 
 elif selected_page == "The Prop Desk":
     st.header("📊 The Prop Desk")
-    st.caption("Vegas knows. Find the edge against your projections.")
+    st.caption("Vegas knows.")
     with st.expander("📘 Legend & Glossary", expanded=False):
-        st.markdown("""
-        **Key Insights Explained:**
-        - **🔥 Barn Burner:** High Vegas Total (>48 pts). Start your fringe players in this shootout.
-        - **🗑️ Garbage Time:** Spread > 9.5 pts. Trailing QBs/WRs may feast on soft defenses late.
-        - **🚜 Workhorse:** Rushing Prop > 80 yds. High floor volume play.
-        - **🎯 Redzone Radar:** TD Probability > 45%. Good bet for a score.
-        - **vs #32 Def:** Matchup Rank. #1 is Best (Allows Most Points), #32 is Worst (Lockdown Defense).
-        - **Edge:** The difference between Vegas implied points and ESPN projection. Blue is positive edge.
-        - **Weather:** ☀️ Clear, 🌧️ Rain (Sloppy), 💨 Wind (Passing Downgrade), ❄️ Snow.
-        """)
+        st.markdown("""**Key Insights Explained:** ...""")
     if not ODDS_API_KEY: st.warning("Missing Key")
     else:
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
-            with ui.luxury_spinner("Calling Vegas..."): 
-                st.session_state["vegas"] = logic.get_vegas_props(ODDS_API_KEY, league, selected_week)
+            with ui.luxury_spinner("Calling Vegas..."): st.session_state["vegas"] = logic.get_vegas_props(ODDS_API_KEY, league, selected_week)
         df = st.session_state["vegas"]
         if df is not None and not df.empty:
-            if "Status" in df.columns: 
-                st.warning(f"⚠️ {df.iloc[0]['Status']}")
+            if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
                 c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-                with c1:
-                    search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
-                with c2:
-                    pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
-                with c3:
-                    verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
-                with c4:
-                    team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
-                
-                c_sort, c_insight, c_space = st.columns([1, 1.5, 1.5])
-                with c_sort:
-                    sort_order = st.selectbox(
-                        "Sort Order", 
-                        ["Highest Projection", "💎 Best Edge (Vegas > ESPN)", "🚩 Worst Edge (Vegas < ESPN)", "🔥 Moneyball Insights"]
-                    )
-                with c_insight:
-                     insight_opts = [x for x in df['Insight'].unique() if x]
-                     insight_filter = st.multiselect("🔥 Moneyball Filter", options=insight_opts)
-
+                with c1: search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
+                with c2: pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
+                with c3: verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
+                with c4: team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
+                c_sort, c_insight, _ = st.columns([1, 1.5, 1.5])
+                with c_sort: sort_order = st.selectbox("Sort Order", ["Highest Projection", "💎 Best Edge", "🚩 Worst Edge"])
+                with c_insight: insight_filter = st.multiselect("🔥 Moneyball Filter", options=[x for x in df['Insight'].unique() if x])
                 if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
                 if pos_filter: df = df[df['Position'].isin(pos_filter)]
                 if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
                 if team_filter: df = df[df['Team'].isin(team_filter)]
                 if insight_filter: df = df[df['Insight'].isin(insight_filter)]
-                
-                if "Highest" in sort_order:
-                    df = df.sort_values(by="Proj Pts", ascending=False)
-                elif "Best Edge" in sort_order:
-                    df = df.sort_values(by="Edge", ascending=False)
-                elif "Worst Edge" in sort_order:
-                    df = df.sort_values(by="Edge", ascending=True)
-                elif "Moneyball" in sort_order:
-                    df = df.sort_values(by="Insight", ascending=False)
-
-                if df.empty:
-                    st.info("No players match your search.")
+                if "Highest" in sort_order: df = df.sort_values(by="Proj Pts", ascending=False)
+                elif "Best Edge" in sort_order: df = df.sort_values(by="Edge", ascending=False)
+                elif "Worst Edge" in sort_order: df = df.sort_values(by="Edge", ascending=True)
+                if df.empty: st.info("No players match your search.")
                 else:
                     cols = st.columns(3)
-                    for i, row in df.reset_index(drop=True).iterrows():
-                        ui.render_prop_card(cols[i % 3], row)
+                    for i, row in df.reset_index(drop=True).iterrows(): ui.render_prop_card(cols[i % 3], row)
         else: st.info("No data available.")
 
 elif selected_page == "The Dealmaker":
     st.header("🤝 The Dealmaker")
-    st.caption("Trade analyzer. Fleece your league mates with data-backed proposals.")
     c1, c2 = st.columns(2)
     with c1: t1 = st.selectbox("Team A", [t.team_name for t in league.teams], index=0)
     with c2: t2 = st.selectbox("Team B", [t.team_name for t in league.teams], index=1)
@@ -550,7 +387,6 @@ elif selected_page == "The Dealmaker":
 
 elif selected_page == "The Dark Pool":
     st.header("🕵️ The Dark Pool")
-    st.caption("The Waiver Wire. Hidden gems and desperate adds.")
     if st.button("🔭 Scan Wire"):
          with ui.luxury_spinner("Scouting..."):
              df = logic.scan_dark_pool(league)
@@ -565,8 +401,6 @@ elif selected_page == "The Dark Pool":
 
 elif selected_page == "Trophy Room":
     st.header("🏆 Trophy Room")
-    st.caption("Glory and shame. The hall of records where we immortalize the season's best and worst performances.")
-    
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Awards"):
             with ui.luxury_spinner("Engraving..."):
@@ -578,7 +412,6 @@ elif selected_page == "Trophy Room":
         aw = st.session_state["awards"]
         if "season_comm" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
         st.divider(); st.markdown("<h2 style='text-align: center;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
-        
         pod = aw.get("Podium", [])
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         if len(pod) > 1:
@@ -587,7 +420,6 @@ elif selected_page == "Trophy Room":
             with c_gold: st.markdown(f"""<div class="podium-step gold"><img src="{ui.get_logo(pod[0])}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:100px; border-radius:50%; border:4px solid #FFD700; display:block; margin:0 auto; box-shadow:0 0 20px rgba(255,215,0,0.6);"><div style="color:white; font-weight:900; font-size:1.4rem; margin-top:15px;">{pod[0].team_name}</div><div style="color:#FFD700;">{pod[0].wins}-{pod[0].losses}</div><div class="rank-num">1</div></div>""", unsafe_allow_html=True)
         if len(pod) > 2:
             with c_brnz: st.markdown(f"""<div class="podium-step bronze"><img src="{ui.get_logo(pod[2])}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:70px; border-radius:50%; border:3px solid #CD7F32; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[2].team_name}</div><div style="color:#CD7F32;">{pod[2].wins}-{pod[2].losses}</div><div class="rank-num">3</div></div>""", unsafe_allow_html=True)
-        
         st.markdown("---")
         def gen_nar(type, team, val):
             if type == "Oracle": return f"Ultimate strategist. {team} hit **{val:.1f}% efficiency**."
@@ -597,7 +429,6 @@ elif selected_page == "Trophy Room":
             if type == "Toilet": return f"Offense stalled. Only **{val:.1f} pts** scored."
             if type == "Blowout": return f"Historic beatdown. Lost by **{val:.1f} pts**."
             return ""
-
         c1, c2, c3, c4 = st.columns(4)
         ora = aw['Oracle']
         with c1: st.markdown(f"""<div class="luxury-card award-card"><img src="{ora['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Oracle</h4><div style="font-weight:bold; color:white;">{ora['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{ora['Eff']:.1f}% Eff</div><div class="award-blurb">{gen_nar("Oracle", ora['Team'], ora['Eff'])}</div></div>""", unsafe_allow_html=True)
@@ -616,7 +447,6 @@ elif selected_page == "Trophy Room":
 
 elif selected_page == "The Vault":
     st.header("⏳ The Dynasty Vault")
-    st.caption("Dynasty history. The ghosts of seasons past. A repository of league history to settle arguments about who truly owned the league in previous years.")
     if "dynasty_lead" not in st.session_state:
         if st.button("🔓 Unlock Vault"):
             with ui.luxury_spinner("Time Traveling..."):
