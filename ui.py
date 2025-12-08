@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import base64
+import re
 from fpdf import FPDF
 from contextlib import contextmanager
 
@@ -67,7 +68,7 @@ def inject_luxury_css():
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
-    /* --- AGGRESSIVE SIDEBAR COLOR OVERRIDE --- */
+    /* --- SIDEBAR CUSTOMIZATION --- */
     section[data-testid="stSidebar"], 
     div[data-testid="stSidebarNav"],
     [data-testid="stSidebar"] > div {{
@@ -75,48 +76,55 @@ def inject_luxury_css():
         border-right: 1px solid rgba(255, 255, 255, 0.08);
     }}
     
-    /* Remove the annoying top padding in the sidebar */
+    /* Remove excess padding at top of sidebar */
     section[data-testid="stSidebar"] .block-container {{
         padding-top: 2rem !important;
     }}
 
-    /* --- EURO STEP: TRANSFORM RADIO BUTTONS INTO LIST ITEMS --- */
+    /* --- EURO STEP: FULL WIDTH LIST ITEMS --- */
     /* 1. Hide the standard radio circles */
     div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {{
         display: none !important;
     }}
     
-    /* 2. Style the label container to look like a list item card */
+    /* 2. Style the label container to span full width */
     div[data-testid="stRadio"] label {{
         background-color: transparent;
-        padding: 12px 15px !important;
-        border-radius: 8px;
+        /* Pull the button to the edges of the sidebar (Negative Margins) */
+        margin-left: -1.5rem !important;
+        margin-right: -1.5rem !important;
+        padding-left: 1.5rem !important; /* Push text back in */
+        padding-right: 1rem !important;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+        
+        width: calc(100% + 3rem) !important; /* Compensate for negative margins */
+        border-radius: 0px !important; /* Flush edges */
+        
         transition: all 0.2s ease;
-        margin-bottom: 4px;
-        border: 1px solid transparent;
+        margin-bottom: 0px;
+        border: none;
         cursor: pointer;
+        display: flex;
     }}
     
-    /* 3. Hover Effect */
+    /* 3. Hover Effect - Subtle light overlay */
     div[data-testid="stRadio"] label:hover {{
-        background-color: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background-color: rgba(255, 255, 255, 0.05) !important;
     }}
     
-    /* 4. Selected State (The "Active" Item) */
-    /* This uses the :has() selector to find the label containing the checked input */
+    /* 4. Selected State - Deep Purple + Gold Border */
     div[data-testid="stRadio"] label:has(input:checked) {{
-        background-color: rgba(114, 9, 183, 0.3) !important;
+        background-color: rgba(114, 9, 183, 0.2) !important;
         border-left: 4px solid #D4AF37 !important;
         color: white !important;
-        font-weight: bold;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }}
     
-    /* 5. Typography adjustment for the list items */
+    /* 5. Typography */
     div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p {{
         font-size: 15px !important;
         font-family: 'Lato', sans-serif !important;
+        font-weight: 500;
         margin: 0;
     }}
 
@@ -125,13 +133,13 @@ def inject_luxury_css():
     #MainMenu {{ visibility: hidden; }}
     .stAppDeployButton {{ display: none; }}
     div:has(> a[href*="streamlit.io"]) {{ visibility: hidden; display: none; }}
-    [data-testid="stSidebarNav"] {{ display: none !important; }} /* Hide default nav if using custom */
+    [data-testid="stSidebarNav"] {{ display: none !important; }}
     
     /* Ensure Header & Mobile Toggle are visible */
     header[data-testid="stHeader"] {{ background: transparent; }}
     [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; color: white !important; }}
 
-    /* --- CARDS & WIDGETS --- */
+    /* --- COMPONENTS --- */
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
     
     /* BADGES */
@@ -167,7 +175,6 @@ def inject_luxury_css():
     .studio-box {{ border-left: 4px solid #7209b7; }}
     .podium-step {{ border-radius: 10px 10px 0 0; text-align: center; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }}
     .rank-num {{ font-size: 3rem; font-weight: 900; opacity: 0.2; margin-bottom: -20px; }}
-    
     @keyframes shine {{ to {{ background-position: 200% center; }} }}
     .luxury-loader-text {{ font-family: 'Helvetica Neue', sans-serif; font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; background: linear-gradient(90deg, #1a1c24 0%, #00C9FF 25%, #ffffff 50%, #00C9FF 75%, #1a1c24 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 3s linear infinite; }}
     .luxury-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(6, 11, 38, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
