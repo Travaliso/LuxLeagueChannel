@@ -13,11 +13,14 @@ import intelligence as intel
 st.set_page_config(page_title="Luxury League Dashboard", page_icon="💎", layout="wide")
 ui.inject_luxury_css()
 
-# --- SECRET HANDLING (Render Compatible) ---
+# --- SECRET HANDLING (Robust) ---
 def get_key(key_name):
-    # 1. Try Render Environment Variable
+    # 1. Try Render Environment (Exact Name)
     value = os.getenv(key_name)
-    # 2. Fallback to local secrets.toml (for development)
+    # 2. Try Render Environment (UPPERCASE) - Common Fix
+    if not value:
+        value = os.getenv(key_name.upper())
+    # 3. Fallback to local secrets.toml
     if not value:
         try:
             value = st.secrets[key_name]
