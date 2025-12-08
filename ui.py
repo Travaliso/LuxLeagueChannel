@@ -81,16 +81,7 @@ def inject_luxury_css():
     .stApp {{ {bg_style} }}
     
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
-    /* Hide the standard Streamlit footer */
-    footer {
-        visibility: hidden;
-    }
-    
-    /* If you are on Streamlit Cloud, this hides the 'Manage App' button often found at the bottom */
-    div:has(> a[href*="streamlit.io"]) {
-        visibility: hidden;
-        display: none;
-    }
+
     /* BADGES */
     .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
