@@ -49,6 +49,7 @@ def get_logo(team):
         return FALLBACK_LOGO
 
 def inject_luxury_css():
+    
     bg_style = """
         background-color: #060b26; 
         background-image: 
@@ -72,6 +73,7 @@ def inject_luxury_css():
         except FileNotFoundError: continue
 
     st.markdown(f"""
+
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap');
     html, body, [class*="css"] {{ font-family: 'Lato', sans-serif; color: #E0E0E0; }}
@@ -79,7 +81,16 @@ def inject_luxury_css():
     .stApp {{ {bg_style} }}
     
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
+    /* Hide the standard Streamlit footer */
+    footer {
+        visibility: hidden;
+    }
     
+    /* If you are on Streamlit Cloud, this hides the 'Manage App' button often found at the bottom */
+    div:has(> a[href*="streamlit.io"]) {
+        visibility: hidden;
+        display: none;
+    }
     /* BADGES */
     .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
@@ -87,7 +98,7 @@ def inject_luxury_css():
     .badge-ok {{ background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D; }}
     
     .meta-badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 4px; margin-bottom: 4px; border: 1px solid transparent; }}
-    ._terminalButton_rix23_138{{._terminalButton_rix23_138: visibility: hidden;}}
+    
     .matchup-good {{ color: #92FE9D; border-color: #92FE9D; background: rgba(146, 254, 157, 0.1); }}
     .matchup-bad {{ color: #FF4B4B; border-color: #FF4B4B; background: rgba(255, 75, 75, 0.1); }}
     .matchup-mid {{ color: #a0aaba; border-color: #a0aaba; background: rgba(160, 170, 186, 0.1); }}
