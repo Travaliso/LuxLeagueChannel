@@ -63,7 +63,13 @@ def inject_luxury_css():
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Lato', sans-serif; color: #E0E0E0; }}
+    
+    /* GLOBAL TEXT COLOR FORCE: PURE WHITE */
+    html, body, [class*="css"], .stMarkdown, p {{ 
+        font-family: 'Lato', sans-serif; 
+        color: #FFFFFF !important; 
+    }}
+    
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
@@ -112,18 +118,19 @@ def inject_luxury_css():
         border-left: 4px solid #D4AF37 !important;
     }}
     
-    /* 5. Text Styling */
+    /* 5. Text Styling - FORCE WHITE */
     div[data-testid="stRadio"] label p {{
         font-family: 'Lato', sans-serif !important;
         font-size: 15px !important;
         font-weight: 500 !important;
-        color: #e0e0e0 !important;
+        color: #FFFFFF !important;
         margin: 0 !important;
     }}
     
     div[data-testid="stRadio"] label:has(input:checked) p {{
         color: #ffffff !important;
         font-weight: 700 !important;
+        text-shadow: 0 0 5px rgba(255,255,255,0.4);
     }}
 
     /* --- HIDE DEFAULT UI --- */
