@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import base64
@@ -25,31 +24,18 @@ def get_tooltip_html(key):
     if not text: return ""
     return f'<div class="tooltip">ℹ️<span class="tooltiptext">{text}</span></div>'
 
-# --- ROBUST LOGO CHECKER ---
 def get_logo(team):
     try:
         url = team.logo_url
-        # 1. Check if URL exists and is a string
-        if not url or not isinstance(url, str) or len(url) < 10:
-            return FALLBACK_LOGO
-        
-        # 2. Force HTTPS
-        if url.startswith("http://"):
-            url = url.replace("http://", "https://")
-            
-        # 3. Check for valid extension (basic check)
+        if not url or not isinstance(url, str) or len(url) < 10: return FALLBACK_LOGO
+        if "mystique" in url.lower(): return FALLBACK_LOGO # Block internal ESPN links
+        if url.startswith("http://"): url = url.replace("http://", "https://")
         valid_exts = ['.png', '.jpg', '.jpeg', '.svg', '.gif']
-        if not any(ext in url.lower() for ext in valid_exts):
-             # Some custom logos don't have extensions, so we might skip this check if needed
-             # But usually, a valid logo has one. Let's be safe.
-             return FALLBACK_LOGO
-             
+        if not any(ext in url.lower() for ext in valid_exts): return FALLBACK_LOGO
         return url
-    except:
-        return FALLBACK_LOGO
+    except: return FALLBACK_LOGO
 
 def inject_luxury_css():
-    
     bg_style = """
         background-color: #060b26; 
         background-image: 
@@ -58,6 +44,8 @@ def inject_luxury_css():
             radial-gradient(circle at 100% 100%, rgba(0, 201, 255, 0.2) 0%, transparent 50%);
         background-attachment: fixed; background-size: cover;
     """
+    
+    # Try to load local background if available
     for ext in ["jpg", "jpeg", "png", "webp"]:
         try:
             with open(f"background.{ext}", "rb") as f:
@@ -73,22 +61,34 @@ def inject_luxury_css():
         except FileNotFoundError: continue
 
     st.markdown(f"""
-
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap');
     html, body, [class*="css"] {{ font-family: 'Lato', sans-serif; color: #E0E0E0; }}
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
+    /* --- NAVIGATION & MENU CONTROLS --- */
+    
+    /* 1. Hide the Standard Footer ("Made with Streamlit") */
+    footer {{ visibility: hidden; }}
+    
+    /* 2. Hide the Top Right "Hamburger" Menu (Three Dots) */
+    #MainMenu {{ visibility: hidden; }}
+    
+    /* 3. Hide the Bottom "Manage App" Button (Streamlit Cloud specific) */
+    .stAppDeployButton {{ display: none; }}
+    div:has(> a[href*="streamlit.io"]) {{ visibility: hidden; display: none; }}
+    
+    /* 4. FORCE SIDEBAR NAVIGATION TO BE VISIBLE */
+    [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
+    
+    /* 5. Ensure the Top-Left Toggle Button is Visible (for Mobile) */
+    [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; }}
+    header[data-testid="stHeader"] {{ background: transparent; }}
+
+    /* --- COMPONENT STYLING --- */
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
-    /* Hide the standard Streamlit footer */
-    footer {
-        visibility: hidden;
-    }
-    div:has(> a[href*="streamlit.io"]) {
-        visibility: hidden;
-        display: none;
-    }
+    
     /* BADGES */
     .prop-badge {{ display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
     .badge-fire {{ background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }}
@@ -106,6 +106,7 @@ def inject_luxury_css():
     .insight-purple {{ background: rgba(114, 9, 183, 0.2); border-color: #7209b7; color: #f72585; }}
     .lab-cyan {{ background: rgba(76, 201, 240, 0.15); border-color: #4cc9f0; color: #4cc9f0; }}
     
+    /* GRID */
     .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }}
     .stat-box {{ text-align: center; }}
     .stat-val {{ font-size: 1.1rem; font-weight: 700; color: white; }}
@@ -115,12 +116,9 @@ def inject_luxury_css():
     
     /* TOOLTIP */
     .tooltip {{ position: relative; display: inline-block; cursor: pointer; margin-left: 4px; vertical-align: middle; }}
-    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.75rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
+    .tooltip .tooltiptext {{ visibility: hidden; width: 240px; background-color: #1E1E1E; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 100; bottom: 140%; left: 50%; margin-left: -120px; opacity: 0; transition: opacity 0.3s; border: 1px solid #D4AF37; font-size: 0.7rem; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }}
     .tooltip:hover .tooltiptext {{ visibility: visible; opacity: 1; }}
 
-    [data-testid="stSidebarNav"] {{ display: block !important; visibility: visible !important; }}
-    header[data-testid="stHeader"] {{ background-color: transparent; }}
-    
     .award-card {{ border-left: 4px solid #00C9FF; min-height: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }}
     .shame-card {{ background: rgba(40, 10, 10, 0.8); border-left: 4px solid #FF4B4B; min-height: 250px; text-align: center; }}
     .studio-box {{ border-left: 4px solid #7209b7; }}
@@ -149,9 +147,8 @@ def render_team_card(col, team_data, rank):
     power_tip = get_tooltip_html("Power Score")
     luck_tip = get_tooltip_html("Luck")
     
-    # Updated to use team_data['Logo'] which comes from logic.py, but fallback check is good here too
     logo_url = team_data.get('Logo')
-    if not logo_url or "http" not in str(logo_url): 
+    if not logo_url or "http" not in str(logo_url) or "mystique" in str(logo_url): 
         logo_url = FALLBACK_LOGO
         
     logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid #00C9FF; margin-right:10px;">'
@@ -217,7 +214,6 @@ def render_lab_card(col, row):
     headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=100&h=100" if pid else "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=100&h=100"
     val_color = "#4cc9f0"
     if "-" in str(row['Value']): val_color = "#FF4B4B"
-    
     metric_key = "WOPR"
     if "RYOE" in row['Metric']: metric_key = "RYOE"
     elif "CPOE" in row['Metric']: metric_key = "CPOE"
@@ -238,7 +234,9 @@ def render_audit_card(col, row):
     regret_html = f"""<div style="background: rgba(255, 75, 75, 0.1); border-left: 3px solid #FF4B4B; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #a0aaba; font-size: 0.75rem; text-transform: uppercase;">Biggest Regret</div><div style="color: white; font-weight: bold;">{row['Regret']}</div><div style="color: #FF4B4B; font-size: 0.8rem;">Left {row['Lost Pts']:.1f} pts on bench</div></div>""" if row['Lost Pts'] > 0 else f"""<div style="background: rgba(146, 254, 157, 0.1); border-left: 3px solid #92FE9D; padding: 8px; margin-top: 10px; border-radius: 4px;"><div style="color: #92FE9D; font-weight: bold;">💎 Perfect Lineup</div><div style="color: #a0aaba; font-size: 0.8rem;">No points left on table</div></div>"""
 
     logo_url = row.get("Logo")
-    if not logo_url or "http" not in str(logo_url): logo_url = FALLBACK_LOGO
+    if not logo_url or "http" not in str(logo_url) or "mystique" in str(logo_url): 
+        logo_url = FALLBACK_LOGO
+        
     logo_html = f'<img src="{logo_url}" onerror="this.onerror=null; this.src=\'{FALLBACK_LOGO}\';" style="width:50px; height:50px; border-radius:50%; border:2px solid {grade_color};">'
 
     html = f"""<div class="luxury-card" style="border-top: 4px solid {grade_color};"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="display:flex; align-items:center; gap:10px;">{logo_html}<div><div style="font-size:1.1rem; font-weight:900; color:white;">{row['Team']}</div><div style="font-size:0.8rem; color:#a0aaba;">Efficiency: {row['Efficiency']:.1f}%</div></div></div><div style="text-align:center;"><div style="font-size:2.5rem; font-weight:900; color:{grade_color}; text-shadow: 0 0 10px {grade_color}40;">{row['Grade']}</div><div style="font-size:0.7rem; color:{grade_color}; text-transform:uppercase;">Grade</div></div></div>{regret_html}<div class="stat-grid" style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);"><div class="stat-box"><div class="stat-val" style="color:#fff;">{row['Starters']:.1f}</div><div class="stat-label">Starter Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#a0aaba;">{row['Bench']:.1f}</div><div class="stat-label">Bench Pts</div></div><div class="stat-box"><div class="stat-val" style="color:#FF4B4B;">-{row['Lost Pts']:.1f}</div><div class="stat-label">Lost Potential</div></div></div></div>"""
