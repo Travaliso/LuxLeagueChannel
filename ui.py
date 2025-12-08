@@ -46,7 +46,6 @@ def inject_luxury_css():
         background-attachment: fixed; background-size: cover;
     """
     
-    # Try to load local background if available
     for ext in ["jpg", "jpeg", "png", "webp"]:
         try:
             with open(f"background.{ext}", "rb") as f:
@@ -68,76 +67,75 @@ def inject_luxury_css():
     h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #D4AF37 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }}
     .stApp {{ {bg_style} }}
     
-    /* --- 1. SIDEBAR BACKGROUND FIX --- */
-    [data-testid="stSidebar"], section[data-testid="stSidebar"] {{
+    /* --- SIDEBAR: BACKGROUND & SPACING --- */
+    section[data-testid="stSidebar"] {{
         background-color: #060b26 !important;
         border-right: 1px solid rgba(255, 255, 255, 0.08);
     }}
     
-    /* Remove padding at top */
-    section[data-testid="stSidebar"] > div:first-child {{
-        padding-top: 2rem !important;
+    /* KILL THE TOP PADDING */
+    section[data-testid="stSidebar"] .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
     }}
 
-    /* --- 2. RADIO BUTTONS AS NAVIGATION LIST --- */
+    /* --- SIDEBAR: CUSTOM NAV (The "List Item" Look) --- */
     
-    /* Target the container of the radio group */
-    div[role="radiogroup"] {{
-        gap: 0px !important; /* Remove gap between items */
-    }}
-
-    /* Hide the actual radio circle */
-    div[role="radiogroup"] label > div:first-child {{
+    /* 1. Hide the circles */
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {{
         display: none !important;
     }}
-
-    /* Style the Label (The Clickable Area) */
-    div[role="radiogroup"] label {{
-        background: transparent !important; /* Kill the grey */
-        padding: 12px 20px !important;
-        margin-left: -20px !important; /* Pull to left edge */
-        margin-right: -20px !important; /* Pull to right edge */
-        width: calc(100% + 40px) !important; /* Compensate width */
-        border-radius: 0px !important;
+    
+    /* 2. Style the Label container to be a full-width card */
+    div[data-testid="stRadio"] label {{
+        background-color: transparent !important;
+        padding: 10px 15px !important;
+        margin-left: -1rem !important; /* Push to edges */
+        margin-right: -1rem !important;
+        width: calc(100% + 2rem) !important;
+        border-radius: 0 !important;
         border: none !important;
-        transition: background-color 0.2s ease, border 0.2s ease;
-        display: flex !important;
-        align-items: center !important;
+        transition: background 0.2s;
+        margin-bottom: 2px !important;
+        display: flex;
+        align-items: center;
     }}
-
-    /* HOVER STATE */
-    div[role="radiogroup"] label:hover {{
+    
+    /* 3. Hover State */
+    div[data-testid="stRadio"] label:hover {{
         background-color: rgba(255, 255, 255, 0.05) !important;
     }}
-
-    /* ACTIVE (SELECTED) STATE */
-    div[role="radiogroup"] label:has(input:checked) {{
+    
+    /* 4. Active/Selected State */
+    div[data-testid="stRadio"] label:has(input:checked) {{
         background-color: rgba(114, 9, 183, 0.25) !important;
         border-left: 4px solid #D4AF37 !important;
     }}
     
-    /* ACTIVE STATE TEXT COLOR */
-    div[role="radiogroup"] label:has(input:checked) p {{
-        color: white !important;
+    /* 5. Text Styling */
+    div[data-testid="stRadio"] label p {{
+        font-family: 'Lato', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        color: #e0e0e0 !important;
+        margin: 0 !important;
+    }}
+    
+    div[data-testid="stRadio"] label:has(input:checked) p {{
+        color: #ffffff !important;
         font-weight: 700 !important;
     }}
 
-    /* TEXT STYLING */
-    div[role="radiogroup"] label p {{
-        font-size: 15px !important;
-        font-family: 'Lato', sans-serif !important;
-        color: #a0aaba !important; /* Default inactive color */
-        margin: 0 !important;
-    }}
-
-    /* --- UI HIDING --- */
+    /* --- HIDE DEFAULT UI --- */
     footer {{ visibility: hidden; }}
     #MainMenu {{ visibility: hidden; }}
     .stAppDeployButton {{ display: none; }}
     div:has(> a[href*="streamlit.io"]) {{ visibility: hidden; display: none; }}
     [data-testid="stSidebarNav"] {{ display: none !important; }}
-    [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; color: white !important; }}
+    
+    /* Keep Mobile Toggle Visible */
     header[data-testid="stHeader"] {{ background: transparent; }}
+    [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; color: white !important; }}
 
     /* --- COMPONENTS --- */
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
