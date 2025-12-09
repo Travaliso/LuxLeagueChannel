@@ -1,11 +1,19 @@
 import streamlit as st
 import os
 
-# 1. Define your Luxury Metadata
-TITLE = "Luxury League HQ"
-DESCRIPTION = "The ultimate fantasy football concierge. Ledger, Analytics, and Intelligence."
-IMAGE_URL = "https://g.espncdn.com/lm-static/logo-packs/ffl/CrazyHelmets-ToddDetwiler/Helmets_07.svg"
-URL = "https://theluxuryleagehq.com"
+# branding.py
+
+# 1. Title & Description (What they see in the text)
+TITLE = "The Luxury League" 
+DESCRIPTION = "Weekly Executive Briefing: The Ledger, The Hierarchy, and The Audit."
+
+# 2. The Image (CRITICAL for the "Cool" factor)
+# MUST be a publicly accessible URL (not a local file path).
+# Recommended size: 1200x630 pixels.
+IMAGE_URL = "Public/LuxLeagueOpenGraph" 
+
+# 3. Your App Link
+URL = "https://theluxuryleaguehq.com"
 
 # 2. Locate Streamlit's static index.html
 ROOT_DIR = os.path.dirname(st.__file__)
