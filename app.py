@@ -175,7 +175,7 @@ if selected_page == "The Ledger":
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
-            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team)
+            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, YEAR)
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.markdown("#### Weekly Transactions")
     mobile_view = st.toggle("📱 Mobile View (List)", value=False)
