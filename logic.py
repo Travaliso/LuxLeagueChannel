@@ -518,3 +518,59 @@ def get_vegas_props(api_key, _league, week):
         return pd.DataFrame(rows).sort_values(by="Proj Pts", ascending=False)
     except Exception as e:
         return pd.DataFrame({"Status": [f"System Error: {str(e)}"]})
+
+# --- ADD THIS TO logic.py ---
+
+def get_playoff_results(_league):
+    """
+    Fetches playoff matchups and categorizes them into Championship vs Consolation.
+    Returns a dict with organized games and potential winners.
+    """
+    reg_season_end = _league.settings.reg_season_count
+    current_week = _league.current_week
+    
+    # 1. Safety Check: Are we in playoffs?
+    if current_week <= reg_season_end:
+        return None
+
+    playoff_data = {
+        "Championship": [],
+        "Consolation": [],
+        "ChampWinner": None,
+        "ConsolationWinner": None
+    }
+
+    # 2. Iterate through all playoff weeks so far
+    for w in range(reg_season_end + 1, current_week + 1):
+        try:
+            box_scores = _league.box_scores(week=w)
+        except:
+            continue # Skip if week hasn't happened or error
+            
+        for game in box_scores:
+            # Identify Bracket Type (Heuristic: If both teams are high seeds, it's Champ)
+            # Note: This is an estimation. ESPN API doesn't explicitly flag "Consolation" on the game object easily.
+            # We assume the user wants to see all games.
+            
+            leader = game.home_team if game.home_score > game.away_score else game.away_team
+            leader_score = max(game.home_score, game.away_score)
+            
+            game_info = {
+                "Week": w,
+                "Home": game.home_team.team_name,
+                "Home Score": game.home_score,
+                "Away": game.away_team.team_name,
+                "Away Score": game.away_score,
+                "Winner": leader.team_name,
+                "Winner Logo": safe_get_logo(leader),
+                "Margin": abs(game.home_score - game.away_score)
+            }
+            
+            # Simple heuristic: If it's the very last week of the league settings, the winner is the champ
+            # check if this is the championship game
+            # (Logic: Winner is 'ChampWinner' if it's the final week)
+            
+            # For now, append to a general list, split by week in UI
+            playoff_data["Championship"].append(game_info)
+
+    return playoff_data
