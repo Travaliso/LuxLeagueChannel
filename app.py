@@ -402,10 +402,67 @@ elif selected_page == "The Dark Pool":
         st.markdown(st.session_state.get("scout_rpt", ""))
         st.dataframe(st.session_state["dark_pool_data"], use_container_width=True)
 
+# --- REPLACE THE "Trophy Room" SECTION IN app.py WITH THIS ---
+
 elif selected_page == "Trophy Room":
     st.header("🏆 Trophy Room")
+    
+    # 1. PLAYOFF CENTER (New Feature)
+    playoff_data = logic.get_playoff_results(league)
+    
+    if playoff_data:
+        st.markdown("""
+            <div style="background: linear-gradient(90deg, #060b26 0%, #1a1c24 100%); 
+            border: 1px solid #D4AF37; border-radius: 12px; padding: 20px; margin-bottom: 30px; text-align: center;">
+                <h2 style="color: #D4AF37; font-family: 'Playfair Display', serif; margin-bottom: 5px;">🏆 THE PLAYOFFS</h2>
+                <div style="color: #a0aaba; letter-spacing: 2px; font-size: 0.8rem;">ROAD TO GLORY</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        games = playoff_data["Championship"]
+        # Group by Week
+        weeks = sorted(list(set(g['Week'] for g in games)), reverse=True)
+        
+        for w in weeks:
+            st.subheader(f"Week {w} Results")
+            week_games = [g for g in games if g['Week'] == w]
+            
+            c1, c2 = st.columns(2)
+            for i, g in enumerate(week_games):
+                winner_color = "#92FE9D" # Green for winner
+                
+                # Determine Styling
+                home_style = f"color: {winner_color}; font-weight: 900;" if g['Home Score'] > g['Away Score'] else "color: white;"
+                away_style = f"color: {winner_color}; font-weight: 900;" if g['Away Score'] > g['Home Score'] else "color: white;"
+                
+                card_html = f"""
+                <div class="luxury-card" style="padding: 15px; border-left: 4px solid {winner_color};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="flex:1; text-align:right; {home_style}">
+                            {g['Home']}<br>
+                            <span style="font-size:1.4rem;">{g['Home Score']:.1f}</span>
+                        </div>
+                        <div style="flex:0.5; text-align:center; color:#555; font-weight:900; font-size:0.8rem;">VS</div>
+                        <div style="flex:1; text-align:left; {away_style}">
+                            {g['Away']}<br>
+                            <span style="font-size:1.4rem;">{g['Away Score']:.1f}</span>
+                        </div>
+                    </div>
+                    <div style="text-align:center; margin-top:10px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px;">
+                        <span style="color:#a0aaba; font-size:0.7rem;">WINNER</span><br>
+                        <img src="{g['Winner Logo']}" style="width:30px; border-radius:50%; vertical-align:middle; margin-right:5px;">
+                        <span style="color:white; font-weight:bold;">{g['Winner']}</span>
+                    </div>
+                </div>
+                """
+                with c1 if i % 2 == 0 else c2:
+                    st.markdown(card_html, unsafe_allow_html=True)
+        
+        st.markdown("---")
+
+    # 2. REGULAR SEASON AWARDS (Existing Logic)
     if "awards" not in st.session_state:
-        if st.button("🏅 Unveil Awards"):
+        if st.button("🏅 Unveil Regular Season Awards"):
             with ui.luxury_spinner("Engraving..."):
                 st.session_state["awards"] = logic.calculate_season_awards(league, current_week)
                 aw = st.session_state["awards"]
@@ -413,8 +470,12 @@ elif selected_page == "Trophy Room":
                 st.rerun()
     else:
         aw = st.session_state["awards"]
-        if "season_comm" in st.session_state: st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
-        st.divider(); st.markdown("<h2 style='text-align: center;'>🏆 THE PODIUM</h2>", unsafe_allow_html=True)
+        if "season_comm" in st.session_state: 
+            st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ State of the League</h3>{st.session_state["season_comm"]}</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        st.markdown("<h3 style='text-align: center; color: #a0aaba;'>REGULAR SEASON PODIUM</h3>", unsafe_allow_html=True)
+        
         pod = aw.get("Podium", [])
         c_silv, c_gold, c_brnz = st.columns([1, 1.2, 1])
         if len(pod) > 1:
@@ -423,7 +484,10 @@ elif selected_page == "Trophy Room":
             with c_gold: st.markdown(f"""<div class="podium-step gold"><img src="{ui.get_logo(pod[0])}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:100px; border-radius:50%; border:4px solid #FFD700; display:block; margin:0 auto; box-shadow:0 0 20px rgba(255,215,0,0.6);"><div style="color:white; font-weight:900; font-size:1.4rem; margin-top:15px;">{pod[0].team_name}</div><div style="color:#FFD700;">{pod[0].wins}-{pod[0].losses}</div><div class="rank-num">1</div></div>""", unsafe_allow_html=True)
         if len(pod) > 2:
             with c_brnz: st.markdown(f"""<div class="podium-step bronze"><img src="{ui.get_logo(pod[2])}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:70px; border-radius:50%; border:3px solid #CD7F32; display:block; margin:0 auto;"><div style="color:white; font-weight:bold; margin-top:10px;">{pod[2].team_name}</div><div style="color:#CD7F32;">{pod[2].wins}-{pod[2].losses}</div><div class="rank-num">3</div></div>""", unsafe_allow_html=True)
+            
         st.markdown("---")
+        
+        # Awards Grid
         def gen_nar(type, team, val):
             if type == "Oracle": return f"Ultimate strategist. {team} hit **{val:.1f}% efficiency**."
             if type == "Sniper": return f"Wire wizard. {team} got **{val:.1f} pts** from free agents."
@@ -432,6 +496,7 @@ elif selected_page == "Trophy Room":
             if type == "Toilet": return f"Offense stalled. Only **{val:.1f} pts** scored."
             if type == "Blowout": return f"Historic beatdown. Lost by **{val:.1f} pts**."
             return ""
+            
         c1, c2, c3, c4 = st.columns(4)
         ora = aw['Oracle']
         with c1: st.markdown(f"""<div class="luxury-card award-card"><img src="{ora['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Oracle</h4><div style="font-weight:bold; color:white;">{ora['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{ora['Eff']:.1f}% Eff</div><div class="award-blurb">{gen_nar("Oracle", ora['Team'], ora['Eff'])}</div></div>""", unsafe_allow_html=True)
@@ -441,13 +506,13 @@ elif selected_page == "Trophy Room":
         with c3: st.markdown(f"""<div class="luxury-card award-card"><img src="{pur['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">Purple Heart</h4><div style="font-weight:bold; color:white;">{pur['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{pur['Count']} Inj</div><div class="award-blurb">{gen_nar("Purple", pur['Team'], pur['Count'])}</div></div>""", unsafe_allow_html=True)
         hoa = aw['Hoarder']
         with c4: st.markdown(f"""<div class="luxury-card award-card"><img src="{hoa['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" style="width:60px; border-radius:50%;"><h4 style="color:#00C9FF; margin:0;">The Hoarder</h4><div style="font-weight:bold; color:white;">{hoa['Team']}</div><div style="color:#a0aaba; font-size:0.8rem;">{hoa['Pts']:.1f} Pts</div><div class="award-blurb">{gen_nar("Hoarder", hoa['Team'], hoa['Pts'])}</div></div>""", unsafe_allow_html=True)
+        
         st.markdown("---")
         t1, t2 = st.columns(2)
         toilet = aw['Toilet']
         with t1: st.markdown(f"""<div class="luxury-card shame-card"><img src="{toilet['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="80" style="border-radius:50%; border:3px solid #FF4B4B;"><div><div style="color:#FF4B4B; font-weight:bold;">LOWEST SCORING</div><div style="font-size:1.8rem; font-weight:900; color:white;">{toilet['Team']}</div><div style="color:#aaa;">{toilet['Pts']:.1f} Pts</div><div class="award-blurb" style="color:#FF8888;">{gen_nar("Toilet", toilet['Team'], toilet['Pts'])}</div></div></div>""", unsafe_allow_html=True)
         blowout = aw['Blowout']
         with t2: st.markdown(f"""<div class="luxury-card shame-card"><div style="color:#FF4B4B; font-weight:bold;">💥 BIGGEST BLOWOUT</div><div style="font-size:1.5rem; font-weight:900; color:white; margin:10px 0;">{blowout['Loser']}</div><div style="color:#aaa;">Def. by {blowout['Winner']} (+{blowout['Margin']:.1f})</div><div class="award-blurb" style="color:#FF8888;">{gen_nar("Blowout", blowout['Loser'], blowout['Margin'])}</div></div>""", unsafe_allow_html=True)
-
 elif selected_page == "The Vault":
     st.header("⏳ The Dynasty Vault")
     if "dynasty_lead" not in st.session_state:
