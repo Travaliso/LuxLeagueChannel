@@ -172,36 +172,42 @@ st.markdown("---")
 if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
+    
+    # --- NEW: CALCULATE DATE & CONTEXT ---
+    # 1. Calculate the 'Tuesday Morning' date for the selected week
+    # Assumes Week 1 ends approx Sept 9, 2025
+    import datetime
+    base_date = datetime.date(2025, 9, 9) 
+    recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
+    date_str = recap_date_obj.strftime("%B %d, %Y")
+
+    # 2. Determine Playoff Context
+    reg_season_len = league.settings.reg_season_count
+    if selected_week <= reg_season_len:
+        season_context = "Regular Season: The grind for playoff positioning."
+    elif selected_week == reg_season_len + 1:
+        season_context = "Playoff Quarterfinals: Win or Go Home."
+    elif selected_week == reg_season_len + 2:
+        season_context = "Playoff Semifinals: The Battle for the Championship Ticket."
+    else:
+        season_context = "The Championship Week: For Eternal Glory and The Trophy."
+    # -------------------------------------
+
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
-            # --- UPDATE THIS LINE BELOW TO PASS 'YEAR' ---
-            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, YEAR) 
-            # ---------------------------------------------
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.markdown("#### Weekly Transactions")
-    mobile_view = st.toggle("📱 Mobile View (List)", value=False)
-    for m in matchup_data:
-        st.markdown(f"""<div class="luxury-card" style="padding: 20px; border-left: 5px solid #7209b7; margin-bottom: 20px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; flex: 1;"><img src="{m['Home Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #00C9FF; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Home']}</div><div style="font-size: 2rem; color: #00C9FF; font-weight: bold;">{m['Home Score']}</div></div><div style="flex: 0.5; text-align: center;"><div style="font-size: 2rem; color: #555; font-weight: 900; opacity: 0.5;">VS</div></div><div style="text-align: center; flex: 1;"><img src="{m['Away Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #FF4B4B; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Away']}</div><div style="font-size: 2rem; color: #FF4B4B; font-weight: bold;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
-        with st.expander(f"📋 View Roster Details: {m['Home']} vs {m['Away']}"):
-            if m['Home Roster']:
-                if mobile_view:
-                    c_home, c_away = st.columns(2)
-                    with c_home:
-                        st.markdown(f"**{m['Home']}**")
-                        for p in m['Home Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
-                    with c_away:
-                        st.markdown(f"**{m['Away']}**")
-                        for p in m['Away Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
-                else:
-                    max_len = max(len(m['Home Roster']), len(m['Away Roster']))
-                    h_names = [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster']))
-                    h_pts = [p['Score'] for p in m['Home Roster']] + [0.0] * (max_len - len(m['Home Roster']))
-                    a_pts = [p['Score'] for p in m['Away Roster']] + [0.0] * (max_len - len(m['Away Roster']))
-                    a_names = [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster']))
-                    df_match = pd.DataFrame({f"{m['Home']} Player": h_names, f"{m['Home']} Pts": h_pts, f"{m['Away']} Pts": a_pts, f"{m['Away']} Player": a_names})
-                    st.dataframe(df_match, use_container_width=True, hide_index=True, column_config={f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"), f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")})
+            
+            # PASS THE NEW CONTEXT AND DATE INTO THE AI
+            st.session_state["recap"] = intel.get_weekly_recap(
+                OPENAI_KEY, 
+                selected_week, 
+                top_team, 
+                season_context, 
+                date_str
+            )
 
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+    
 elif selected_page == "The Hierarchy":
     st.header("📈 The Hierarchy")
     st.caption("A ruthless ranking of who is actually good.")
