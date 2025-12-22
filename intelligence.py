@@ -14,19 +14,21 @@ def ai_response(key, prompt, tokens=1500):
             max_tokens=tokens
         ).choices[0].message.content
     except Exception as e: return f"⚠️ AI Error: {str(e)}"
-
-def get_weekly_recap(key, selected_week, top_team, year):
+        
+def get_weekly_recap(key, selected_week, top_team, context_label, date_label):
     prompt = f"""
-    Write a DETAILED fantasy football recap for Week {selected_week} of the {year} NFL season. 
-    Highlight the Powerhouse of the week: {top_team}. 
+    Write a DETAILED, high-stakes fantasy football recap for Week {selected_week} ({date_label}).
+    
+    CONTEXT: {context_label}
+    POWERHOUSE: {top_team}
     
     CRITICAL INSTRUCTIONS:
-    1. This is FANTASY football, not real football. Team A does not "play defense" against Team B. 
+    1. Acknowledge the specific stage of the season ("{context_label}"). If it is the playoffs, emphasize the "win or go home" pressure and the tragedy of elimination.
     2. Focus entirely on point production, roster management, and efficiency.
-    3. Do NOT use betting terminology (covers, spreads, moneyline).
-    4. Ensure any dates mentioned correspond to the current year: {year}.
+    3. Do NOT use betting terminology.
+    4. Use the provided date: {date_label}. Do not hallucinate a different date.
     
-    Style: Wall Street Executive Report.
+    Style: Wall Street Executive Report. Tone should be serious and consequential.
     """
     return ai_response(key, prompt, 2500)
 
