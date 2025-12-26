@@ -6,7 +6,7 @@ import os
 import ui
 import logic
 import intelligence as intel
-import datetime # <--- Added for date calculation
+import datetime # Required for the date fix
 
 # ==============================================================================
 # 1. SETUP & CONFIGURATION
@@ -86,14 +86,7 @@ with st.sidebar:
         with ui.luxury_spinner("Compiling Intelligence Report..."):
             if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated."
             awards = logic.calculate_season_awards(league, current_week)
-            else:
-        # This button allows you to regenerate the report if the date/context is wrong
-        if st.button("🔄 Regenerate Report"):
-            del st.session_state["recap"]
-            st.rerun()
-    # ----------------------
-
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
+            
             pdf = ui.PDF()
             pdf.add_page()
             pdf.chapter_title(f"WEEK {selected_week} BRIEFING")
@@ -179,12 +172,13 @@ if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
     
-# --- DATE & CONTEXT CALCULATION ---
-    # 1. Calculate the standard 'Tuesday Morning' recap date
+    # --- DATE & CONTEXT CALCULATION ---
+    # 1. Calculate the 'Tuesday Morning' date for the selected week
+    # Assumes Week 1 ends approx Sept 9, 2025
     base_date = datetime.date(2025, 9, 9) 
     recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
     
-    # 2. THE FIX: If that date is in the future, use Today's Date instead
+    # 2. Check if the calculated date is in the future. If so, use Today.
     if recap_date_obj > datetime.date.today():
         recap_date_obj = datetime.date.today()
         
@@ -200,12 +194,17 @@ if selected_page == "The Ledger":
         season_context = "Playoff Semifinals: The Battle for the Championship Ticket."
     else:
         season_context = "The Championship Week: For Eternal Glory and The Trophy."
-    # ----------------------------------
+    # -------------------------------------
     
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
             st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, season_context, date_str)
+    else:
+        # Refresh button to force new AI generation if date/context was wrong
+        if st.button("🔄 Regenerate Report"):
+            del st.session_state["recap"]
+            st.rerun()
             
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.markdown("#### Weekly Transactions")
@@ -434,7 +433,7 @@ elif selected_page == "The Dark Pool":
 elif selected_page == "Trophy Room":
     st.header("🏆 Trophy Room")
     
-    # 1. PLAYOFF CENTER (New Feature)
+    # 1. PLAYOFF CENTER (Updated Logic)
     playoff_data = logic.get_playoff_results(league)
     
     if playoff_data:
@@ -550,9 +549,8 @@ elif selected_page == "The Vault":
                 st.session_state["dynasty_lead"] = logic.process_dynasty_leaderboard(df_raw)
                 st.session_state["dynasty_raw"] = df_raw
                 st.rerun()
-else:
+    else:
         st.dataframe(st.session_state["dynasty_lead"], use_container_width=True)
         fig = px.line(st.session_state["dynasty_raw"], x="Year", y="Wins", color="Manager", markers=True)
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
-
