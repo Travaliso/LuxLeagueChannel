@@ -574,3 +574,62 @@ def get_playoff_results(_league):
             playoff_data["Championship"].append(game_info)
 
     return playoff_data
+# --- ADD TO logic.py ---
+
+@st.cache_data(ttl=3600*12)
+def get_forward_guidance(_league, team_name, current_week, lookahead=4):
+    """
+    Generates a 4-week lookahead heatmap for a specific team's roster.
+    Returns a DataFrame with opponents and color codes based on difficulty.
+    """
+    # 1. Get the Team Object
+    target_team = next((t for t in _league.teams if t.team_name == team_name), None)
+    if not target_team: return pd.DataFrame()
+    
+    # 2. Load Data needed for context
+    year = _league.year
+    dvp = get_dvp_ranks_safe(year) # { 'SF': {'QB': 5, 'WR': 10...} }
+    
+    # 3. Get NFL Schedule for upcoming weeks
+    try:
+        nfl_sched = nfl.import_schedules([year])
+    except:
+        return pd.DataFrame() # Fail gracefully if nfl_data_py is down
+
+    # 4. Build the Grid
+    roster_data = []
+    
+    # Filter for starters + key bench (WR/RB/QB/TE only)
+    relevant_pos = ['QB', 'RB', 'WR', 'TE']
+    roster = [p for p in target_team.roster if p.position in relevant_pos]
+    
+    for player in roster:
+        row = {"Player": player.name, "Pos": player.position, "ID": player.playerId}
+        p_team = clean_team_abbr(player.proTeam)
+        
+        for w in range(current_week, current_week + lookahead):
+            # Find the game for this player's NFL team in this week
+            week_games = nfl_sched[nfl_sched['week'] == w]
+            game = week_games[(week_games['home_team'] == p_team) | (week_games['away_team'] == p_team)]
+            
+            if game.empty:
+                row[f"Wk {w}"] = "BYE"
+                row[f"Wk {w}_Rank"] = 16 # Neutral
+            else:
+                game = game.iloc[0]
+                opp = game['away_team'] if game['home_team'] == p_team else game['home_team']
+                opp = clean_team_abbr(opp)
+                
+                # Get the DVP Rank (1 = Tough Defense, 32 = Easy Defense)
+                # Note: In standard DVP, Rank 32 means they allow the MOST points (Good for us)
+                # We need to normalize: High Rank Number = Green (Easy), Low Rank Number = Red (Hard)
+                rank = 16 # Default neutral
+                if opp in dvp and player.position in dvp[opp]:
+                    rank = dvp[opp][player.position] # e.g. 32 (Best matchup) or 1 (Worst matchup)
+                
+                row[f"Wk {w}"] = f"{opp}"
+                row[f"Wk {w}_Rank"] = rank
+                
+        roster_data.append(row)
+        
+    return pd.DataFrame(roster_data)
