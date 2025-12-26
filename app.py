@@ -217,6 +217,7 @@ with c_moon:
             <div class="luxury-card" style="border-left: 4px solid #7209b7; padding: 15px;">
                 <div style="color:#7209b7; font-weight:900; font-size:0.9rem; text-transform:uppercase;">Biggest Surprise</div>
                 <div style="font-size:1.4rem; font-weight:bold; color:white;">{moon['Name']}</div>
+                <div style="font-size:1.1rem; font-weight:bold; color:white;">{moon['Points']:.1f} PTS</div>
                 <div style="color:#a0aaba;">{moon['Team']}</div>
                 <div style="margin-top:5px; font-weight:bold; color:#92FE9D;">+{moon['OverAchieve']:.1f} vs Proj</div>
             </div>
