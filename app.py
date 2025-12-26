@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import branding
 import plotly.express as px
 import plotly.graph_objects as go
 import os
 import ui
 import logic
 import intelligence as intel
+import datetime # <--- Added for date calculation
 
 # ==============================================================================
 # 1. SETUP & CONFIGURATION
@@ -47,7 +47,7 @@ except Exception as e:
     st.stop()
 
 # ==============================================================================
-# 3. SIDEBAR NAVIGATION (LUXURY CSS RADIO)
+# 3. SIDEBAR NAVIGATION
 # ==============================================================================
 with st.sidebar:
     # 1. LUXURY HEADER
@@ -65,8 +65,7 @@ with st.sidebar:
     
     st.markdown("---")
 
-    # 3. NAVIGATION MENU (Native Radio -> Styled as List)
-    # Note: Emoji icons added here for visual flair since we aren't using option_menu
+    # 3. NAVIGATION MENU
     selected_page_raw = st.radio(
         "Navigation",
         [
@@ -99,7 +98,7 @@ with st.sidebar:
             st.markdown(html, unsafe_allow_html=True)
 
 # ==============================================================================
-# 4. DATA PIPELINE (DEPENDS ON SELECTED_WEEK)
+# 4. DATA PIPELINE
 # ==============================================================================
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     with ui.luxury_spinner(f"Accessing Week {selected_week} Data..."):
@@ -172,12 +171,29 @@ st.markdown("---")
 if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
+    
+    # --- DATE & CONTEXT CALCULATION ---
+    # Assumes Week 1 ends approx Sept 9, 2025
+    base_date = datetime.date(2025, 9, 9) 
+    recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
+    date_str = recap_date_obj.strftime("%B %d, %Y")
+
+    reg_season_len = league.settings.reg_season_count
+    if selected_week <= reg_season_len:
+        season_context = "Regular Season: The grind for playoff positioning."
+    elif selected_week == reg_season_len + 1:
+        season_context = "Playoff Quarterfinals: Win or Go Home."
+    elif selected_week == reg_season_len + 2:
+        season_context = "Playoff Semifinals: The Battle for the Championship Ticket."
+    else:
+        season_context = "The Championship Week: For Eternal Glory and The Trophy."
+    # ----------------------------------
+    
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
-            # --- UPDATE THIS LINE BELOW TO PASS 'YEAR' ---
-            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, YEAR) 
-            # ---------------------------------------------
+            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, season_context, date_str)
+            
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
     st.markdown("#### Weekly Transactions")
     mobile_view = st.toggle("📱 Mobile View (List)", value=False)
@@ -402,8 +418,6 @@ elif selected_page == "The Dark Pool":
         st.markdown(st.session_state.get("scout_rpt", ""))
         st.dataframe(st.session_state["dark_pool_data"], use_container_width=True)
 
-# --- REPLACE THE "Trophy Room" SECTION IN app.py WITH THIS ---
-
 elif selected_page == "Trophy Room":
     st.header("🏆 Trophy Room")
     
@@ -419,7 +433,7 @@ elif selected_page == "Trophy Room":
             </div>
         """, unsafe_allow_html=True)
         
-        games = playoff_data["Championship"]
+        games = playoff_data.get("Championship", [])
         # Group by Week
         weeks = sorted(list(set(g['Week'] for g in games)), reverse=True)
         
@@ -513,6 +527,7 @@ elif selected_page == "Trophy Room":
         with t1: st.markdown(f"""<div class="luxury-card shame-card"><img src="{toilet['Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="80" style="border-radius:50%; border:3px solid #FF4B4B;"><div><div style="color:#FF4B4B; font-weight:bold;">LOWEST SCORING</div><div style="font-size:1.8rem; font-weight:900; color:white;">{toilet['Team']}</div><div style="color:#aaa;">{toilet['Pts']:.1f} Pts</div><div class="award-blurb" style="color:#FF8888;">{gen_nar("Toilet", toilet['Team'], toilet['Pts'])}</div></div></div>""", unsafe_allow_html=True)
         blowout = aw['Blowout']
         with t2: st.markdown(f"""<div class="luxury-card shame-card"><div style="color:#FF4B4B; font-weight:bold;">💥 BIGGEST BLOWOUT</div><div style="font-size:1.5rem; font-weight:900; color:white; margin:10px 0;">{blowout['Loser']}</div><div style="color:#aaa;">Def. by {blowout['Winner']} (+{blowout['Margin']:.1f})</div><div class="award-blurb" style="color:#FF8888;">{gen_nar("Blowout", blowout['Loser'], blowout['Margin'])}</div></div>""", unsafe_allow_html=True)
+
 elif selected_page == "The Vault":
     st.header("⏳ The Dynasty Vault")
     if "dynasty_lead" not in st.session_state:
@@ -527,3 +542,5 @@ elif selected_page == "The Vault":
         fig = px.line(st.session_state["dynasty_raw"], x="Year", y="Wins", color="Manager", markers=True)
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
+
+}
