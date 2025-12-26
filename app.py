@@ -537,7 +537,7 @@ elif selected_page == "The Vault":
                 st.session_state["dynasty_lead"] = logic.process_dynasty_leaderboard(df_raw)
                 st.session_state["dynasty_raw"] = df_raw
                 st.rerun()
-    else:
+else:
         st.dataframe(st.session_state["dynasty_lead"], use_container_width=True)
         fig = px.line(st.session_state["dynasty_raw"], x="Year", y="Wins", color="Manager", markers=True)
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
