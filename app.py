@@ -6,7 +6,7 @@ import os
 import ui
 import logic
 import intelligence as intel
-import datetime # Required for the date fix
+import datetime 
 
 # ==============================================================================
 # 1. SETUP & CONFIGURATION
@@ -76,7 +76,6 @@ with st.sidebar:
         ],
         label_visibility="collapsed"
     )
-    # Strip emoji for logic checks
     selected_page = selected_page_raw.split(" ", 1)[1] if " " in selected_page_raw else selected_page_raw
     
     st.markdown("---")
@@ -123,15 +122,24 @@ for game in box_scores:
             info = {"Name": p.name, "Score": p.points, "Pos": p.slot_position}
             status = getattr(p, 'injuryStatus', 'ACTIVE')
             is_injured = any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
+            
+            # --- BENCH LOGIC ---
             if p.slot_position == 'BE':
                 bench.append(info)
+                # Only highlight if score > 15 AND score > 0 (Sanity check)
                 if p.points > 15: 
                     bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
+            
+            # --- STARTER LOGIC ---
             else:
                 starters.append(info)
                 if not is_injured: 
                     all_active_players.append({
-                        "Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId, "Projected": p.projected_points
+                        "Name": p.name, 
+                        "Points": p.points, 
+                        "Team": team_name, 
+                        "ID": p.playerId, 
+                        "Projected": p.projected_points
                     })
         return starters, bench
 
@@ -146,17 +154,27 @@ for game in box_scores:
 if efficiency_data: df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
 else: df_eff = pd.DataFrame(columns=["Team", "Total Potential", "Starters", "Bench"])
 
-# --- PLAYER DATA PROCESSING ---
+# --- ADVANCED PLAYER AWARDS ---
+df_disappointments = pd.DataFrame()
+df_moonshot = pd.DataFrame()
+
 if all_active_players: 
     df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(7)
     
-    # Calculate Disappointments (Projected - Actual)
+    # 1. Hall of Shame (Underperformers)
+    # FILTER: Exclude players with 0 points (Likely haven't played yet)
     df_active = pd.DataFrame(all_active_players)
-    df_active['Diff'] = df_active['Projected'] - df_active['Points']
-    df_disappointments = df_active.sort_values(by="Diff", ascending=False).head(4)
+    df_played = df_active[df_active['Points'] > 0].copy() 
+    
+    if not df_played.empty:
+        df_played['Diff'] = df_played['Projected'] - df_played['Points'] # Positive = Bad (Proj > Actual)
+        df_disappointments = df_played.sort_values(by="Diff", ascending=False).head(4)
+        
+        # 2. The Moonshot (Overachievers)
+        df_played['OverAchieve'] = df_played['Points'] - df_played['Projected'] # Positive = Good
+        df_moonshot = df_played.sort_values(by="OverAchieve", ascending=False).head(1)
 else: 
     df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
-    df_disappointments = pd.DataFrame(columns=["Name", "Points", "Team", "ID", "Projected"])
 
 if bench_highlights: df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
@@ -169,12 +187,9 @@ st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 # --- WEEKLY ELITE (7 PLAYERS) ---
 st.markdown("### 🌟 Weekly Elite")
 if not df_players.empty:
-    # Row 1: Top 4
     cols_top = st.columns(4)
     for i in range(4):
         if i < len(df_players): ui.render_hero_card(cols_top[i], df_players.iloc[i])
-    
-    # Row 2: Next 3
     cols_bot = st.columns(3)
     for i in range(3):
         idx = i + 4
@@ -183,13 +198,30 @@ else: st.info("No player data available for this week yet.")
 
 st.markdown("---")
 
-# --- WEEKLY DISAPPOINTMENTS ---
-st.markdown("### 📉 Hall of Shame (The Letdowns)")
-if not df_disappointments.empty:
-    d_cols = st.columns(4)
-    for i, row in df_disappointments.reset_index(drop=True).iterrows():
-        ui.render_villain_card(d_cols[i], row)
-else: st.info("No major disappointments found.")
+# --- WEEKLY AWARDS ROW ---
+c_shame, c_moon = st.columns([2, 1])
+
+with c_shame:
+    st.markdown("### 📉 Hall of Shame (The Letdowns)")
+    if not df_disappointments.empty:
+        d_cols = st.columns(2)
+        for i, row in df_disappointments.head(2).reset_index(drop=True).iterrows():
+            ui.render_villain_card(d_cols[i], row)
+    else: st.info("No major disappointments found.")
+
+with c_moon:
+    st.markdown("### 🚀 The Moonshot")
+    if not df_moonshot.empty:
+        moon = df_moonshot.iloc[0]
+        st.markdown(f"""
+            <div class="luxury-card" style="border-left: 4px solid #7209b7; padding: 15px;">
+                <div style="color:#7209b7; font-weight:900; font-size:0.9rem; text-transform:uppercase;">Biggest Surprise</div>
+                <div style="font-size:1.4rem; font-weight:bold; color:white;">{moon['Name']}</div>
+                <div style="color:#a0aaba;">{moon['Team']}</div>
+                <div style="margin-top:5px; font-weight:bold; color:#92FE9D;">+{moon['OverAchieve']:.1f} vs Proj</div>
+            </div>
+        """, unsafe_allow_html=True)
+    else: st.info("Data pending.")
 
 st.markdown("---")
 
@@ -215,19 +247,15 @@ if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
     
-    # --- DATE & CONTEXT CALCULATION ---
-    # 1. Calculate the 'Tuesday Morning' date for the selected week
-    # Assumes Week 1 ends approx Sept 9, 2025
+    # --- DATE & CONTEXT LOGIC (Fixed) ---
     base_date = datetime.date(2025, 9, 9) 
     recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
     
-    # 2. Check if the calculated date is in the future. If so, use Today.
     if recap_date_obj > datetime.date.today():
         recap_date_obj = datetime.date.today()
         
     date_str = recap_date_obj.strftime("%B %d, %Y")
 
-    # 3. Determine Playoff Context
     reg_season_len = league.settings.reg_season_count
     if selected_week <= reg_season_len:
         season_context = "Regular Season: The grind for playoff positioning."
@@ -237,14 +265,12 @@ if selected_page == "The Ledger":
         season_context = "Playoff Semifinals: The Battle for the Championship Ticket."
     else:
         season_context = "The Championship Week: For Eternal Glory and The Trophy."
-    # -------------------------------------
     
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
             top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
             st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team, season_context, date_str)
     else:
-        # Refresh button to force new AI generation if date/context was wrong
         if st.button("🔄 Regenerate Report"):
             del st.session_state["recap"]
             st.rerun()
@@ -476,7 +502,6 @@ elif selected_page == "The Dark Pool":
 elif selected_page == "Trophy Room":
     st.header("🏆 Trophy Room")
     
-    # 1. PLAYOFF CENTER (Updated Logic)
     playoff_data = logic.get_playoff_results(league)
     
     if playoff_data:
@@ -489,7 +514,6 @@ elif selected_page == "Trophy Room":
         """, unsafe_allow_html=True)
         
         games = playoff_data.get("Championship", [])
-        # Group by Week
         weeks = sorted(list(set(g['Week'] for g in games)), reverse=True)
         
         for w in weeks:
@@ -498,9 +522,8 @@ elif selected_page == "Trophy Room":
             
             c1, c2 = st.columns(2)
             for i, g in enumerate(week_games):
-                winner_color = "#92FE9D" # Green for winner
+                winner_color = "#92FE9D" 
                 
-                # Determine Styling
                 home_style = f"color: {winner_color}; font-weight: 900;" if g['Home Score'] > g['Away Score'] else "color: white;"
                 away_style = f"color: {winner_color}; font-weight: 900;" if g['Away Score'] > g['Home Score'] else "color: white;"
                 
@@ -529,7 +552,6 @@ elif selected_page == "Trophy Room":
         
         st.markdown("---")
 
-    # 2. REGULAR SEASON AWARDS (Existing Logic)
     if "awards" not in st.session_state:
         if st.button("🏅 Unveil Regular Season Awards"):
             with ui.luxury_spinner("Engraving..."):
@@ -556,7 +578,6 @@ elif selected_page == "Trophy Room":
             
         st.markdown("---")
         
-        # Awards Grid
         def gen_nar(type, team, val):
             if type == "Oracle": return f"Ultimate strategist. {team} hit **{val:.1f}% efficiency**."
             if type == "Sniper": return f"Wire wizard. {team} got **{val:.1f} pts** from free agents."
