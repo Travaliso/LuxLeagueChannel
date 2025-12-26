@@ -79,24 +79,17 @@ def inject_luxury_css():
         border-right: 1px solid rgba(255, 255, 255, 0.08);
     }}
     
-    /* KILL THE TOP PADDING */
     section[data-testid="stSidebar"] .block-container {{
         padding-top: 1rem !important;
         padding-bottom: 1rem !important;
     }}
 
-    /* --- SIDEBAR: CUSTOM NAV (The "List Item" Look) --- */
-    
-    /* 1. Hide the circles */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {{
-        display: none !important;
-    }}
-    
-    /* 2. Style the Label container to be a full-width card */
+    /* --- SIDEBAR: CUSTOM NAV --- */
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {{ display: none !important; }}
     div[data-testid="stRadio"] label {{
         background-color: transparent !important;
         padding: 10px 15px !important;
-        margin-left: -1rem !important; /* Push to edges */
+        margin-left: -1rem !important;
         margin-right: -1rem !important;
         width: calc(100% + 2rem) !important;
         border-radius: 0 !important;
@@ -106,43 +99,10 @@ def inject_luxury_css():
         display: flex;
         align-items: center;
     }}
-    
-    /* 3. Hover State */
-    div[data-testid="stRadio"] label:hover {{
-        background-color: rgba(255, 255, 255, 0.05) !important;
-    }}
-    
-    /* 4. Active/Selected State */
-    div[data-testid="stRadio"] label:has(input:checked) {{
-        background-color: rgba(114, 9, 183, 0.25) !important;
-        border-left: 4px solid #D4AF37 !important;
-    }}
-    
-    /* 5. Text Styling - FORCE WHITE */
-    div[data-testid="stRadio"] label p {{
-        font-family: 'Lato', sans-serif !important;
-        font-size: 15px !important;
-        font-weight: 500 !important;
-        color: #FFFFFF !important;
-        margin: 0 !important;
-    }}
-    
-    div[data-testid="stRadio"] label:has(input:checked) p {{
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        text-shadow: 0 0 5px rgba(255,255,255,0.4);
-    }}
-
-    /* --- HIDE DEFAULT UI --- */
-    footer {{ visibility: hidden; }}
-    #MainMenu {{ visibility: hidden; }}
-    .stAppDeployButton {{ display: none; }}
-    div:has(> a[href*="streamlit.io"]) {{ visibility: hidden; display: none; }}
-    [data-testid="stSidebarNav"] {{ display: none !important; }}
-    
-    /* Keep Mobile Toggle Visible */
-    header[data-testid="stHeader"] {{ background: transparent; }}
-    [data-testid="collapsedControl"] {{ display: block !important; visibility: visible !important; color: white !important; }}
+    div[data-testid="stRadio"] label:hover {{ background-color: rgba(255, 255, 255, 0.05) !important; }}
+    div[data-testid="stRadio"] label:has(input:checked) {{ background-color: rgba(114, 9, 183, 0.25) !important; border-left: 4px solid #D4AF37 !important; }}
+    div[data-testid="stRadio"] label p {{ font-family: 'Lato', sans-serif !important; font-size: 15px !important; font-weight: 500 !important; color: #FFFFFF !important; margin: 0 !important; }}
+    div[data-testid="stRadio"] label:has(input:checked) p {{ color: #ffffff !important; font-weight: 700 !important; text-shadow: 0 0 5px rgba(255,255,255,0.4); }}
 
     /* --- COMPONENTS --- */
     .luxury-card {{ background: rgba(17, 25, 40, 0.75); backdrop-filter: blur(16px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
@@ -188,6 +148,10 @@ def luxury_spinner(text="Processing..."):
 def render_hero_card(col, player):
     with col:
         st.markdown(f"""<div class="luxury-card" style="padding: 15px; display: flex; align-items: center;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(0, 201, 255, 0.5);"><div><div style="color: white; font-weight: 800;">{player['Name']}</div><div style="color: #00C9FF; font-weight: 600;">{player['Points']} PTS</div><div style="color: #a0aaba; font-size: 0.8rem;">{player['Team']}</div></div></div>""", unsafe_allow_html=True)
+
+def render_villain_card(col, player):
+    with col:
+        st.markdown(f"""<div class="luxury-card" style="padding: 15px; display: flex; align-items: center; border-left: 4px solid #FF4B4B;"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{player['ID']}.png&w=80&h=60" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(255, 75, 75, 0.5); filter: grayscale(100%);"><div><div style="color: #FF4B4B; font-weight: 800;">{player['Name']}</div><div style="color: white; font-weight: 600;">{player['Points']} PTS</div><div style="color: #a0aaba; font-size: 0.7rem;">Proj: {player.get('Projected', 0):.1f}</div></div></div>""", unsafe_allow_html=True)
 
 def render_team_card(col, team_data, rank):
     power_tip = get_tooltip_html("Power Score")
