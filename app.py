@@ -80,6 +80,50 @@ with st.sidebar:
     
     st.markdown("---")
 
+    # --- IN app.py ---
+
+# 1. Update the Menu List (Add "🔮 The Outlook")
+# selected_page_raw = st.radio(..., ["📜 The Ledger", "🔮 The Outlook", ...])
+
+# 2. Add the Page Logic
+elif selected_page == "The Outlook":
+    st.header("🔮 The Forward Guidance")
+    st.caption("Quarterly Schedule Analysis & Liquidity Planning.")
+    
+    # Selector to view ANY team's outlook
+    view_team = st.selectbox("Select Portfolio:", [t.team_name for t in league.teams], index=0)
+    
+    with ui.luxury_spinner("Calculating Market Conditions..."):
+        df_outlook = logic.get_forward_guidance(league, view_team, current_week)
+        
+    if not df_outlook.empty:
+        st.markdown(f"""
+        <div class="luxury-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <h3 style="margin: 0; color: white;">{view_team}</h3>
+                    <span style="color: #a0aaba; font-size: 0.8rem;">4-Week Strength of Schedule Map</span>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.7rem; color: #a0aaba;">LEGEND</div>
+                    <span class="meta-badge rank-easy" style="background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D;">SMASH (Bottom 10 Def)</span>
+                    <span class="meta-badge rank-hard" style="background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B;">FADE (Top 10 Def)</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        ui.render_schedule_heatmap(df_outlook, current_week)
+        
+        st.markdown("""
+        <div style="background: rgba(114, 9, 183, 0.1); border-left: 4px solid #7209b7; padding: 15px; border-radius: 8px; font-size: 0.9rem; color: #e0e0e0;">
+            <b>💡 Strategic Insight:</b> The rank (#) shown next to the opponent represents how many fantasy points that defense allows to the position. 
+            <br><b>Rank 32</b> = Allows MOST points (Best Matchup). <b>Rank 1</b> = Allows LEAST points (Worst Matchup).
+        </div>
+        """, unsafe_allow_html=True)
+        
+    else:
+        st.error("Unable to retrieve schedule data. NFL API might be busy.")
     # PDF Generation Button
     if st.button("📄 Generate PDF"):
         with ui.luxury_spinner("Compiling Intelligence Report..."):
