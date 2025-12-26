@@ -258,3 +258,74 @@ def clean_for_pdf(text):
 def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
+
+# --- ADD TO ui.py ---
+
+def render_schedule_heatmap(df, start_week):
+    if df.empty:
+        st.info("No schedule data available.")
+        return
+
+    # Define Column Names dynamically based on the dataframe
+    cols = [c for c in df.columns if "Wk" in c and "_Rank" not in c]
+    
+    html = """
+    <style>
+        .heatmap-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: 'Lato', sans-serif; }
+        .heatmap-header { text-align: left; color: #a0aaba; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px; font-size: 0.8rem; text-transform: uppercase; }
+        .heatmap-row { border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .player-cell { padding: 12px 10px; color: white; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+        .matchup-cell { text-align: center; padding: 10px; font-weight: 700; font-size: 0.9rem; border-radius: 4px; }
+        
+        /* Rank Coloring (Standard DVP: 32 is Easiest/Green, 1 is Hardest/Red) */
+        .rank-easy { background-color: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid rgba(146, 254, 157, 0.3); } /* Rank 22-32 */
+        .rank-mid { background-color: rgba(255, 255, 255, 0.05); color: #a0aaba; } /* Rank 12-21 */
+        .rank-hard { background-color: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid rgba(255, 75, 75, 0.3); } /* Rank 1-11 */
+        .rank-bye { background-color: #1a1c24; color: #555; border: 1px solid #333; }
+    </style>
+    <table class="heatmap-table">
+        <thead>
+            <tr>
+                <th class="heatmap-header" style="width: 30%;">Asset</th>
+    """
+    
+    for c in cols:
+        html += f'<th class="heatmap-header" style="text-align: center;">{c}</th>'
+    html += "</tr></thead><tbody>"
+    
+    for _, row in df.iterrows():
+        # Player Info
+        pid = row['ID']
+        headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=60&h=45"
+        html += f"""
+        <tr class="heatmap-row">
+            <td>
+                <div class="player-cell">
+                    <img src="{headshot}" style="width: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1);">
+                    <div>
+                        <div>{row['Player']}</div>
+                        <div style="font-size: 0.7rem; color: #a0aaba;">{row['Pos']}</div>
+                    </div>
+                </div>
+            </td>
+        """
+        
+        # Matchup Cells
+        for c in cols:
+            opp = row[c]
+            rank_col = f"{c}_Rank"
+            rank = row.get(rank_col, 16)
+            
+            css_class = "rank-mid"
+            if opp == "BYE": css_class = "rank-bye"
+            elif rank >= 22: css_class = "rank-easy" # Easy Matchup (Allows lots of points)
+            elif rank <= 10: css_class = "rank-hard" # Hard Matchup
+            
+            matchup_display = f"{opp} <span style='font-size:0.6rem; opacity:0.7;'>#{rank}</span>" if opp != "BYE" else "BYE"
+            
+            html += f'<td style="padding: 5px;"><div class="matchup-cell {css_class}">{matchup_display}</div></td>'
+            
+        html += "</tr>"
+        
+    html += "</tbody></table>"
+    st.markdown(html, unsafe_allow_html=True)
