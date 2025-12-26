@@ -69,10 +69,10 @@ with st.sidebar:
     selected_page_raw = st.radio(
         "Navigation",
         [
-            "📜 The Ledger", "📈 The Hierarchy", "🔎 The Audit", "💎 The Hedge Fund", 
-            "📊 The IPO Audit", "🧬 The Lab", "🔮 The Forecast", "🌌 The Multiverse", 
-            "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", "🕵️ The Dark Pool", 
-            "🏆 Trophy Room", "⏳ The Vault"
+            "📜 The Ledger", "📈 The Hierarchy", "🔮 The Outlook", "🔎 The Audit", 
+            "💎 The Hedge Fund", "📊 The IPO Audit", "🧬 The Lab", "🔮 The Forecast", 
+            "🌌 The Multiverse", "🚀 Next Week", "📊 The Prop Desk", "🤝 The Dealmaker", 
+            "🕵️ The Dark Pool", "🏆 Trophy Room", "⏳ The Vault"
         ],
         label_visibility="collapsed"
     )
@@ -80,50 +80,6 @@ with st.sidebar:
     
     st.markdown("---")
 
-    # --- IN app.py ---
-
-# 1. Update the Menu List (Add "🔮 The Outlook")
-# selected_page_raw = st.radio(..., ["📜 The Ledger", "🔮 The Outlook", ...])
-
-# 2. Add the Page Logic
-elif selected_page == "The Outlook":
-    st.header("🔮 The Forward Guidance")
-    st.caption("Quarterly Schedule Analysis & Liquidity Planning.")
-    
-    # Selector to view ANY team's outlook
-    view_team = st.selectbox("Select Portfolio:", [t.team_name for t in league.teams], index=0)
-    
-    with ui.luxury_spinner("Calculating Market Conditions..."):
-        df_outlook = logic.get_forward_guidance(league, view_team, current_week)
-        
-    if not df_outlook.empty:
-        st.markdown(f"""
-        <div class="luxury-card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                <div>
-                    <h3 style="margin: 0; color: white;">{view_team}</h3>
-                    <span style="color: #a0aaba; font-size: 0.8rem;">4-Week Strength of Schedule Map</span>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 0.7rem; color: #a0aaba;">LEGEND</div>
-                    <span class="meta-badge rank-easy" style="background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D;">SMASH (Bottom 10 Def)</span>
-                    <span class="meta-badge rank-hard" style="background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B;">FADE (Top 10 Def)</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        ui.render_schedule_heatmap(df_outlook, current_week)
-        
-        st.markdown("""
-        <div style="background: rgba(114, 9, 183, 0.1); border-left: 4px solid #7209b7; padding: 15px; border-radius: 8px; font-size: 0.9rem; color: #e0e0e0;">
-            <b>💡 Strategic Insight:</b> The rank (#) shown next to the opponent represents how many fantasy points that defense allows to the position. 
-            <br><b>Rank 32</b> = Allows MOST points (Best Matchup). <b>Rank 1</b> = Allows LEAST points (Worst Matchup).
-        </div>
-        """, unsafe_allow_html=True)
-        
-    else:
-        st.error("Unable to retrieve schedule data. NFL API might be busy.")
     # PDF Generation Button
     if st.button("📄 Generate PDF"):
         with ui.luxury_spinner("Compiling Intelligence Report..."):
@@ -167,14 +123,10 @@ for game in box_scores:
             status = getattr(p, 'injuryStatus', 'ACTIVE')
             is_injured = any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED'])
             
-            # --- BENCH LOGIC ---
             if p.slot_position == 'BE':
                 bench.append(info)
-                # Only highlight if score > 15 AND score > 0 (Sanity check)
                 if p.points > 15: 
                     bench_highlights.append({"Team": team_name, "Player": p.name, "Score": p.points})
-            
-            # --- STARTER LOGIC ---
             else:
                 starters.append(info)
                 if not is_injured: 
@@ -204,18 +156,13 @@ df_moonshot = pd.DataFrame()
 
 if all_active_players: 
     df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(7)
-    
-    # 1. Hall of Shame (Underperformers)
-    # FILTER: Exclude players with 0 points (Likely haven't played yet)
     df_active = pd.DataFrame(all_active_players)
     df_played = df_active[df_active['Points'] > 0].copy() 
     
     if not df_played.empty:
-        df_played['Diff'] = df_played['Projected'] - df_played['Points'] # Positive = Bad (Proj > Actual)
+        df_played['Diff'] = df_played['Projected'] - df_played['Points'] 
         df_disappointments = df_played.sort_values(by="Diff", ascending=False).head(4)
-        
-        # 2. The Moonshot (Overachievers)
-        df_played['OverAchieve'] = df_played['Points'] - df_played['Projected'] # Positive = Good
+        df_played['OverAchieve'] = df_played['Points'] - df_played['Projected'] 
         df_moonshot = df_played.sort_values(by="OverAchieve", ascending=False).head(1)
 else: 
     df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
@@ -228,7 +175,7 @@ else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
 # ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
 
-# --- WEEKLY ELITE (7 PLAYERS) ---
+# --- WEEKLY ELITE ---
 st.markdown("### 🌟 Weekly Elite")
 if not df_players.empty:
     cols_top = st.columns(4)
@@ -239,12 +186,10 @@ if not df_players.empty:
         idx = i + 4
         if idx < len(df_players): ui.render_hero_card(cols_bot[i], df_players.iloc[idx])
 else: st.info("No player data available for this week yet.")
-
 st.markdown("---")
 
 # --- WEEKLY AWARDS ROW ---
 c_shame, c_moon = st.columns([2, 1])
-
 with c_shame:
     st.markdown("### 📉 Hall of Shame (The Letdowns)")
     if not df_disappointments.empty:
@@ -252,7 +197,6 @@ with c_shame:
         for i, row in df_disappointments.head(2).reset_index(drop=True).iterrows():
             ui.render_villain_card(d_cols[i], row)
     else: st.info("No major disappointments found.")
-
 with c_moon:
     st.markdown("### 🚀 The Moonshot")
     if not df_moonshot.empty:
@@ -267,7 +211,6 @@ with c_moon:
             </div>
         """, unsafe_allow_html=True)
     else: st.info("Data pending.")
-
 st.markdown("---")
 
 # --- BENCH WARMER AWARD ---
@@ -292,13 +235,11 @@ if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
     
-    # --- DATE & CONTEXT LOGIC (Fixed) ---
+    # --- DATE & CONTEXT LOGIC ---
     base_date = datetime.date(2025, 9, 9) 
     recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
-    
     if recap_date_obj > datetime.date.today():
         recap_date_obj = datetime.date.today()
-        
     date_str = recap_date_obj.strftime("%B %d, %Y")
 
     reg_season_len = league.settings.reg_season_count
@@ -356,6 +297,25 @@ elif selected_page == "The Hierarchy":
     if "df_advanced" not in st.session_state: st.session_state["df_advanced"] = logic.calculate_heavy_analytics(league, current_week)
     cols = st.columns(3)
     for i, row in st.session_state["df_advanced"].reset_index(drop=True).iterrows(): ui.render_team_card(cols[i % 3], row, i+1)
+
+elif selected_page == "The Outlook":
+    st.header("🔮 The Forward Guidance")
+    st.caption("Quarterly Schedule Analysis & Liquidity Planning.")
+    view_team = st.selectbox("Select Portfolio:", [t.team_name for t in league.teams], index=0)
+    with ui.luxury_spinner("Calculating Market Conditions..."):
+        df_outlook = logic.get_forward_guidance(league, view_team, current_week)
+    if not df_outlook.empty:
+        st.markdown(f"""
+        <div class="luxury-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div><h3 style="margin: 0; color: white;">{view_team}</h3><span style="color: #a0aaba; font-size: 0.8rem;">4-Week Strength of Schedule Map</span></div>
+                <div style="text-align: right;"><div style="font-size: 0.7rem; color: #a0aaba;">LEGEND</div><span class="meta-badge rank-easy" style="background: rgba(146, 254, 157, 0.2); color: #92FE9D; border: 1px solid #92FE9D;">SMASH (Bottom 10 Def)</span><span class="meta-badge rank-hard" style="background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B;">FADE (Top 10 Def)</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        ui.render_schedule_heatmap(df_outlook, current_week)
+        st.markdown("""<div style="background: rgba(114, 9, 183, 0.1); border-left: 4px solid #7209b7; padding: 15px; border-radius: 8px; font-size: 0.9rem; color: #e0e0e0;"><b>💡 Strategic Insight:</b> The rank (#) shown next to the opponent represents how many fantasy points that defense allows to the position. <br><b>Rank 32</b> = Allows MOST points (Best Matchup). <b>Rank 1</b> = Allows LEAST points (Worst Matchup).</div>""", unsafe_allow_html=True)
+    else: st.error("Unable to retrieve schedule data. NFL API might be busy.")
 
 elif selected_page == "The Audit":
     st.header("🔎 The Audit")
