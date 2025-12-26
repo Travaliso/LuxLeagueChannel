@@ -86,7 +86,14 @@ with st.sidebar:
         with ui.luxury_spinner("Compiling Intelligence Report..."):
             if "recap" not in st.session_state: st.session_state["recap"] = "Analysis Generated."
             awards = logic.calculate_season_awards(league, current_week)
-            
+            else:
+        # This button allows you to regenerate the report if the date/context is wrong
+        if st.button("🔄 Regenerate Report"):
+            del st.session_state["recap"]
+            st.rerun()
+    # ----------------------
+
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
             pdf = ui.PDF()
             pdf.add_page()
             pdf.chapter_title(f"WEEK {selected_week} BRIEFING")
