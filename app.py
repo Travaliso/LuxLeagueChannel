@@ -172,12 +172,18 @@ if selected_page == "The Ledger":
     st.header("📜 The Ledger")
     st.caption("Where the receipts are kept and the scores are settled.")
     
-    # --- DATE & CONTEXT CALCULATION ---
-    # Assumes Week 1 ends approx Sept 9, 2025
+# --- DATE & CONTEXT CALCULATION ---
+    # 1. Calculate the standard 'Tuesday Morning' recap date
     base_date = datetime.date(2025, 9, 9) 
     recap_date_obj = base_date + datetime.timedelta(weeks=selected_week - 1)
+    
+    # 2. THE FIX: If that date is in the future, use Today's Date instead
+    if recap_date_obj > datetime.date.today():
+        recap_date_obj = datetime.date.today()
+        
     date_str = recap_date_obj.strftime("%B %d, %Y")
 
+    # 3. Determine Playoff Context
     reg_season_len = league.settings.reg_season_count
     if selected_week <= reg_season_len:
         season_context = "Regular Season: The grind for playoff positioning."
