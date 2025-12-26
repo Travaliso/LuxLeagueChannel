@@ -543,4 +543,3 @@ elif selected_page == "The Vault":
         fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#a0aaba")
         st.plotly_chart(fig, use_container_width=True)
 
-}
