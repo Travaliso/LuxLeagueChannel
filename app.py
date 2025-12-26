@@ -131,7 +131,7 @@ for game in box_scores:
                 starters.append(info)
                 if not is_injured: 
                     all_active_players.append({
-                        "Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId
+                        "Name": p.name, "Points": p.points, "Team": team_name, "ID": p.playerId, "Projected": p.projected_points
                     })
         return starters, bench
 
@@ -146,8 +146,17 @@ for game in box_scores:
 if efficiency_data: df_eff = pd.DataFrame(efficiency_data).sort_values(by="Total Potential", ascending=False)
 else: df_eff = pd.DataFrame(columns=["Team", "Total Potential", "Starters", "Bench"])
 
-if all_active_players: df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(5)
-else: df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
+# --- PLAYER DATA PROCESSING ---
+if all_active_players: 
+    df_players = pd.DataFrame(all_active_players).sort_values(by="Points", ascending=False).head(7)
+    
+    # Calculate Disappointments (Projected - Actual)
+    df_active = pd.DataFrame(all_active_players)
+    df_active['Diff'] = df_active['Projected'] - df_active['Points']
+    df_disappointments = df_active.sort_values(by="Diff", ascending=False).head(4)
+else: 
+    df_players = pd.DataFrame(columns=["Name", "Points", "Team", "ID"])
+    df_disappointments = pd.DataFrame(columns=["Name", "Points", "Team", "ID", "Projected"])
 
 if bench_highlights: df_bench_stars = pd.DataFrame(bench_highlights).sort_values(by="Score", ascending=False).head(5)
 else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
@@ -156,15 +165,49 @@ else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
 # 5. DASHBOARD UI ROUTER
 # ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
+
+# --- WEEKLY ELITE (7 PLAYERS) ---
 st.markdown("### 🌟 Weekly Elite")
-h1, h2, h3 = st.columns(3)
 if not df_players.empty:
-    top_3 = df_players.head(3).reset_index(drop=True)
-    if len(top_3) >= 1: ui.render_hero_card(h1, top_3.iloc[0])
-    if len(top_3) >= 2: ui.render_hero_card(h2, top_3.iloc[1])
-    if len(top_3) >= 3: ui.render_hero_card(h3, top_3.iloc[2])
+    # Row 1: Top 4
+    cols_top = st.columns(4)
+    for i in range(4):
+        if i < len(df_players): ui.render_hero_card(cols_top[i], df_players.iloc[i])
+    
+    # Row 2: Next 3
+    cols_bot = st.columns(3)
+    for i in range(3):
+        idx = i + 4
+        if idx < len(df_players): ui.render_hero_card(cols_bot[i], df_players.iloc[idx])
 else: st.info("No player data available for this week yet.")
+
 st.markdown("---")
+
+# --- WEEKLY DISAPPOINTMENTS ---
+st.markdown("### 📉 Hall of Shame (The Letdowns)")
+if not df_disappointments.empty:
+    d_cols = st.columns(4)
+    for i, row in df_disappointments.reset_index(drop=True).iterrows():
+        ui.render_villain_card(d_cols[i], row)
+else: st.info("No major disappointments found.")
+
+st.markdown("---")
+
+# --- BENCH WARMER AWARD ---
+if not df_bench_stars.empty:
+    st.markdown("### 🪵 The Bench Mob (Wasted Points)")
+    bench_king = df_bench_stars.iloc[0]
+    st.markdown(f"""
+        <div class="luxury-card" style="border-left: 4px solid #F7B801; display:flex; align-items:center;">
+            <div style="font-size:3rem; margin-right:20px;">🪵</div>
+            <div>
+                <div style="color:#F7B801; font-weight:900; font-size:1.2rem;">BENCH WARMER OF THE WEEK</div>
+                <div style="color:white; font-size:1.5rem; font-weight:bold;">{bench_king['Player']} ({bench_king['Score']:.1f} PTS)</div>
+                <div style="color:#a0aaba;">Stashed by {bench_king['Team']}</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    st.markdown("---")
 
 # --- PAGE ROUTING ---
 
