@@ -397,7 +397,7 @@ def run_multiverse_simulation(_league, forced_winners_list=None, simulations=100
         final_output.append({"Team": team_name, "New Odds": odds})
     return pd.DataFrame(final_output).sort_values(by="New Odds", ascending=False)
 
-# --- MARKET (Unchanged but included for completeness) ---
+# --- MARKET ---
 @st.cache_data(ttl=3600)
 def get_vegas_props(api_key, _league, week):
     current_year = _league.year
@@ -498,9 +498,8 @@ def get_vegas_props(api_key, _league, week):
                     if opp in dvp_map and p_pos in dvp_map[opp]:
                         rank = dvp_map[opp][p_pos]
                         dvp_txt = f"vs #{rank} {p_pos} Def"
-                    w_data = {}
                     site = match.get('game_site', 'UNK')
-                    if site in weather_map: w_data = weather_map[site]
+                    w_data = weather_map.get(site, "72°F, Indoors")
                     insight_msg = ""
                     ctx = s.get('context', {'total':0, 'spread':0})
                     if ctx['total'] > 48: insight_msg = "🔥 Barn Burner"
