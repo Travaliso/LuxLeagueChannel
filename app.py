@@ -58,14 +58,14 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # 2. WEEK SELECTOR
+# 2. WEEK SELECTOR
     current_week = league.current_week
     if current_week <= 1:
-    selected_week = 1
-    st.info("Week 1 is currently active. The time-travel slider will appear in Week 2.")
-else:
-    selected_week = st.slider("Select Week", 1, current_week, current_week)
-    
+        selected_week = 1
+        st.info("Week 1 is currently active. The time-travel slider will appear in Week 2.")
+    else:
+        selected_week = st.slider("Select Week", 1, current_week, current_week)
+        
     st.markdown("---")
 
     # 3. NAVIGATION MENU (Native Radio -> Styled as List)
