@@ -106,7 +106,7 @@ with st.sidebar:
 # ==============================================================================
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     with ui.luxury_spinner(f"Accessing Week {selected_week} Data..."):
-        try:
+try:
         st.session_state['box_scores'] = league.box_scores(week=selected_week)
     except Exception:
         st.session_state['box_scores'] = []
