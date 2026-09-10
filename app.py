@@ -60,7 +60,10 @@ with st.sidebar:
     
     # 2. WEEK SELECTOR
     current_week = league.current_week
-    if current_week == 0: current_week = 1
+    if current_week <= 1:
+    selected_week = 1
+    st.info("Week 1 is currently active. The time-travel slider will appear in Week 2.")
+else:
     selected_week = st.slider("Select Week", 1, current_week, current_week)
     
     st.markdown("---")
