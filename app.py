@@ -106,7 +106,11 @@ with st.sidebar:
 # ==============================================================================
 if 'box_scores' not in st.session_state or st.session_state.get('week') != selected_week:
     with ui.luxury_spinner(f"Accessing Week {selected_week} Data..."):
-        st.session_state['box_scores'] = league.box_scores(week=selected_week)
+        try:
+    st.session_state['box_scores'] = league.box_scores(week=selected_week)
+except Exception:
+    st.session_state['box_scores'] = []
+    st.warning("Matchup data is not yet available from ESPN. Box scores will populate closer to kickoff.")
         st.session_state['week'] = selected_week
     st.rerun()
 
