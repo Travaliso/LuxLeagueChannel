@@ -224,7 +224,8 @@ def analyze_nextgen_metrics_v3(roster, year, current_week):
 def calculate_heavy_analytics(_league, current_week):
     data_rows = []
     for team in _league.teams:
-        power_score = round(team.points_for / current_week, 1)
+        safe_week = max(1, current_week)
+        power_score = round(team.points_for / safe_week, 1)
         true_wins, total_matchups = 0, 0
         for w in range(1, current_week + 1):
             box = _league.box_scores(week=w)
