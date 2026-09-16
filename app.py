@@ -176,37 +176,49 @@ st.markdown("---")
 
 # --- PAGE ROUTING ---
 
-if selected_page == "The Ledger":
-    st.header("📜 The Ledger")
-    st.caption("Where the receipts are kept and the scores are settled.")
-    if "recap" not in st.session_state:
-        with ui.luxury_spinner("Analyst is reviewing portfolios..."): 
-            top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "League"
-            st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, selected_week, top_team)
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state["recap"]}</div>', unsafe_allow_html=True)
-    st.markdown("#### Weekly Transactions")
-    mobile_view = st.toggle("📱 Mobile View (List)", value=False)
-    for m in matchup_data:
-        st.markdown(f"""<div class="luxury-card" style="padding: 20px; border-left: 5px solid #7209b7; margin-bottom: 20px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div style="text-align: center; flex: 1;"><img src="{m['Home Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #00C9FF; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Home']}</div><div style="font-size: 2rem; color: #00C9FF; font-weight: bold;">{m['Home Score']}</div></div><div style="flex: 0.5; text-align: center;"><div style="font-size: 2rem; color: #555; font-weight: 900; opacity: 0.5;">VS</div></div><div style="text-align: center; flex: 1;"><img src="{m['Away Logo']}" onerror="this.onerror=null; this.src='{ui.FALLBACK_LOGO}';" width="70" style="border-radius: 50%; border: 3px solid #FF4B4B; padding: 2px;"><div style="font-weight: 900; font-size: 1.2rem; margin-top: 10px; color: white;">{m['Away']}</div><div style="font-size: 2rem; color: #FF4B4B; font-weight: bold;">{m['Away Score']}</div></div></div></div>""", unsafe_allow_html=True)
-        with st.expander(f"📋 View Roster Details: {m['Home']} vs {m['Away']}"):
-            if m['Home Roster']:
-                if mobile_view:
-                    c_home, c_away = st.columns(2)
-                    with c_home:
-                        st.markdown(f"**{m['Home']}**")
-                        for p in m['Home Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
-                    with c_away:
-                        st.markdown(f"**{m['Away']}**")
-                        for p in m['Away Roster']: st.markdown(f"{p['Name']}: **{p['Score']:.1f}**")
-                else:
-                    max_len = max(len(m['Home Roster']), len(m['Away Roster']))
-                    h_names = [p['Name'] for p in m['Home Roster']] + [''] * (max_len - len(m['Home Roster']))
-                    h_pts = [p['Score'] for p in m['Home Roster']] + [0.0] * (max_len - len(m['Home Roster']))
-                    a_pts = [p['Score'] for p in m['Away Roster']] + [0.0] * (max_len - len(m['Away Roster']))
-                    a_names = [p['Name'] for p in m['Away Roster']] + [''] * (max_len - len(m['Away Roster']))
-                    df_match = pd.DataFrame({f"{m['Home']} Player": h_names, f"{m['Home']} Pts": h_pts, f"{m['Away']} Pts": a_pts, f"{m['Away']} Player": a_names})
-                    st.dataframe(df_match, use_container_width=True, hide_index=True, column_config={f"{m['Home']} Pts": st.column_config.NumberColumn(format="%.1f"), f"{m['Away']} Pts": st.column_config.NumberColumn(format="%.1f")})
+# --- THE LEDGER TAB ---
+if selected_tab == "The Ledger":
+    
+    # 1. WEEKLY ELITE (Top Section: 4 cards on top, 3 below)
+    st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
+    
+    # Row 1 (Top 4)
+    elite_row1 = st.columns(4)
+    for i, col in enumerate(elite_row1):
+        with col:
+            # Replace with your actual ui.card() function or HTML
+            st.markdown(f"<!-- Insert Elite Player {i+1} Card Here -->", unsafe_allow_html=True)
+            
+    # Row 2 (Next 3)
+    elite_row2 = st.columns([1, 1, 1, 1]) # 4 columns to keep sizing consistent, leave last empty
+    for i in range(3):
+        with elite_row2[i]:
+            st.markdown(f"<!-- Insert Elite Player {i+5} Card Here -->", unsafe_allow_html=True)
 
+    st.markdown("<br><br>", unsafe_allow_html=True) # Spacing
+
+    # 2. THE LOWER SPLIT (Hall of Shame/Bench Mob on Left, Moonshot on Right)
+    bottom_left, bottom_right = st.columns([2.2, 1]) 
+
+    with bottom_left:
+        # Hall of Shame
+        st.markdown("### 🥶 Hall of Shame (The Letdowns)")
+        shame_cols = st.columns(2)
+        with shame_cols[0]:
+            st.markdown("<!-- Insert Letdown Player 1 Card (Red Border) -->", unsafe_allow_html=True)
+        with shame_cols[1]:
+            st.markdown("<!-- Insert Letdown Player 2 Card (Red Border) -->", unsafe_allow_html=True)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Bench Mob
+        st.markdown("<h3 style='color: #d4af37;'>🪵 The Bench Mob (Wasted Points)</h3>", unsafe_allow_html=True)
+        st.markdown("<!-- Insert Bench Mob Card (Gold Border, Wide) -->", unsafe_allow_html=True)
+
+    with bottom_right:
+        # The Moonshot
+        st.markdown("### 🚀 The Moonshot")
+        st.markdown("<!-- Insert Moonshot Card (Tall/Purple) -->", unsafe_allow_html=True)
 elif selected_page == "The Hierarchy":
     st.header("📈 The Hierarchy")
     st.caption("A ruthless ranking of who is actually good.")
