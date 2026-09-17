@@ -177,7 +177,7 @@ st.markdown("---")
 # --- PAGE ROUTING ---
 
 # --- THE LEDGER TAB ---
-if selected_tab == "The Ledger":
+if page == "The Ledger":
     
     # 1. WEEKLY ELITE (Top Section: 4 cards on top, 3 below)
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
