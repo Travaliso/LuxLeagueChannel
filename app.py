@@ -228,10 +228,10 @@ if selected_page == "The Ledger":
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Drafting Studio Report..."):
             # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
-    if "recap" not in st.session_state:
-        with ui.luxury_spinner("Drafting Studio Report..."):
-            try:
-                top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
+        if "recap" not in st.session_state:
+            with ui.luxury_spinner("Drafting Studio Report..."):
+                try:
+                    top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
                 
                 # We strip out the logo URLs here so the LLM doesn't hallucinate giant markdown images
                 clean_matchup_data = []
