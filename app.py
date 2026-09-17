@@ -176,49 +176,74 @@ st.markdown("---")
 
 # --- PAGE ROUTING ---
 
-# --- THE LEDGER TAB ---
+# --- THE LEDGER TAB ---# --- THE LEDGER TAB ---
 if selected_page == "The Ledger":
     
-    # 1. WEEKLY ELITE (Top Section: 4 cards on top, 3 below)
+    # 1. DATA EXTRACTION & SORTING
+    all_starters = []
+    bench_players = []
+    
+    for game in box_scores:
+        for team_name, lineup in [(game.home_team.team_name, game.home_lineup), (game.away_team.team_name, game.away_lineup)]:
+            for p in lineup:
+                # Ignore injured players who scored 0
+                status = getattr(p, 'injuryStatus', 'ACTIVE')
+                if any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED']): 
+                    continue
+                
+                proj = getattr(p, 'projected_points', 0.0)
+                info = {"Name": p.name, "Points": p.points, "Proj": proj, "ID": p.playerId, "Team": "FA", "Owner": team_name}
+                
+                if p.slot_position == 'BE':
+                    bench_players.append(info)
+                else:
+                    all_starters.append(info)
+    
+    # Sort categories
+    elite_players = sorted(all_starters, key=lambda x: x['Points'], reverse=True)[:7]
+    
+    # Letdowns: Starters who missed their projection by the most (Requires ESPN proj > 8)
+    letdowns = sorted([p for p in all_starters if p['Proj'] > 8], key=lambda x: x['Points'] - x['Proj'])[:2]
+    if len(letdowns) < 2: letdowns = sorted(all_starters, key=lambda x: x['Points'])[:2] # Fallback if projections are missing
+    
+    # Moonshot: Biggest positive difference between actual points and projection
+    moonshot_player = sorted(all_starters, key=lambda x: x['Points'] - x['Proj'], reverse=True)[0] if all_starters else None
+    
+    # Bench Mob: Highest scoring player left on a bench
+    bench_warmer = sorted(bench_players, key=lambda x: x['Points'], reverse=True)[0] if bench_players else None
+
+
+    # 2. RENDER THE WEEKLY ELITE
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
     
-    # Row 1 (Top 4)
     elite_row1 = st.columns(4)
-    for i, col in enumerate(elite_row1):
-        with col:
-            # Replace with your actual ui.card() function or HTML
-            st.markdown(f"<!-- Insert Elite Player {i+1} Card Here -->", unsafe_allow_html=True)
+    for i in range(min(4, len(elite_players))):
+        ui.render_hero_card(elite_row1[i], elite_players[i])
             
-    # Row 2 (Next 3)
-    elite_row2 = st.columns([1, 1, 1, 1]) # 4 columns to keep sizing consistent, leave last empty
-    for i in range(3):
-        with elite_row2[i]:
-            st.markdown(f"<!-- Insert Elite Player {i+5} Card Here -->", unsafe_allow_html=True)
+    if len(elite_players) > 4:
+        elite_row2 = st.columns([1, 1, 1, 1]) 
+        for i in range(4, min(7, len(elite_players))):
+            ui.render_hero_card(elite_row2[i-4], elite_players[i])
 
-    st.markdown("<br><br>", unsafe_allow_html=True) # Spacing
+    st.markdown("<br><br>", unsafe_allow_html=True) 
 
-    # 2. THE LOWER SPLIT (Hall of Shame/Bench Mob on Left, Moonshot on Right)
+    # 3. RENDER THE LOWER SPLIT
     bottom_left, bottom_right = st.columns([2.2, 1]) 
 
     with bottom_left:
-        # Hall of Shame
         st.markdown("### 🥶 Hall of Shame (The Letdowns)")
         shame_cols = st.columns(2)
-        with shame_cols[0]:
-            st.markdown("<!-- Insert Letdown Player 1 Card (Red Border) -->", unsafe_allow_html=True)
-        with shame_cols[1]:
-            st.markdown("<!-- Insert Letdown Player 2 Card (Red Border) -->", unsafe_allow_html=True)
+        if len(letdowns) > 0: ui.render_shame_card(shame_cols[0], letdowns[0])
+        if len(letdowns) > 1: ui.render_shame_card(shame_cols[1], letdowns[1])
             
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Bench Mob
         st.markdown("<h3 style='color: #d4af37;'>🪵 The Bench Mob (Wasted Points)</h3>", unsafe_allow_html=True)
-        st.markdown("<!-- Insert Bench Mob Card (Gold Border, Wide) -->", unsafe_allow_html=True)
+        if bench_warmer: ui.render_bench_mob_card(bench_warmer)
 
     with bottom_right:
-        # The Moonshot
         st.markdown("### 🚀 The Moonshot")
-        st.markdown("<!-- Insert Moonshot Card (Tall/Purple) -->", unsafe_allow_html=True)
+        if moonshot_player: ui.render_moonshot_card(bottom_right, moonshot_player)
 elif selected_page == "The Hierarchy":
     st.header("📈 The Hierarchy")
     st.caption("A ruthless ranking of who is actually good.")
