@@ -69,7 +69,6 @@ with st.sidebar:
     st.markdown("---")
 
     # 3. NAVIGATION MENU (Native Radio -> Styled as List)
-    # Note: Emoji icons added here for visual flair since we aren't using option_menu
     selected_page_raw = st.radio(
         "Navigation",
         [
@@ -108,6 +107,9 @@ if 'box_scores' not in st.session_state or st.session_state.get('week') != selec
     with ui.luxury_spinner(f"Accessing Week {selected_week} Data..."):
         try:
             st.session_state['box_scores'] = league.box_scores(week=selected_week)
+            # Clear stale AI reports whenever the week changes so it doesn't get stuck on 0.0 scores
+            for k in ["recap", "rank_comm", "next_week_comm"]:
+                if k in st.session_state: del st.session_state[k]
         except Exception:
             st.session_state['box_scores'] = []
             st.warning("Matchup data is not yet available from ESPN. Box scores will populate closer to kickoff.")
@@ -146,11 +148,7 @@ for game in box_scores:
     h_r, h_br = get_roster_data(game.home_lineup, home.team_name)
     a_r, a_br = get_roster_data(game.away_lineup, away.team_name)
     
-    # Calculate live scores directly from starters to bypass API lag (fixes 0.0 scores)
-    h_score = round(sum(p['Score'] for p in h_r), 2)
-    a_score = round(sum(p['Score'] for p in a_r), 2)
-    
-    matchup_data.append({"Home": home.team_name, "Home Score": h_score, "Home Logo": ui.get_logo(home), "Home Roster": h_r, "Away": away.team_name, "Away Score": a_score, "Away Logo": ui.get_logo(away), "Away Roster": a_r})
+    matchup_data.append({"Home": home.team_name, "Home Score": game.home_score, "Home Logo": ui.get_logo(home), "Home Roster": h_r, "Away": away.team_name, "Away Score": game.away_score, "Away Logo": ui.get_logo(away), "Away Roster": a_r})
     
     h_p = sum(p['Score'] for p in h_r) + sum(p['Score'] for p in h_br)
     a_p = sum(p['Score'] for p in a_r) + sum(p['Score'] for p in a_br)
@@ -190,6 +188,7 @@ if selected_page == "The Ledger":
                     continue
                 
                 proj = getattr(p, 'projected_points', 0.0)
+                # Maps the Team to the owner instead of FA
                 info = {"Name": p.name, "Points": p.points, "Proj": proj, "ID": p.playerId, "Team": team_name, "Owner": team_name}
                 
                 if p.slot_position == 'BE':
@@ -210,24 +209,8 @@ if selected_page == "The Ledger":
     # Bench Mob: Highest scoring player left on a bench
     bench_warmer = sorted(bench_players, key=lambda x: x['Points'], reverse=True)[0] if bench_players else None
 
-    # 2. THE STUDIO REPORT
-    if "recap" not in st.session_state:
-        with ui.luxury_spinner("Drafting Studio Report..."):
-            try:
-                top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
-                raw_recap = intel.get_weekly_recap(OPENAI_KEY, matchup_data, top_team) 
-                
-                # Strip out LLM placeholder artifacts
-                raw_recap = raw_recap.replace("[insert week number here]", str(selected_week))
-                
-                st.session_state["recap"] = raw_recap
-            except Exception as e:
-                st.session_state["recap"] = f"LLM Generation Error: {e}"
 
-    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state.get("recap")}</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 3. RENDER THE WEEKLY ELITE
+    # 2. RENDER THE WEEKLY ELITE (AT THE TOP)
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
     
     elite_row1 = st.columns(4)
@@ -241,7 +224,35 @@ if selected_page == "The Ledger":
 
     st.markdown("<br><br>", unsafe_allow_html=True) 
 
-    # 4. RENDER THE LOWER SPLIT
+    # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
+    if "recap" not in st.session_state:
+        with ui.luxury_spinner("Drafting Studio Report..."):
+            try:
+                top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
+                
+                # We strip out the logo URLs here so the LLM doesn't hallucinate giant markdown images
+                clean_matchup_data = []
+                for m in matchup_data:
+                    clean_matchup_data.append({
+                        "Home": m["Home"], "Home Score": m["Home Score"], "Home Roster": m["Home Roster"],
+                        "Away": m["Away"], "Away Score": m["Away Score"], "Away Roster": m["Away Roster"]
+                    })
+                
+                raw_recap = intel.get_weekly_recap(OPENAI_KEY, clean_matchup_data, top_team) 
+                
+                # Strip out LLM placeholder artifacts
+                import re
+                raw_recap = re.sub(r'\[.*?week.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
+                
+                st.session_state["recap"] = raw_recap
+            except Exception as e:
+                st.session_state["recap"] = f"LLM Generation Error: {e}"
+
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state.get("recap")}</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+
+    # 4. RENDER THE LOWER SPLIT (SCORES AND THE REST)
     bottom_left, bottom_right = st.columns([2.2, 1]) 
 
     with bottom_left:
