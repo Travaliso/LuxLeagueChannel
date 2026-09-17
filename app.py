@@ -182,13 +182,11 @@ if selected_page == "The Ledger":
     for game in box_scores:
         for team_name, lineup in [(game.home_team.team_name, game.home_lineup), (game.away_team.team_name, game.away_lineup)]:
             for p in lineup:
-                # Ignore injured players who scored 0
                 status = getattr(p, 'injuryStatus', 'ACTIVE')
                 if any(k in str(status).upper() for k in ['OUT', 'IR', 'RESERVE', 'SUSPENDED']): 
                     continue
                 
                 proj = getattr(p, 'projected_points', 0.0)
-                # Maps the Team to the owner instead of FA
                 info = {"Name": p.name, "Points": p.points, "Proj": proj, "ID": p.playerId, "Team": team_name, "Owner": team_name}
                 
                 if p.slot_position == 'BE':
@@ -196,19 +194,13 @@ if selected_page == "The Ledger":
                 else:
                     all_starters.append(info)
     
-    # Sort categories
     elite_players = sorted(all_starters, key=lambda x: x['Points'], reverse=True)[:7]
     
-    # Letdowns: Starters who missed their projection by the most (Requires ESPN proj > 8)
     letdowns = sorted([p for p in all_starters if p['Proj'] > 8], key=lambda x: x['Points'] - x['Proj'])[:2]
-    if len(letdowns) < 2: letdowns = sorted(all_starters, key=lambda x: x['Points'])[:2] # Fallback if projections are missing
+    if len(letdowns) < 2: letdowns = sorted(all_starters, key=lambda x: x['Points'])[:2] 
     
-    # Moonshot: Biggest positive difference between actual points and projection
     moonshot_player = sorted(all_starters, key=lambda x: x['Points'] - x['Proj'], reverse=True)[0] if all_starters else None
-    
-    # Bench Mob: Highest scoring player left on a bench
     bench_warmer = sorted(bench_players, key=lambda x: x['Points'], reverse=True)[0] if bench_players else None
-
 
     # 2. RENDER THE WEEKLY ELITE (AT THE TOP)
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
@@ -227,13 +219,9 @@ if selected_page == "The Ledger":
     # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Drafting Studio Report..."):
-            # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
-        if "recap" not in st.session_state:
-            with ui.luxury_spinner("Drafting Studio Report..."):
-                try:
-                    top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
+            try:
+                top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
                 
-                # We strip out the logo URLs here so the LLM doesn't hallucinate giant markdown images
                 clean_matchup_data = []
                 for m in matchup_data:
                     clean_matchup_data.append({
@@ -243,25 +231,20 @@ if selected_page == "The Ledger":
                 
                 raw_recap = intel.get_weekly_recap(OPENAI_KEY, clean_matchup_data, top_team) 
                 
-                # --- CLEANUP LLM HALLUCINATIONS ---
                 import re
                 from datetime import datetime
                 
-                # 1. Fix week and year placeholders
                 raw_recap = re.sub(r'\[.*?week.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
                 raw_recap = re.sub(r'\[.*?number.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
                 raw_recap = re.sub(r'Week \d+', f'Week {selected_week}', raw_recap, flags=re.IGNORECASE)
                 raw_recap = re.sub(r'\[.*?season year.*?\]', str(YEAR), raw_recap, flags=re.IGNORECASE)
                 
-                # 2. Fix bracketed date placeholders with today's actual date
                 today_str = datetime.now().strftime("%B %d, %Y")
                 raw_recap = re.sub(r'\[.*?Date.*?\]', today_str, raw_recap, flags=re.IGNORECASE)
                 
-                # 3. The Analyst Persona
                 raw_recap = re.sub(r'\[.*?Name.*?\]', "Travis McFarland", raw_recap, flags=re.IGNORECASE)
                 raw_recap = re.sub(r'\[.*?Title.*?\]', "Director of High-Protein Analytics", raw_recap, flags=re.IGNORECASE)
                 
-                # 4. Nuclear Option: Blank out any other rogue brackets the LLM invents
                 raw_recap = re.sub(r'\[.*?\]', '', raw_recap)
                 
                 st.session_state["recap"] = raw_recap
@@ -270,7 +253,6 @@ if selected_page == "The Ledger":
 
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state.get("recap")}</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
-
 
     # 4. RENDER THE LOWER SPLIT (SCORES AND THE REST)
     bottom_left, bottom_right = st.columns([2.2, 1]) 
