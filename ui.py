@@ -294,3 +294,54 @@ def clean_for_pdf(text):
 def create_download_link(val, filename):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Executive Briefing (PDF)</a>'
+def render_shame_card(col, player):
+    pid = player.get('ID', 0)
+    headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=80&h=60" if pid else FALLBACK_LOGO
+    
+    html = f"""
+    <div class="luxury-card" style="border-left: 3px solid #FF4B4B; padding: 15px; display: flex; align-items: center; background: rgba(40, 10, 10, 0.4);">
+        <img src="{headshot}" onerror="this.onerror=null; this.src='{FALLBACK_LOGO}';" style="border-radius: 8px; margin-right: 15px; border: 1px solid rgba(255, 75, 75, 0.5); object-fit: cover; width: 60px; height: 60px; background: #000;">
+        <div>
+            <div style="color: #FF4B4B; font-size: 0.9rem; font-weight: bold;">{player.get('Name', 'Unknown')}</div>
+            <div style="color: white; font-weight: 800; font-size: 1.1rem;">{player.get('Points', 0)} PTS</div>
+            <div style="color: #a0aaba; font-size: 0.75rem;">Proj: {player.get('Proj', 0)}</div>
+        </div>
+    </div>
+    """
+    with col:
+        st.markdown(html, unsafe_allow_html=True)
+
+def render_bench_mob_card(player):
+    html = f"""
+    <div class="luxury-card" style="border-left: 4px solid #d4af37; padding: 20px; background: rgba(30, 25, 10, 0.6); display: flex; align-items: center;">
+        <div style="font-size: 2.5rem; margin-right: 20px; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);">🪵</div>
+        <div>
+            <div style="color: #d4af37; font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;">Bench Warmer of the Week</div>
+            <div style="color: white; font-size: 1.4rem; font-weight: 900;">{player.get('Name', 'Unknown')} <span style="color: #a0aaba; font-size: 1.1rem;">({player.get('Points', 0)} PTS)</span></div>
+            <div style="color: #a0aaba; font-size: 0.85rem; margin-top: 5px;">Stashed by <span style="color: white; font-weight: bold;">{player.get('Owner', 'Unknown Team')}</span></div>
+        </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+def render_moonshot_card(col, player):
+    pid = player.get('ID', 0)
+    headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{pid}.png&w=150&h=110" if pid else FALLBACK_LOGO
+    
+    diff = float(player.get('Points', 0)) - float(player.get('Proj', 0))
+    diff_color = "#92FE9D" if diff > 0 else "#FF4B4B"
+    diff_sign = "+" if diff > 0 else ""
+    
+    html = f"""
+    <div class="luxury-card award-card" style="border-left: 4px solid #7209b7; background: rgba(20, 10, 40, 0.6); justify-content: center; padding: 25px;">
+        <div style="color: #7209b7; font-size: 0.75rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 15px; text-transform: uppercase;">Biggest Surprise</div>
+        <div style="font-size: 1.8rem; font-weight: 900; color: white; line-height: 1.1; margin-bottom: 5px;">{player.get('Name', 'Unknown')}</div>
+        <div style="font-size: 1.2rem; color: #00C9FF; font-weight: bold; margin-bottom: 5px;">{player.get('Points', 0)} PTS</div>
+        <div style="color: #a0aaba; font-size: 0.85rem; margin-bottom: 20px;">{player.get('Team', 'Unknown')}</div>
+        <div style="background: rgba(146, 254, 157, 0.1); border: 1px solid {diff_color}; color: {diff_color}; padding: 6px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: bold;">
+            {diff_sign}{diff:.1f} vs Proj
+        </div>
+    </div>
+    """
+    with col:
+        st.markdown(html, unsafe_allow_html=True)
