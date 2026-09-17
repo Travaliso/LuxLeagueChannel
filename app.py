@@ -212,7 +212,24 @@ if selected_page == "The Ledger":
     # Bench Mob: Highest scoring player left on a bench
     bench_warmer = sorted(bench_players, key=lambda x: x['Points'], reverse=True)[0] if bench_players else None
 
+    # ... (Keep the DATA EXTRACTION & SORTING block from the last step here) ...
 
+    # 2. THE STUDIO REPORT
+    if "recap" not in st.session_state:
+        with ui.luxury_spinner("Drafting Studio Report..."):
+            try:
+                # Replace this line if your intelligence function was named something different!
+                st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, matchup_data) 
+            except Exception as e:
+                st.session_state["recap"] = f"LLM Generation Error: {e}"
+
+    st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state.get("recap")}</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 3. RENDER THE WEEKLY ELITE (This is what you pasted last time)
+    st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
+    # ...
+    
     # 2. RENDER THE WEEKLY ELITE
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
     
