@@ -58,7 +58,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-# 2. WEEK SELECTOR
+    # 2. WEEK SELECTOR
     current_week = league.current_week
     if current_week <= 1:
         selected_week = 1
@@ -164,19 +164,11 @@ else: df_bench_stars = pd.DataFrame(columns=["Team", "Player", "Score"])
 # 5. DASHBOARD UI ROUTER
 # ==============================================================================
 st.title(f"🏛️ Luxury League Protocol: Week {selected_week}")
-st.markdown("### 🌟 Weekly Elite")
-h1, h2, h3 = st.columns(3)
-if not df_players.empty:
-    top_3 = df_players.head(3).reset_index(drop=True)
-    if len(top_3) >= 1: ui.render_hero_card(h1, top_3.iloc[0])
-    if len(top_3) >= 2: ui.render_hero_card(h2, top_3.iloc[1])
-    if len(top_3) >= 3: ui.render_hero_card(h3, top_3.iloc[2])
-else: st.info("No player data available for this week yet.")
 st.markdown("---")
 
 # --- PAGE ROUTING ---
 
-# --- THE LEDGER TAB ---# --- THE LEDGER TAB ---
+# --- THE LEDGER TAB ---
 if selected_page == "The Ledger":
     
     # 1. DATA EXTRACTION & SORTING
@@ -212,25 +204,20 @@ if selected_page == "The Ledger":
     # Bench Mob: Highest scoring player left on a bench
     bench_warmer = sorted(bench_players, key=lambda x: x['Points'], reverse=True)[0] if bench_players else None
 
-    # ... (Keep the DATA EXTRACTION & SORTING block from the last step here) ...
-
     # 2. THE STUDIO REPORT
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Drafting Studio Report..."):
             try:
-                # Replace this line if your intelligence function was named something different!
-                st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, matchup_data) 
+                # Provide the top team from the efficiency data to avoid the missing argument error
+                top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
+                st.session_state["recap"] = intel.get_weekly_recap(OPENAI_KEY, matchup_data, top_team) 
             except Exception as e:
                 st.session_state["recap"] = f"LLM Generation Error: {e}"
 
     st.markdown(f'<div class="luxury-card studio-box"><h3>🎙️ The Studio Report</h3>{st.session_state.get("recap")}</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 3. RENDER THE WEEKLY ELITE (This is what you pasted last time)
-    st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
-    # ...
-    
-    # 2. RENDER THE WEEKLY ELITE
+    # 3. RENDER THE WEEKLY ELITE
     st.markdown("<h3 style='color: gold;'>🏆 Weekly Elite</h3>", unsafe_allow_html=True)
     
     elite_row1 = st.columns(4)
@@ -244,7 +231,7 @@ if selected_page == "The Ledger":
 
     st.markdown("<br><br>", unsafe_allow_html=True) 
 
-    # 3. RENDER THE LOWER SPLIT
+    # 4. RENDER THE LOWER SPLIT
     bottom_left, bottom_right = st.columns([2.2, 1]) 
 
     with bottom_left:
@@ -261,6 +248,7 @@ if selected_page == "The Ledger":
     with bottom_right:
         st.markdown("### 🚀 The Moonshot")
         if moonshot_player: ui.render_moonshot_card(bottom_right, moonshot_player)
+
 elif selected_page == "The Hierarchy":
     st.header("📈 The Hierarchy")
     st.caption("A ruthless ranking of who is actually good.")
