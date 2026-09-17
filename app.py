@@ -240,9 +240,19 @@ if selected_page == "The Ledger":
                 
                 raw_recap = intel.get_weekly_recap(OPENAI_KEY, clean_matchup_data, top_team) 
                 
-                # Strip out LLM placeholder artifacts
+                # --- CLEANUP LLM HALLUCINATIONS ---
                 import re
+                from datetime import datetime
+                
+                # 1. Fix bracketed week placeholders (e.g., [insert week number])
                 raw_recap = re.sub(r'\[.*?week.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
+                
+                # 2. Fix hardcoded hallucinated weeks (e.g., "Week 5" becomes "Week 1")
+                raw_recap = re.sub(r'Week \d+', f'Week {selected_week}', raw_recap, flags=re.IGNORECASE)
+                
+                # 3. Fix bracketed date placeholders with today's actual date
+                today_str = datetime.now().strftime("%B %d, %Y")
+                raw_recap = re.sub(r'\[.*?Date.*?\]', today_str, raw_recap, flags=re.IGNORECASE)
                 
                 st.session_state["recap"] = raw_recap
             except Exception as e:
