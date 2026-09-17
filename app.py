@@ -227,6 +227,9 @@ if selected_page == "The Ledger":
     # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
     if "recap" not in st.session_state:
         with ui.luxury_spinner("Drafting Studio Report..."):
+            # 3. THE STUDIO REPORT (EXECUTIVE SUMMARY)
+    if "recap" not in st.session_state:
+        with ui.luxury_spinner("Drafting Studio Report..."):
             try:
                 top_team = df_eff.iloc[0]['Team'] if not df_eff.empty else "TBD"
                 
@@ -244,15 +247,22 @@ if selected_page == "The Ledger":
                 import re
                 from datetime import datetime
                 
-                # 1. Fix bracketed week placeholders (e.g., [insert week number])
+                # 1. Fix week and year placeholders
                 raw_recap = re.sub(r'\[.*?week.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
-                
-                # 2. Fix hardcoded hallucinated weeks (e.g., "Week 5" becomes "Week 1")
+                raw_recap = re.sub(r'\[.*?number.*?\]', str(selected_week), raw_recap, flags=re.IGNORECASE)
                 raw_recap = re.sub(r'Week \d+', f'Week {selected_week}', raw_recap, flags=re.IGNORECASE)
+                raw_recap = re.sub(r'\[.*?season year.*?\]', str(YEAR), raw_recap, flags=re.IGNORECASE)
                 
-                # 3. Fix bracketed date placeholders with today's actual date
+                # 2. Fix bracketed date placeholders with today's actual date
                 today_str = datetime.now().strftime("%B %d, %Y")
                 raw_recap = re.sub(r'\[.*?Date.*?\]', today_str, raw_recap, flags=re.IGNORECASE)
+                
+                # 3. The Analyst Persona
+                raw_recap = re.sub(r'\[.*?Name.*?\]', "Travis McFarland", raw_recap, flags=re.IGNORECASE)
+                raw_recap = re.sub(r'\[.*?Title.*?\]', "Director of High-Protein Analytics", raw_recap, flags=re.IGNORECASE)
+                
+                # 4. Nuclear Option: Blank out any other rogue brackets the LLM invents
+                raw_recap = re.sub(r'\[.*?\]', '', raw_recap)
                 
                 st.session_state["recap"] = raw_recap
             except Exception as e:
