@@ -415,36 +415,42 @@ elif selected_page == "The Prop Desk":
     st.caption("Vegas knows.")
     with st.expander("📘 Legend & Glossary", expanded=False):
         st.markdown("""**Key Insights Explained:** ...""")
-    if not ODDS_API_KEY: st.warning("Missing Key")
+    if not ODDS_API_KEY: 
+        st.warning("Missing Key")
     else:
+        # 1. Force Refresh Button to pull freshly opened lines from Vegas
+        col_btn, _ = st.columns([1, 4])
+        with col_btn:
+            if st.button("🔄 Refresh Vegas Odds"):
+                if "vegas" in st.session_state:
+                    del st.session_state["vegas"]
+                st.cache_data.clear()
+                st.rerun()
+
         if "vegas" not in st.session_state or "Edge" not in st.session_state["vegas"].columns:
-            with ui.luxury_spinner("Calling Vegas..."): st.session_state["vegas"] = logic.get_vegas_props(ODDS_API_KEY, league, selected_week)
+            with ui.luxury_spinner("Calling Vegas..."): 
+                st.session_state["vegas"] = logic.get_vegas_props(ODDS_API_KEY, league, selected_week)
+        
         df = st.session_state["vegas"]
         if df is not None and not df.empty:
-            if "Status" in df.columns: st.warning(f"⚠️ {df.iloc[0]['Status']}")
+            if "Status" in df.columns: 
+                st.warning(f"⚠️ {df.iloc[0]['Status']}")
             else:
                 c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-                with c1: search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
+                with c1: 
+                    search_txt = st.text_input("🔍 Find Player", placeholder="Type a name...").lower()
                 with c2: pos_filter = st.multiselect("Position", options=sorted(df['Position'].unique()))
                 with c3: verdict_filter = st.multiselect("Verdict", options=sorted(df['Verdict'].unique()))
                 with c4: team_filter = st.multiselect("Team", options=sorted(df['Team'].astype(str).unique()))
                 c_sort, c_insight, _ = st.columns([1, 1.5, 1.5])
                 with c_sort: sort_order = st.selectbox("Sort Order", ["Highest Projection", "💎 Best Edge", "🚩 Worst Edge"])
                 with c_insight: insight_filter = st.multiselect("🔥 Moneyball Filter", options=[x for x in df['Insight'].unique() if x])
-                if search_txt: df = df[df['Player'].str.lower().str.contains(search_txt)]
-                if pos_filter: df = df[df['Position'].isin(pos_filter)]
-                if verdict_filter: df = df[df['Verdict'].isin(verdict_filter)]
-                if team_filter: df = df[df['Team'].isin(team_filter)]
-                if insight_filter: df = df[df['Insight'].isin(insight_filter)]
-                if "Highest" in sort_order: df = df.sort_values(by="Proj Pts", ascending=False)
-                elif "Best Edge" in sort_order: df = df.sort_values(by="Edge", ascending=False)
-                elif "Worst Edge" in sort_order: df = df.sort_values(by="Edge", ascending=True)
-                if df.empty: st.info("No players match your search.")
-                else:
-                    cols = st.columns(3)
-                    for i, row in df.reset_index(drop=True).iterrows(): ui.render_prop_card(cols[i % 3], row)
-        else: st.info("No data available.")
-
+                
+                # Smart search query: handles "joshua" -> "josh"
+                if search_txt:
+                    alt_search = search_txt.replace("joshua", "josh") if "joshua" in search_txt else search_txt.replace("josh", "joshua")
+                    df = df[df['Player'].str.lower().str.contains(search_txt) | df['Player'].str.lower().str.contains(alt_search)]
+                    
 elif selected_page == "The Dealmaker":
     st.header("🤝 The Dealmaker")
     c1, c2 = st.columns(2)
