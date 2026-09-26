@@ -450,6 +450,30 @@ elif selected_page == "The Prop Desk":
                 if search_txt:
                     alt_search = search_txt.replace("joshua", "josh") if "joshua" in search_txt else search_txt.replace("josh", "joshua")
                     df = df[df['Player'].str.lower().str.contains(search_txt) | df['Player'].str.lower().str.contains(alt_search)]
+                if pos_filter: 
+                    df = df[df['Position'].isin(pos_filter)]
+                if verdict_filter: 
+                    df = df[df['Verdict'].isin(verdict_filter)]
+                if team_filter: 
+                    df = df[df['Team'].isin(team_filter)]
+                if insight_filter: 
+                    df = df[df['Insight'].isin(insight_filter)]
+                
+                if "Highest" in sort_order: 
+                    df = df.sort_values(by="Proj Pts", ascending=False)
+                elif "Best Edge" in sort_order: 
+                    df = df.sort_values(by="Edge", ascending=False)
+                elif "Worst Edge" in sort_order: 
+                    df = df.sort_values(by="Edge", ascending=True)
+
+                if df.empty: 
+                    st.info("No players match your search.")
+                else:
+                    cols = st.columns(3)
+                    for i, row in df.reset_index(drop=True).iterrows(): 
+                        ui.render_prop_card(cols[i % 3], row)
+        else: 
+            st.info("No data available.")
                     
 elif selected_page == "The Dealmaker":
     st.header("🤝 The Dealmaker")
