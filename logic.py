@@ -49,7 +49,15 @@ def safe_get_logo(team):
     except: return FALLBACK_LOGO
 
 def normalize_name(name):
-    return re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
+    clean = re.sub(r'[^a-z0-9]', '', str(name).lower()).replace('iii','').replace('ii','').replace('jr','')
+    # Map common player name variations so Vegas matches ESPN
+    alias_map = {
+        'joshuadowns': 'joshdowns',
+        'gabrieldavis': 'gabedavis',
+        'mitchelltrubisky': 'mitchtrubisky',
+        'cameronakers': 'camakers'
+    }
+    return alias_map.get(clean, clean)
 
 def clean_team_abbr(abbr):
     mapping = {'WSH': 'WAS', 'JAX': 'JAC', 'LAR': 'LA', 'LV': 'LV', 'ARZ': 'ARI', 'HST': 'HOU', 'BLT': 'BAL', 'CLV': 'CLE', 'SL': 'STL', 'KAN': 'KC', 'NWE': 'NE', 'NOS': 'NO', 'TAM': 'TB', 'GNB': 'GB', 'SFO': 'SF', 'LVR': 'LV', 'KCS': 'KC', 'TBB': 'TB', 'JAC': 'JAC', 'LAC': 'LAC'}
